@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Builds
+.next/
+out/
+build/
+dist/
+
+# Convex generated code
+convex/_generated/
+
+# Environment
+.env*.local
+.env
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Misc
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/

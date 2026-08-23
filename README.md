@@ -1,2 +1,74 @@
 # Sannidhi
-ADAPTIVE TRUST-BASED ATTENDANCE ECOSYSTEM
+
+**Adaptive Trust-Based Attendance Ecosystem**
+
+## What is this project?
+
+Sannidhi replaces manual classroom roll calls with an adaptive, tamper-evident attendance system. Instead of forcing every student through every verification check, the system combines multiple trust signals — identity, device trust, physical presence, and optional biometrics — and escalates verification only when evidence is weak or suspicious.
+
+- **Normal students** check in quickly with minimal friction.
+- **Suspicious attempts** receive stronger verification or faculty review.
+- **Every decision** is recorded with an explainable evidence trail.
+
+Full specification: [docs/report.md](docs/report.md)
+
+## Planned Features
+
+### Student
+- Passkey-based enrollment and fast check-in
+- Attendance history (calendar & subject-wise) with attendance projection
+- Leave/on-duty requests and correction requests
+- Alerts: absences, threshold warnings, verification challenges
+- Device management with controlled replacement flow
+
+### Faculty
+- One-tap session start from scheduled class
+- Rotating QR session challenges (anti-screenshot, anti-replay)
+- Live verification board with reason codes
+- Random spot re-checks and manual verification/override with audit
+- Correction-request inbox; offline capture with later sync
+
+### Administration
+- User, course, timetable, venue, and policy management
+- Flagged-attempt review, proxy-pattern analytics, reports & exports
+- Device approval/replacement administration
+- Retention, biometric-consent, and correction policy controls
+
+### Verification Core
+- Risk engine fusing identity + device + presence signals into **Accept / Step-up / Flag / Reject** decisions
+- Step-up liveness & face match only when risk demands it
+- Tamper-evident append-only event history with auditable corrections
+
+## Architecture
+
+Five deep modules anchor the design. Surfaces build on these interfaces only — thresholds, signing, hash-chaining, and reconciliation stay hidden inside the implementations. Rationale and seam rules: [docs/report.md](docs/report.md) §20.
+
+| Module | Interface surfaces consume | Hidden inside |
+| --- | --- | --- |
+| Risk Decision | signals → Decision: Accept / Step-up / Flag / Reject + evidence summary + reason codes | thresholds, signal weights, policy versioning |
+| Session Challenge | `mint(session)` · `redeem(challenge, context)` | signing keys, rotation window, nonce store, replay detection |
+| Event Ledger | `append(event)` · `history()` · `verifyChain()` | hash chain, correction linkage, retention |
+| Sync | same ledger append seam, events tagged by origin | offline/mobile reconciliation rules |
+| Presence Evidence | normalized evidence shape fed to Risk Decision | Wi-Fi/BLE/location adapters (added when a second source lands) |
+
+Guiding rule: every attendance state change enters through the Event Ledger's single append seam, and no surface re-fuses trust signals — decision logic exists once, behind the Risk Decision interface.
+
+## Delivery Plan
+
+Web app first (students, faculty, admin), native mobile apps in a later phase reusing the same APIs.
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| 0 | Foundations: repo, CI/CD, data model, auth skeleton | Not started |
+| 1 | Identity enrollment, passkeys, device registration, RBAC | Not started |
+| 2 | Sessions & rotating QR check-in | Not started |
+| 3 | Device trust, presence signals, risk decision engine | Not started |
+| 4 | Adaptive step-up security (liveness, face match, spot checks) | Not started |
+| 5 | Tamper-evident audit, corrections, offline resilience | Not started |
+| 6 | Analytics & insights | Not started |
+| 7 | Native mobile applications | Not started |
+| 8 | Institution scale: multi-department, integrations | Not started |
+
+## Status
+
+> **Planning stage** — requirements finalized in `docs/report.md`; architecture direction recorded in `docs/report.md` §20; implementation not yet started.
