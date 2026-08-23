@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 import { COOKIE_NAME, ROLES, signSession, type Role } from "@/lib/auth/session";
 
 function notFound() {
@@ -8,7 +9,7 @@ function notFound() {
 }
 
 export async function POST(request: Request) {
-  if (process.env.ENABLE_DEV_LOGIN !== "1") return notFound();
+  if (!isDevLoginEnabled()) return notFound();
   let body: unknown;
   try {
     body = await request.json();
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  if (process.env.ENABLE_DEV_LOGIN !== "1") return notFound();
+  if (!isDevLoginEnabled()) return notFound();
   const store = await cookies();
   store.delete(COOKIE_NAME);
   return NextResponse.json({ ok: true });

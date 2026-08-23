@@ -59,7 +59,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Foundations: repo, CI/CD, data model, auth skeleton | Not started |
+| 0 | Foundations: repo, CI/CD, data model, auth skeleton | In review (PR #10) |
 | 1 | Identity enrollment, passkeys, device registration, RBAC | Not started |
 | 2 | Sessions & rotating QR check-in | Not started |
 | 3 | Device trust, presence signals, risk decision engine | Not started |

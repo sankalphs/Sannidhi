@@ -5,7 +5,7 @@ import { ROLES, type Role } from "@/lib/auth/session";
 
 const GROUP_PREFIXES = ["/student", "/faculty", "/admin", "/audit"] as const;
 
-function allowedRolesFor(prefix: (typeof GROUP_PREFIXES)[number]): Role[] {
+function allowedRolesFor(prefix: string): Role[] {
   const decisions = ROLES.map((role) => evaluateAccess(`${prefix}/deep/path`, role));
   return ROLES.filter((_, index) => decisions[index].status === "allow");
 }
@@ -23,6 +23,16 @@ describe("evaluateAccess", () => {
     expect(allowedRolesFor("/faculty")).toEqual(["faculty"]);
     expect(allowedRolesFor("/admin")).toEqual(["department_authority", "admin"]);
     expect(allowedRolesFor("/audit")).toEqual(["admin", "auditor"]);
+  });
+
+  it("restricts admin child routes to the admin role", () => {
+    expect(allowedRolesFor("/admin/users")).toEqual(["admin"]);
+    expect(evaluateAccess("/admin/users", "department_authority")).toEqual({
+      status: "redirect",
+      to: "/admin",
+    });
+    expect(allowedRolesFor("/admin/courses")).toEqual(["department_authority", "admin"]);
+    expect(allowedRolesFor("/admin/policies")).toEqual(["department_authority", "admin"]);
   });
 
   it("sends wrong-role users to their own role home", () => {

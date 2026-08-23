@@ -29,7 +29,6 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   ],
   department_authority: [
     { label: "Overview", href: "/admin", icon: LayoutDashboard },
-    { label: "Users", href: "/admin/users", icon: Users },
     { label: "Courses & sections", href: "/admin/courses", icon: BookOpen },
     { label: "Policies", href: "/admin/policies", icon: Landmark },
   ],
@@ -38,6 +37,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: "Users", href: "/admin/users", icon: Users },
     { label: "Courses & sections", href: "/admin/courses", icon: BookOpen },
     { label: "Policies", href: "/admin/policies", icon: Landmark },
+    { label: "Event ledger", href: "/audit/events", icon: ScrollText },
   ],
   auditor: [
     { label: "Overview", href: "/audit", icon: LayoutDashboard },

@@ -86,7 +86,6 @@ export default defineSchema({
     prevEventHash: v.optional(v.string()),
     eventHash: v.string(),
     correctsEventId: v.optional(v.id("attendance_events")),
-    correctedByEventId: v.optional(v.id("attendance_events")),
     decision: v.optional(decisionValidator),
     capturedAt: v.number(),
     recordedByUserId: v.optional(v.id("users")),

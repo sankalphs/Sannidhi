@@ -1,9 +1,10 @@
 import Link from "next/link";
 
 import { ImpersonationButtons } from "@/app/(auth)/login/impersonation-buttons";
+import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 
 export default function LoginPage() {
-  const devLoginEnabled = process.env.ENABLE_DEV_LOGIN === "1";
+  const devLoginEnabled = isDevLoginEnabled();
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
       <div className="flex max-w-md flex-col gap-3">
