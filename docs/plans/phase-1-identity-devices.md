@@ -15,6 +15,7 @@ Establish the root of trust: institution-backed accounts, passkey authentication
 - Approved personal-device registration tied to each student account.
 - Device lifecycle state machine: `new → enrolled → active → suspended | revoked | replaced` (spec §4).
 - Controlled device replacement/recovery flow: identity re-verification + new-device verification + auditable approval decision — no silent trust transfer (spec §4 policy note).
+- Device records expose a normalized trust-evidence shape for the Risk Decision interface (Phase 3); lifecycle transitions and replacement approvals land as append-only audit events through the Event Ledger seam.
 - Biometric consent capture UI with clear disclosure; face-enrollment stub storing template references only (no raw images; spec §16).
 - Enrollment completion gate: attendance features locked until identity + device checks succeed.
 
