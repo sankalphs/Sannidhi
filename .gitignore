@@ -11,6 +11,10 @@ dist/
 
 # Convex generated code
 convex/_generated/
+.convex/
+
+# TypeScript
+*.tsbuildinfo
 
 # Environment
 .env*.local
