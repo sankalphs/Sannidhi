@@ -15,6 +15,8 @@ Establish the web-first application skeleton so every later phase builds on a co
   - `institutions`
   - `users` with role enum: `student | faculty | department_authority | admin | auditor` (spec §17)
   - `courses`, `sections`, `venues`, `timetable_slots`, `enrollments`
+- Attendance Event Ledger foundations (spec §12, §20): append-only `attendance_events` schema with hash-chain fields, correction linkage, origin tag (`online | offline-faculty | mobile`), and policy-version stamp — structure only; every later attendance write enters this one seam.
+- Shared Decision record type for the Risk Decision module interface (spec §6, §20): outcome enum `accept | step_up | flag | reject`, structured evidence summary, reason codes — no fusion logic yet.
 - RBAC middleware guarding `/student`, `/faculty`, `/admin`, `/audit` route groups.
 - App shell: role-aware navigation, layout primitives, empty-state components for each surface.
 - Demo-data seed script for local development.
@@ -24,6 +26,7 @@ Establish the web-first application skeleton so every later phase builds on a co
 - [ ] CI green (lint + typecheck + tests) on the PR
 - [ ] All four role route groups resolve and are access-guarded
 - [ ] Schema definitions reviewed against spec §17 role model
+- [ ] Ledger schema reviewed: append-only, hash-chained, correction-linked — no surface-level mutation path designed in
 - [ ] Preview deployment renders the shell for each role
 
 ## Out of Scope
