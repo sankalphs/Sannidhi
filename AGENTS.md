@@ -3,6 +3,7 @@
 ## Workflow
 
 - **Push clean code to GitHub after each subphase** — never leave work unpushed across a subphase boundary.
+- **Never squash-and-merge** — always merge PRs with a regular merge commit (`gh pr merge --merge`, or `git merge --no-ff` locally). Squashing collapses the subphase commits into one blob and destroys the per-subphase history this workflow depends on.
 - **After every commit, check for reviewer feedback**: CodeRabbit and GitHub Copilot post their reviews as comments on the commit/PR once it lands. Read and address that feedback before starting the next piece of work.
 
 ## Available tooling
