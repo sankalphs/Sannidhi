@@ -1,0 +1,9 @@
+node_modules
+.next
+convex/_generated
+coverage
+playwright-report
+test-results
+docs
+README.md
+AGENTS.md

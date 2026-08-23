@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Cache Convex backend binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/convex
+          key: ${{ runner.os }}-convex-backend-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-convex-backend-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Convex code
+        run: bunx convex dev --once --typecheck disable
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Generate Next types
+        run: bunx next typegen
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Unit tests
+        run: bun run test
+
+      - name: Format check
+        run: bun run format:check
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: bun run test:e2e
+
+      - name: Build
+        run: bun run build
