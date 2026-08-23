@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "seed": "convex run seed:seedDemoData",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
