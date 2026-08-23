@@ -17,6 +17,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "convex": "^1.45.0",
+    "jose": "^6.2.10",
     "lucide-react": "^1.33.0",
     "next": "15.5.23",
     "radix-ui": "^1.6.7",

@@ -1,83 +1,78 @@
-import Image from "next/image";
+import { BookOpen, GraduationCap, Landmark, ScrollText, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+
+import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+
+type Surface = {
+  href: string;
+  title: string;
+  description: string;
+  icon: LucideIcon;
+};
+
+const SURFACES: Surface[] = [
+  {
+    href: "/student",
+    title: "Student",
+    description: "Track your attendance history and file correction requests.",
+    icon: BookOpen,
+  },
+  {
+    href: "/faculty",
+    title: "Faculty",
+    description: "Run class sessions and keep the roster honest in real time.",
+    icon: GraduationCap,
+  },
+  {
+    href: "/admin",
+    title: "Admin & department authority",
+    description: "Manage people, courses, sections, and attendance policies.",
+    icon: Landmark,
+  },
+  {
+    href: "/audit",
+    title: "Auditor",
+    description: "Read-only access to the append-only event ledger.",
+    icon: ScrollText,
+  },
+];
 
 export default function Home() {
   return (
-    <div className="grid min-h-screen grid-rows-[20px_1fr_20px] items-center justify-items-center gap-16 p-8 pb-20 font-sans sm:p-20">
-      <main className="row-start-2 flex flex-col items-center gap-[32px] sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-center font-mono text-sm/6 sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="rounded bg-black/[.05] px-1 py-0.5 font-mono font-semibold dark:bg-white/[.06]">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">Save and see your changes instantly.</li>
-        </ol>
-
-        <div className="flex flex-col items-center gap-4 sm:flex-row">
-          <a
-            className="bg-foreground text-background flex h-10 items-center justify-center gap-2 rounded-full border border-solid border-transparent px-4 text-sm font-medium transition-colors hover:bg-[#383838] sm:h-12 sm:w-auto sm:px-5 sm:text-base dark:hover:bg-[#ccc]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="flex h-10 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-4 text-sm font-medium transition-colors hover:border-transparent hover:bg-[#f2f2f2] sm:h-12 sm:w-auto sm:px-5 sm:text-base md:w-[158px] dark:border-white/[.145] dark:hover:bg-[#1a1a1a]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex flex-wrap items-center justify-center gap-[24px]">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/file.svg" alt="File icon" width={16} height={16} />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/window.svg" alt="Window icon" width={16} height={16} />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/globe.svg" alt="Globe icon" width={16} height={16} />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+    <main className="flex min-h-screen flex-col items-center px-4 py-20">
+      <div className="flex max-w-3xl flex-col items-center gap-4 text-center">
+        <Badge variant="secondary">Phase 0 scaffold</Badge>
+        <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+          Sannidhi — Adaptive Attendance
+        </h1>
+        <p className="text-muted-foreground text-lg sm:text-xl">
+          One ecosystem for honest, low-friction attendance across classrooms, departments, and
+          audits.
+        </p>
+      </div>
+      <div className="mt-12 grid w-full max-w-5xl gap-4 sm:grid-cols-2">
+        {SURFACES.map((surface) => (
+          <Link key={surface.href} href={surface.href} className="group">
+            <Card className="group-hover:border-primary/50 h-full transition-colors">
+              <CardHeader>
+                <div className="bg-primary/10 text-primary flex size-10 items-center justify-center rounded-lg">
+                  <surface.icon className="size-5" />
+                </div>
+                <CardTitle>{surface.title}</CardTitle>
+                <CardDescription>{surface.description}</CardDescription>
+              </CardHeader>
+              <CardContent className="text-primary text-sm font-medium group-hover:underline">
+                Enter surface
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+      <p className="text-muted-foreground mt-12 max-w-xl text-center text-sm">
+        Passkey login arrives in Phase 1. Until then, protected surfaces bounce unauthenticated
+        visitors back here.
+      </p>
+    </main>
   );
 }
