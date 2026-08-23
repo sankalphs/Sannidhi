@@ -1,5 +1,8 @@
 import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { hashInviteToken } from "../src/lib/invites/token";
+
+const DEMO_INVITE_TOKEN = "demo-invite-token";
 
 export const seedDemoData = internalMutation({
   args: {},
@@ -51,6 +54,7 @@ export const seedDemoData = internalMutation({
     ];
 
     const studentIds: Id<"users">[] = [];
+    let adminId: Id<"users"> | undefined;
     for (const user of userData) {
       const userId = await ctx.db.insert("users", {
         institutionId,
@@ -62,6 +66,12 @@ export const seedDemoData = internalMutation({
       if (user.role === "student") {
         studentIds.push(userId);
       }
+      if (user.role === "admin") {
+        adminId = userId;
+      }
+    }
+    if (adminId === undefined) {
+      throw new Error("seed data must include an admin user");
     }
 
     const courseData = [
@@ -165,9 +175,31 @@ export const seedDemoData = internalMutation({
       }
     }
 
+    const invitedEmail = "meera.nair@sit.edu.in";
+    await ctx.db.insert("users", {
+      institutionId,
+      email: invitedEmail,
+      name: "Meera Nair",
+      role: "student",
+      status: "invited",
+      createdAt: now,
+    });
+
+    await ctx.db.insert("invites", {
+      institutionId,
+      email: invitedEmail,
+      role: "student",
+      tokenHash: await hashInviteToken(DEMO_INVITE_TOKEN),
+      status: "pending",
+      invitedByUserId: adminId,
+      createdAt: now,
+      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+    });
+
     return {
       institutions: 1,
-      users: userData.length,
+      users: userData.length + 1,
+      invites: 1,
       courses: courseData.length,
       sections: sectionIds.length,
       venues: venueIds.length,
