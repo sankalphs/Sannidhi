@@ -90,7 +90,7 @@ bunx convex dev --once
 Add a session signing secret to `.env.local` (at least 16 characters locally):
 
 ```sh
-SESSION_SECRET=<random string of 16+ characters>
+SESSION_SECRET=<random string of at least 16 bytes>
 ```
 
 Run the app:

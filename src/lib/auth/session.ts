@@ -21,14 +21,14 @@ export const ROLE_TO_HOME: Record<Role, string> = {
 
 function getSecret(): Uint8Array {
   const secret = process.env.SESSION_SECRET;
-  if (secret === undefined || secret.length < 16) {
-    throw new Error("SESSION_SECRET must be set to at least 16 characters");
+  if (secret === undefined) {
+    throw new Error("SESSION_SECRET must be set");
   }
-  const bytes = new Uint8Array(secret.length);
-  for (let index = 0; index < secret.length; index += 1) {
-    bytes[index] = secret.charCodeAt(index) & 0xff;
+  const encoded = new TextEncoder().encode(secret);
+  if (encoded.byteLength < 16) {
+    throw new Error("SESSION_SECRET must be at least 16 bytes");
   }
-  return bytes;
+  return new Uint8Array(encoded);
 }
 
 export async function signSession(payload: SessionPayload): Promise<string> {

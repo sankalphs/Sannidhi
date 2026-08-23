@@ -20,10 +20,12 @@ describe("session", () => {
     else process.env.SESSION_SECRET = original;
   });
 
-  it("rejects signing when SESSION_SECRET is shorter than 16 characters", async () => {
+  it("rejects signing when SESSION_SECRET is shorter than 16 bytes", async () => {
     const original = process.env.SESSION_SECRET;
     process.env.SESSION_SECRET = "short";
-    await expect(signSession({ userId: "user-1", role: "admin" })).rejects.toThrow();
+    await expect(signSession({ userId: "user-1", role: "admin" })).rejects.toThrow(
+      "at least 16 bytes",
+    );
     if (original === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = original;
   });

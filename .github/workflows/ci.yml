@@ -6,12 +6,17 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -32,6 +37,9 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Generate Next types
+        run: bunx next typegen
 
       - name: Typecheck
         run: bun run typecheck
