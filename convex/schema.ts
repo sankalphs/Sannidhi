@@ -93,5 +93,6 @@ export default defineSchema({
   })
     .index("by_student_section", ["studentId", "sectionId"])
     .index("by_section_state", ["sectionId", "state"])
-    .index("by_seq", ["seq"]),
+    .index("by_seq", ["seq"])
+    .index("by_corrects_event", ["correctsEventId"]),
 });

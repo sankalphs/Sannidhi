@@ -71,7 +71,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Status
 
-> **Planning stage** — requirements finalized in `docs/report.md`; architecture direction recorded in `docs/report.md` §20; implementation not yet started.
+> **Phase 0 in review** — requirements finalized in `docs/report.md`; architecture direction recorded in `docs/report.md` §20; foundations implemented and under review (PR #10).
 
 ## Local development
 
