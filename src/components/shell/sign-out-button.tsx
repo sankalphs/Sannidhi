@@ -18,9 +18,13 @@ export function SignOutButton({ devLoginEnabled }: SignOutButtonProps) {
 
   async function handleSignOut() {
     setPending(true);
-    await fetch("/api/dev-session", { method: "DELETE" });
-    router.push("/");
-    router.refresh();
+    try {
+      await fetch("/api/dev-session", { method: "DELETE" });
+      router.push("/");
+      router.refresh();
+    } finally {
+      setPending(false);
+    }
   }
 
   return (

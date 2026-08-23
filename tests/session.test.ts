@@ -11,11 +11,19 @@ describe("session", () => {
 
   it("rejects tokens signed with a different secret", async () => {
     const original = process.env.SESSION_SECRET;
-    process.env.SESSION_SECRET = "secret-a";
+    process.env.SESSION_SECRET = "signing-secret-alpha-0123456789";
     const token = await signSession({ userId: "user-1", role: "admin" });
-    process.env.SESSION_SECRET = "secret-b";
+    process.env.SESSION_SECRET = "signing-secret-bravo-0123456789";
     const session = await verifySession(token);
     expect(session).toBeNull();
+    if (original === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = original;
+  });
+
+  it("rejects signing when SESSION_SECRET is shorter than 16 characters", async () => {
+    const original = process.env.SESSION_SECRET;
+    process.env.SESSION_SECRET = "short";
+    await expect(signSession({ userId: "user-1", role: "admin" })).rejects.toThrow();
     if (original === undefined) delete process.env.SESSION_SECRET;
     else process.env.SESSION_SECRET = original;
   });
@@ -23,6 +31,15 @@ describe("session", () => {
   it("returns null for garbage tokens", async () => {
     expect(await verifySession("not-a-jwt")).toBeNull();
     expect(await verifySession("")).toBeNull();
+  });
+
+  it("fails closed when SESSION_SECRET is unset", async () => {
+    const original = process.env.SESSION_SECRET;
+    delete process.env.SESSION_SECRET;
+    const token = await signSession({ userId: "user-1", role: "admin" }).catch(() => "sign-failed");
+    await expect(verifySession(typeof token === "string" ? token : "")).resolves.toBeNull();
+    if (original === undefined) delete process.env.SESSION_SECRET;
+    else process.env.SESSION_SECRET = original;
   });
 
   it("exposes the expected cookie name and role homes", () => {

@@ -22,7 +22,12 @@ export async function POST(request: Request) {
   }
   const token = await signSession({ userId: `dev-${role}`, role: role as Role });
   const store = await cookies();
-  store.set(COOKIE_NAME, token, { httpOnly: true, sameSite: "lax", path: "/" });
+  store.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+  });
   return NextResponse.json({ ok: true });
 }
 

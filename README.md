@@ -72,3 +72,49 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 ## Status
 
 > **Planning stage** — requirements finalized in `docs/report.md`; architecture direction recorded in `docs/report.md` §20; implementation not yet started.
+
+## Local development
+
+Prerequisites: [bun](https://bun.sh) 1.2+.
+
+```sh
+bun install
+```
+
+Start the Convex backend once to generate `convex/_generated` and create `.env.local` with the anonymous local backend URL:
+
+```sh
+bunx convex dev --once
+```
+
+Add a session signing secret to `.env.local` (at least 16 characters locally):
+
+```sh
+SESSION_SECRET=<random string of 16+ characters>
+```
+
+Run the app:
+
+```sh
+bun run dev
+```
+
+Setting `ENABLE_DEV_LOGIN=1` in `.env.local` enables the role switcher on `/login`.
+
+Seed demo data against a running Convex backend:
+
+```sh
+bun run seed
+```
+
+### Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `bun run lint` | ESLint |
+| `bun run typecheck` | TypeScript, no emit |
+| `bun run test` | Vitest unit tests |
+| `bun run test:e2e` | Playwright end-to-end tests |
+| `bun run format` | Prettier write |
+| `bun run format:check` | Prettier check |
+| `bun run build` | Production build |

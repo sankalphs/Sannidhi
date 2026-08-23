@@ -35,8 +35,11 @@ export function AppShell({ role, nav, children }: AppShellProps) {
     <div className="bg-background min-h-screen">
       <header className="bg-background/95 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-40 flex h-14 items-center gap-3 border-b px-4 backdrop-blur lg:pl-60">
         <details className="group relative lg:hidden">
-          <summary className="hover:bg-accent -ml-2 flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden">
-            <span className="flex flex-col gap-1">
+          <summary
+            aria-label="Open navigation menu"
+            className="hover:bg-accent -ml-2 flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden"
+          >
+            <span className="flex flex-col gap-1" aria-hidden="true">
               <span className="bg-foreground h-0.5 w-4 rounded-full" />
               <span className="bg-foreground h-0.5 w-4 rounded-full" />
               <span className="bg-foreground h-0.5 w-4 rounded-full" />

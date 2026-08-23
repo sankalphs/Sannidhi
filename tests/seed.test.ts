@@ -6,8 +6,8 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(join(process.cwd(), "convex", "seed.ts"), "utf8");
 
 describe("convex/seed.ts", () => {
-  it("exports a public seedDemoData mutation", () => {
-    expect(source).toMatch(/export const seedDemoData = mutation\(/);
+  it("exports seedDemoData as an internal mutation", () => {
+    expect(source).toMatch(/export const seedDemoData = internalMutation\(/);
   });
 
   it("guards against re-seeding when institutions already exist", () => {

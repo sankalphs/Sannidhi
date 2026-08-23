@@ -19,10 +19,11 @@ export const ROLE_TO_HOME: Record<Role, string> = {
   auditor: "/audit",
 };
 
-const DEV_FALLBACK_SECRET = "sannidhi-dev-secret-do-not-use-in-production";
-
 function getSecret(): Uint8Array {
-  const secret = process.env.SESSION_SECRET ?? DEV_FALLBACK_SECRET;
+  const secret = process.env.SESSION_SECRET;
+  if (secret === undefined || secret.length < 16) {
+    throw new Error("SESSION_SECRET must be set to at least 16 characters");
+  }
   const bytes = new Uint8Array(secret.length);
   for (let index = 0; index < secret.length; index += 1) {
     bytes[index] = secret.charCodeAt(index) & 0xff;

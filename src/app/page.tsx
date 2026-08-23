@@ -2,6 +2,7 @@ import { BookOpen, GraduationCap, Landmark, ScrollText, type LucideIcon } from "
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 type Surface = {
@@ -69,10 +70,15 @@ export default function Home() {
           </Link>
         ))}
       </div>
-      <p className="text-muted-foreground mt-12 max-w-xl text-center text-sm">
-        Passkey login arrives in Phase 1. Until then, protected surfaces bounce unauthenticated
-        visitors back here.
-      </p>
+      <div className="mt-8 flex flex-col items-center gap-2">
+        <Button asChild>
+          <Link href="/login">Sign in</Link>
+        </Button>
+        <p className="text-muted-foreground max-w-xl text-center text-sm">
+          Passkey login arrives in Phase 1. Until then, protected surfaces bounce unauthenticated
+          visitors back here.
+        </p>
+      </div>
     </main>
   );
 }

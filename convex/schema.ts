@@ -46,7 +46,7 @@ export default defineSchema({
     capacity: v.optional(v.number()),
   }).index("by_institution", ["institutionId"]),
 
-  timetableSlots: defineTable({
+  timetable_slots: defineTable({
     sectionId: v.id("sections"),
     venueId: v.id("venues"),
     dayOfWeek: v.number(),
@@ -64,7 +64,7 @@ export default defineSchema({
     .index("by_student", ["studentId"])
     .index("by_section", ["sectionId"]),
 
-  attendanceEvents: defineTable({
+  attendance_events: defineTable({
     institutionId: v.id("institutions"),
     studentId: v.id("users"),
     sectionId: v.id("sections"),

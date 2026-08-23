@@ -1,7 +1,7 @@
-import { mutation } from "./_generated/server";
+import { internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
-export const seedDemoData = mutation({
+export const seedDemoData = internalMutation({
   args: {},
   handler: async (ctx) => {
     const existingInstitution = await ctx.db.query("institutions").first();
@@ -132,7 +132,7 @@ export const seedDemoData = mutation({
 
     let slotCount = 0;
     for (const slot of slotData) {
-      await ctx.db.insert("timetableSlots", {
+      await ctx.db.insert("timetable_slots", {
         sectionId: sectionIds[slot.sectionIndex],
         venueId: venueIds[slot.venueIndex],
         dayOfWeek: slot.dayOfWeek,
@@ -158,7 +158,7 @@ export const seedDemoData = mutation({
       for (const pair of pairs) {
         await ctx.db.insert("enrollments", {
           studentId: studentIds[studentIndex],
-          sectionId: sectionIds[pair[0]],
+          sectionId: sectionIds[pair[1]],
           enrolledAt: now,
         });
         enrollmentCount += 1;

@@ -26,17 +26,18 @@ export function ImpersonationButtons({ enabled }: ImpersonationButtonsProps) {
 
   async function impersonate(role: Role) {
     setPendingRole(role);
-    const response = await fetch("/api/dev-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role }),
-    });
-    if (!response.ok) {
+    try {
+      const response = await fetch("/api/dev-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      if (!response.ok) return;
+      router.push(ROLE_TO_HOME[role]);
+      router.refresh();
+    } finally {
       setPendingRole(null);
-      return;
     }
-    router.push(ROLE_TO_HOME[role]);
-    router.refresh();
   }
 
   return (

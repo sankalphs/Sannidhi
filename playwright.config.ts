@@ -16,5 +16,9 @@ export default defineConfig({
     url: "http://localhost:3000",
     reuseExistingServer: true,
     timeout: 120_000,
+    env: {
+      ENABLE_DEV_LOGIN: "1",
+      SESSION_SECRET: "e2e-playwright-session-secret-0123456789",
+    },
   },
 });
