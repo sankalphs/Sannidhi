@@ -4,8 +4,8 @@ import type { ActorTokenClaims } from "../src/lib/auth/actor-token";
 import { type Role } from "../src/lib/auth/session";
 import { hashInviteToken, randomToken } from "../src/lib/invites/token";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { verifyActorToken } from "./lib/actor";
 
 const roleValidator = v.union(
@@ -48,6 +48,59 @@ async function resolveActorUserId(
   } catch {
     return undefined;
   }
+}
+
+export type UserDoc = {
+  _id: Id<"users">;
+  institutionId: Id<"institutions">;
+  email: string;
+  status?: "invited" | "active" | "suspended";
+};
+
+export async function findPendingInviteForUser(
+  ctx: QueryCtx | MutationCtx,
+  user: Pick<UserDoc, "institutionId" | "email">,
+): Promise<Doc<"invites"> | null> {
+  const candidates = await ctx.db
+    .query("invites")
+    .withIndex("by_email", (q) => q.eq("email", user.email))
+    .collect();
+  const pending = candidates
+    .filter((invite) => invite.institutionId === user.institutionId && invite.status === "pending")
+    .sort((a, b) => b.createdAt - a.createdAt);
+  return pending[0] ?? null;
+}
+
+export async function activateUserAndAcceptInvite(
+  ctx: MutationCtx,
+  args: { user: UserDoc; invite: Doc<"invites"> },
+): Promise<void> {
+  const { user, invite } = args;
+  if (user.status === "suspended") throw new ConvexError("account suspended");
+  if (invite.status !== "pending") throw new ConvexError("invite is not pending");
+  if (invite.expiresAt <= Date.now()) {
+    await ctx.db.patch(invite._id, { status: "expired" });
+    throw new ConvexError("invite expired");
+  }
+
+  const now = Date.now();
+  if (user.status !== "active") {
+    await ctx.db.patch(user._id, { status: "active" });
+  }
+  await ctx.db.patch(invite._id, {
+    status: "accepted",
+    acceptedByUserId: user._id,
+    acceptedAt: now,
+  });
+
+  await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+    institutionId: invite.institutionId,
+    category: "identity",
+    type: "invite.redeemed",
+    actorUserId: user._id,
+    subjectUserId: user._id,
+    payload: { email: invite.email, role: invite.role, inviteId: invite._id },
+  });
 }
 
 async function createSingleInvite(
@@ -275,28 +328,11 @@ export const redeemInvite = mutation({
     }
     if (user.status === "suspended") throw new ConvexError("account suspended");
 
-    const now = Date.now();
     const displayName = args.name?.trim();
     if (displayName !== undefined && displayName.length > 0 && displayName !== user.name) {
       await ctx.db.patch(user._id, { name: displayName });
     }
-    if (user.status !== "active") {
-      await ctx.db.patch(user._id, { status: "active" });
-    }
-    await ctx.db.patch(invite._id, {
-      status: "accepted",
-      acceptedByUserId: user._id,
-      acceptedAt: now,
-    });
-
-    await ctx.runMutation(internal.ledger.appendLedgerEvent, {
-      institutionId: invite.institutionId,
-      category: "identity",
-      type: "invite.redeemed",
-      actorUserId: user._id,
-      subjectUserId: user._id,
-      payload: { email: invite.email, role: invite.role, inviteId: invite._id },
-    });
+    await activateUserAndAcceptInvite(ctx, { user, invite });
 
     return { userId: user._id, role: invite.role };
   },
@@ -319,12 +355,17 @@ export const validateInviteToken = query({
     if (invite.status === "expired" || invite.expiresAt <= Date.now()) return invalid("expired");
 
     const institution = await ctx.db.get(invite.institutionId);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", invite.email))
+      .first();
     return {
       valid: true as const,
       email: invite.email,
       role: invite.role,
       institutionName: institution?.name ?? null,
       expiresAt: invite.expiresAt,
+      userId: user !== null && user.institutionId === invite.institutionId ? user._id : null,
     };
   },
 });

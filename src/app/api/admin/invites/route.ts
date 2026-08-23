@@ -1,20 +1,17 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
 import { mintActorToken } from "@/lib/auth/actor-token";
-import { COOKIE_NAME, ROLES, verifySession, type Role } from "@/lib/auth/session";
+import { getActiveSession } from "@/lib/auth/server";
+import { verifySession, ROLES, type Role } from "@/lib/auth/session";
 import { getConvexClient } from "@/lib/convex/server-client";
 import { EMAIL_PATTERN } from "@/lib/invites/csv";
 
 type SessionPayload = NonNullable<Awaited<ReturnType<typeof verifySession>>>;
 
 async function getAdminSession(): Promise<SessionPayload | null> {
-  const store = await cookies();
-  const token = store.get(COOKIE_NAME)?.value;
-  if (token === undefined) return null;
-  const session = await verifySession(token);
+  const session = await getActiveSession({ allowEnrollment: false });
   if (session === null || session.role !== "admin") return null;
   return session;
 }

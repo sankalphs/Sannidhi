@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { ImpersonationButtons } from "@/app/(auth)/login/impersonation-buttons";
+import { PasskeyLoginButton } from "@/app/(auth)/login/passkey-login-button";
 import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 
 export default function LoginPage() {
@@ -10,17 +11,20 @@ export default function LoginPage() {
       <div className="flex max-w-md flex-col gap-3">
         <h1 className="text-3xl font-semibold tracking-tight">Sign in</h1>
         <p className="text-muted-foreground text-sm">
-          Authentication arrives in Phase 1 — passkey ceremonies will land here. For now you can
-          explore each surface with a stubbed dev session.
+          Use the passkey registered to your Sannidhi account — no passwords, no shared secrets.
         </p>
       </div>
-      {devLoginEnabled ? (
-        <ImpersonationButtons enabled={devLoginEnabled} />
-      ) : (
-        <p className="text-muted-foreground text-sm">
-          Dev impersonation is disabled (set ENABLE_DEV_LOGIN=1 to turn it on).
-        </p>
-      )}
+      <PasskeyLoginButton />
+      <div className="flex flex-col items-center gap-3">
+        <p className="text-muted-foreground text-xs tracking-wide uppercase">Dev exploration</p>
+        {devLoginEnabled ? (
+          <ImpersonationButtons enabled={devLoginEnabled} />
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Dev impersonation is disabled (set ENABLE_DEV_LOGIN=1 to turn it on).
+          </p>
+        )}
+      </div>
       <Link href="/" className="text-primary text-sm underline-offset-4 hover:underline">
         Back to home
       </Link>

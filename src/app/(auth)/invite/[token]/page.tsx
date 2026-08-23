@@ -1,8 +1,7 @@
-import { Fingerprint, ShieldX } from "lucide-react";
+import { ShieldX } from "lucide-react";
 import Link from "next/link";
 
 import { api } from "../../../../../convex/_generated/api";
-import { Button } from "@/components/ui/button";
 import { getConvexClient } from "@/lib/convex/server-client";
 
 import { PasskeyEnrollmentStep } from "./passkey-enrollment-step";
@@ -78,15 +77,7 @@ export default async function InviteRedemptionPage({
           passwords, no shared secrets.
         </p>
 
-        <PasskeyEnrollmentStep />
-
-        <Button disabled>
-          <Fingerprint />
-          Register passkey
-        </Button>
-        <p className="text-muted-foreground text-center text-xs">
-          Passkey ceremonies land with the authentication rollout (Phase 1).
-        </p>
+        <PasskeyEnrollmentStep token={token} />
       </div>
     </main>
   );

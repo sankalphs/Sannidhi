@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { Badge } from "@/components/ui/badge";
-import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "@/lib/auth/nav";
 import type { Role } from "@/lib/auth/session";
@@ -54,7 +53,7 @@ export function AppShell({ role, nav, children }: AppShellProps) {
           <Badge variant="outline" className="capitalize">
             {role.replace("_", " ")}
           </Badge>
-          <SignOutButton devLoginEnabled={isDevLoginEnabled()} />
+          <SignOutButton />
         </div>
       </header>
       <aside className="bg-background fixed inset-y-0 left-0 z-30 hidden w-56 border-r pt-14 lg:flex lg:flex-col">

@@ -160,6 +160,14 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_institution_state", ["institutionId", "state"]),
 
+  auth_challenges: defineTable({
+    challenge: v.string(),
+    purpose: v.union(v.literal("registration"), v.literal("authentication")),
+    userId: v.optional(v.id("users")),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+  }).index("by_challenge", ["challenge"]),
+
   sessions: defineTable({
     userId: v.id("users"),
     tokenHash: v.string(),
