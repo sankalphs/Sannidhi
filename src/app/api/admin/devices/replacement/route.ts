@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
+import { deviceErrorResponse } from "@/lib/api/device-errors";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
@@ -42,10 +43,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Decision failed";
-    return NextResponse.json(
-      { error: message },
-      { status: message.includes("unauthorized") ? 403 : 400 },
-    );
+    return deviceErrorResponse("admin-replacement-decision", error);
   }
 }

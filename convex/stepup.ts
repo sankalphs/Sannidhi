@@ -78,6 +78,13 @@ export const stepUpVerify = action({
     ) {
       throw new ConvexError("challenge not bound to this account");
     }
+    const consumed = await ctx.runMutation(internal.passkeysInternal.consumeChallenge, {
+      challenge,
+      userId: claims.userId as Id<"users">,
+    });
+    if (!consumed.consumed) {
+      throw new ConvexError("challenge invalid or expired");
+    }
 
     const record = await ctx.runQuery(internal.passkeysInternal.getCredentialForAuth, {
       credentialId: response.id,
@@ -108,10 +115,7 @@ export const stepUpVerify = action({
     if (!verification.verified) throw new ConvexError("authentication verification failed");
 
     const verifiedAt = Date.now();
-    await ctx.runMutation(internal.passkeysInternal.consumeChallenge, {
-      challenge,
-    });
-    await ctx.runMutation(internal.sessions.touchBySid, { sid: claims.sid });
+    await ctx.runMutation(internal.sessions.markStepUp, { sid: claims.sid });
     await ctx.runMutation(internal.passkeysInternal.updateCredentialCounter, {
       credentialRecordId: record._id,
       newCounter: verification.authenticationInfo.newCounter,

@@ -2,11 +2,11 @@ import { NextResponse } from "next/server";
 
 import { api } from "../../../../../convex/_generated/api";
 import type { Id } from "../../../../../convex/_generated/dataModel";
+import { deviceErrorResponse } from "@/lib/api/device-errors";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
+import { isFreshAuth, REPLACEMENT_REASON_MAX_LENGTH } from "@/lib/devices/replacement";
 import { getConvexClient } from "@/lib/convex/server-client";
-
-const FRESH_AUTH_WINDOW_MS = 5 * 60 * 1000;
 
 export async function POST(request: Request) {
   const session = await getActiveSession();
@@ -26,8 +26,11 @@ export async function POST(request: Request) {
   if (typeof oldDeviceId !== "string" || oldDeviceId.length === 0) {
     return NextResponse.json({ error: "deviceId is required" }, { status: 400 });
   }
-  if (reason.length === 0 || reason.length > 500) {
-    return NextResponse.json({ error: "reason required (1-500 characters)" }, { status: 400 });
+  if (reason.length === 0 || reason.length > REPLACEMENT_REASON_MAX_LENGTH) {
+    return NextResponse.json(
+      { error: `reason required (1-${REPLACEMENT_REASON_MAX_LENGTH} characters)` },
+      { status: 400 },
+    );
   }
 
   try {
@@ -39,14 +42,12 @@ export async function POST(request: Request) {
     });
 
     if (session.role !== "admin") {
-      const fresh = (await client.query(api.sessions.getSessionFreshAuth, { actorToken })) as {
-        lastSeenAt: number | null;
-      };
-      const freshAuth =
-        fresh.lastSeenAt !== null && Date.now() - fresh.lastSeenAt <= FRESH_AUTH_WINDOW_MS;
-      if (!freshAuth) {
+      const stepUp = (await client.query(api.sessions.getSessionStepUpStatus, {
+        actorToken,
+      })) as { lastStepUpAt: number | null };
+      if (!isFreshAuth(stepUp.lastStepUpAt ?? undefined, Date.now())) {
         return NextResponse.json(
-          { error: "identity re-verification required", code: "step-up-required" },
+          { error: "Identity re-verification required.", code: "step-up-required" },
           { status: 403 },
         );
       }
@@ -60,10 +61,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Replacement request failed";
-    return NextResponse.json(
-      { error: message },
-      { status: message.includes("unauthorized") ? 403 : 400 },
-    );
+    return deviceErrorResponse("replacement", error);
   }
 }

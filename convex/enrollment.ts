@@ -173,14 +173,14 @@ export const getMyBiometricRecord = query({
 });
 
 export const recordBiometricConsent = mutation({
-  args: { actorToken: v.string(), consentVersion: v.optional(v.string()) },
+  args: { actorToken: v.string() },
   handler: async (ctx, args) => {
     const claims = await requireActor(args.actorToken);
     const user = await getUserOrThrow(ctx, claims.userId);
     assertStudent(user);
 
     const now = Date.now();
-    const consentVersion = args.consentVersion ?? BIOMETRIC_CONSENT_VERSION;
+    const consentVersion = BIOMETRIC_CONSENT_VERSION;
 
     let recordId: Id<"biometric_records">;
     const existing = await findActiveBiometricRecord(ctx, user._id);

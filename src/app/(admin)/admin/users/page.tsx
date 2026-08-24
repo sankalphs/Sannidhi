@@ -4,7 +4,9 @@ import { Users } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { Badge } from "@/components/ui/badge";
-import { getCachedConvexClient } from "@/lib/convex/server-client";
+import { mintActorToken } from "@/lib/auth/actor-token";
+import { getActiveSession } from "@/lib/auth/server";
+import { getConvexClient } from "@/lib/convex/server-client";
 
 import { ImportPanel } from "./import-panel";
 import { RevokeButton } from "./revoke-button";
@@ -22,6 +24,7 @@ function formatDate(ms: number): string {
     year: "numeric",
     month: "short",
     day: "numeric",
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -39,8 +42,24 @@ function InviteStatusBadge({ status }: { status: InviteRow["status"] }) {
 }
 
 export default async function AdminUsersPage() {
-  const client = getCachedConvexClient();
-  const institution = await client.query(api.users.getDefaultInstitution, {});
+  const session = await getActiveSession();
+  if (session === null || session.role !== "admin") {
+    return (
+      <EmptyState
+        icon={Users}
+        title="Administrator access required"
+        description="User management is restricted to administrators."
+      />
+    );
+  }
+
+  const client = getConvexClient();
+  const actorToken = await mintActorToken({
+    userId: session.userId,
+    role: session.role,
+    ...(session.sid !== undefined ? { sid: session.sid } : {}),
+  });
+  const institution = await client.query(api.users.getMyInstitution, { actorToken });
 
   if (institution === null) {
     return (
@@ -59,8 +78,8 @@ export default async function AdminUsersPage() {
   }
 
   const [users, invites] = await Promise.all([
-    client.query(api.users.listUsers, { institutionId: institution._id }),
-    client.query(api.invites.listInvites, { institutionId: institution._id }),
+    client.query(api.users.listUsers, { actorToken }),
+    client.query(api.invites.listInvites, { actorToken }),
   ]);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -119,7 +138,7 @@ export default async function AdminUsersPage() {
               </tr>
             </thead>
             <tbody className="divide-y">
-              {invites.map((invite) => (
+              {pendingInvites.map((invite) => (
                 <tr key={invite.inviteId}>
                   <td className="px-4 py-2 font-mono text-xs">{invite.email}</td>
                   <td className="px-4 py-2">{formatRole(invite.role)}</td>
@@ -130,9 +149,7 @@ export default async function AdminUsersPage() {
                     {formatDate(invite.expiresAt)}
                   </td>
                   <td className="px-4 py-2 text-right">
-                    {invite.status === "pending" ? (
-                      <RevokeButton inviteId={invite.inviteId} />
-                    ) : null}
+                    <RevokeButton inviteId={invite.inviteId} />
                   </td>
                 </tr>
               ))}

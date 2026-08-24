@@ -4,9 +4,13 @@ export const FRESH_AUTH_WINDOW_MS = 5 * 60 * 1000;
 
 export const REPLACEMENT_REASON_MAX_LENGTH = 500;
 
-export function isFreshAuth(lastSeenAt: number | undefined, now: number): boolean {
+export function isFreshAuth(
+  lastSeenAt: number | undefined,
+  now: number,
+  windowMs: number = FRESH_AUTH_WINDOW_MS,
+): boolean {
   if (lastSeenAt === undefined) return false;
-  return now - lastSeenAt <= FRESH_AUTH_WINDOW_MS;
+  return now - lastSeenAt <= windowMs;
 }
 
 export type ReplacementEligibilityInput = {

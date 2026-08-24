@@ -13,7 +13,7 @@ import { buildDeviceTrustEvidence } from "../src/lib/trust-evidence";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { verifyActorToken } from "./lib/actor";
+import { assertSameInstitution, requireAdminUser, verifyActorToken } from "./lib/actor";
 
 const MAX_LABEL_LENGTH = 80;
 const MAX_LISTED_DEVICES = 200;
@@ -33,6 +33,14 @@ async function requireAdminActor(actorToken: string): Promise<ActorTokenClaims> 
   const claims = await requireActor(actorToken);
   if (claims.role !== "admin") throw new ConvexError("unauthorized");
   return claims;
+}
+
+async function requireAdminInstitution(
+  ctx: MutationCtx | QueryCtx,
+  actorToken: string,
+): Promise<Id<"institutions">> {
+  const admin = await requireAdminUser(ctx, actorToken);
+  return admin.institutionId;
 }
 
 async function resolveActorUserId(
@@ -272,6 +280,10 @@ export const activateDevice = mutation({
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertOwnerOrAdmin(claims, device);
 
+    if (device.state === "suspended" && claims.role !== "admin") {
+      throw new ConvexError("suspended devices can only be reinstated by an administrator");
+    }
+
     assertTransition(device.state, "active");
 
     if (device.replacesDeviceId === undefined) {
@@ -330,6 +342,10 @@ export const suspendDevice = mutation({
   handler: async (ctx, args) => {
     const claims = await requireAdminActor(args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
+    assertSameInstitution(
+      await requireAdminInstitution(ctx, args.actorToken),
+      device.institutionId,
+    );
     assertTransition(device.state, "suspended");
 
     const now = Date.now();
@@ -357,6 +373,10 @@ export const revokeDevice = mutation({
   handler: async (ctx, args) => {
     const claims = await requireAdminActor(args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
+    assertSameInstitution(
+      await requireAdminInstitution(ctx, args.actorToken),
+      device.institutionId,
+    );
     assertTransition(device.state, "revoked");
 
     const now = Date.now();
@@ -384,6 +404,10 @@ export const adminActivateDevice = mutation({
   handler: async (ctx, args) => {
     const claims = await requireAdminActor(args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
+    assertSameInstitution(
+      await requireAdminInstitution(ctx, args.actorToken),
+      device.institutionId,
+    );
     assertTransition(device.state, "active");
 
     if (device.replacesDeviceId === undefined) {
@@ -472,10 +496,13 @@ export const decideReplacement = mutation({
   },
   handler: async (ctx, args) => {
     const claims = await requireAdminActor(args.actorToken);
-
     const request = await ctx.db.get(args.requestId);
     if (request === null) throw new ConvexError("replacement request not found");
     if (request.status !== "pending") throw new ConvexError("request already decided");
+    assertSameInstitution(
+      await requireAdminInstitution(ctx, args.actorToken),
+      request.institutionId,
+    );
 
     const now = Date.now();
 
@@ -594,7 +621,6 @@ export const listMyReplacementRequests = query({
 export const listDevices = query({
   args: {
     actorToken: v.string(),
-    institutionId: v.id("institutions"),
     state: v.optional(
       v.union(
         v.literal("new"),
@@ -607,7 +633,7 @@ export const listDevices = query({
     ),
   },
   handler: async (ctx, args) => {
-    await requireAdminActor(args.actorToken);
+    const institutionId = await requireAdminInstitution(ctx, args.actorToken);
 
     const states = (
       args.state !== undefined
@@ -619,10 +645,11 @@ export const listDevices = query({
     for (const state of states) {
       const page = await ctx.db
         .query("devices")
-        .withIndex("by_institution_state", (q) =>
-          q.eq("institutionId", args.institutionId).eq("state", state),
+        .withIndex("by_institution_state_registered", (q) =>
+          q.eq("institutionId", institutionId).eq("state", state),
         )
-        .collect();
+        .order("desc")
+        .take(MAX_LISTED_DEVICES);
       devices.push(...page);
     }
 
@@ -654,7 +681,7 @@ export const listAllReplacementRequests = query({
     status: v.optional(v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected"))),
   },
   handler: async (ctx, args) => {
-    await requireAdminActor(args.actorToken);
+    const institutionId = await requireAdminInstitution(ctx, args.actorToken);
 
     const statuses =
       args.status !== undefined ? [args.status] : (["pending", "approved", "rejected"] as const);
@@ -662,9 +689,10 @@ export const listAllReplacementRequests = query({
     for (const status of statuses) {
       const page = await ctx.db
         .query("replacement_requests")
-        .withIndex("by_status", (q) => q.eq("status", status))
-        .collect();
-      requests.push(...page);
+        .withIndex("by_status_requested", (q) => q.eq("status", status))
+        .order("desc")
+        .take(MAX_LISTED_DEVICES);
+      requests.push(...page.filter((request) => request.institutionId === institutionId));
     }
 
     const rows = [];

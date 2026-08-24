@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { api } from "../../../../../convex/_generated/api";
+import { deviceErrorResponse } from "@/lib/api/device-errors";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
@@ -19,8 +20,8 @@ export async function POST(request: Request) {
   }
 
   const label = typeof body.label === "string" ? body.label.trim() : "";
-  if (label.length === 0) {
-    return NextResponse.json({ error: "label is required" }, { status: 400 });
+  if (label.length === 0 || label.length > 80) {
+    return NextResponse.json({ error: "label required (1-80 characters)" }, { status: 400 });
   }
 
   try {
@@ -37,10 +38,6 @@ export async function POST(request: Request) {
     });
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Device registration failed";
-    return NextResponse.json(
-      { error: message },
-      { status: message.includes("unauthorized") ? 403 : 400 },
-    );
+    return deviceErrorResponse("register", error);
   }
 }

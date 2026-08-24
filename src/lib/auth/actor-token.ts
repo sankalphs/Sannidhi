@@ -26,6 +26,8 @@ function getSecret(): Uint8Array {
   return new Uint8Array(encoded);
 }
 
+export const getActorSecret = getSecret;
+
 export async function mintActorToken(
   payload: ActorTokenClaims,
   options?: { expiresIn?: number | string },

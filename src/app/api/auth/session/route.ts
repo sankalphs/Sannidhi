@@ -3,7 +3,6 @@ import { NextResponse } from "next/server";
 
 import { api } from "../../../../../convex/_generated/api";
 import { mintActorToken } from "@/lib/auth/actor-token";
-import { errorResponse } from "@/lib/auth/http";
 import { SESSION_COOKIE_OPTIONS, getActiveSession, getSessionExpiresAt } from "@/lib/auth/server";
 import { COOKIE_NAME, isEnrollmentSession, verifySession } from "@/lib/auth/session";
 import { getConvexClient } from "@/lib/convex/server-client";
@@ -50,6 +49,7 @@ export async function DELETE() {
   const store = await cookies();
   const token = store.get(COOKIE_NAME)?.value;
 
+  let revocationFailed = false;
   if (token !== undefined) {
     const parsed = await verifySession(token);
     if (parsed !== null && !isEnrollmentSession(parsed) && parsed.sid !== undefined) {
@@ -60,12 +60,18 @@ export async function DELETE() {
           sid: parsed.sid,
         });
         await getConvexClient().mutation(api.sessions.revokeMySession, { actorToken });
-      } catch (error) {
-        return errorResponse(error);
+      } catch {
+        revocationFailed = true;
       }
     }
   }
 
   store.set(COOKIE_NAME, "", { ...SESSION_COOKIE_OPTIONS, maxAge: 0 });
+  if (revocationFailed) {
+    return NextResponse.json(
+      { ok: false, error: "Server-side sign-out incomplete" },
+      { status: 502 },
+    );
+  }
   return NextResponse.json({ ok: true });
 }

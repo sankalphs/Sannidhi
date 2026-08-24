@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { postJson } from "@/lib/client/post-json";
 
 import {
   DEVICE_STATE_BADGE_VARIANT,
@@ -18,19 +19,6 @@ import {
 } from "./device-state";
 
 type Phase = "idle" | "registering" | "awaiting-code";
-
-async function postJson(url: string, body: unknown): Promise<Record<string, unknown>> {
-  const response = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
-  if (!response.ok) {
-    throw new Error(typeof data.error === "string" ? data.error : "Request failed");
-  }
-  return data;
-}
 
 export function DeviceManager({
   initialDevices,
@@ -211,7 +199,7 @@ export function DeviceManager({
                           Enter code
                         </Button>
                       ) : null}
-                      {device.state === "enrolled" || device.state === "suspended" ? (
+                      {device.state === "enrolled" ? (
                         <Button
                           size="xs"
                           disabled={busyDeviceId === device._id}

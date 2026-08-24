@@ -4,8 +4,11 @@ import { api } from "../../../../../../../convex/_generated/api";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { errorResponse, readJsonBody, unauthorized } from "@/lib/auth/http";
 import { getActiveSession, setSessionCookie } from "@/lib/auth/server";
-import { ROLE_TO_HOME, signSession } from "@/lib/auth/session";
+import { isEnrollmentSession, ROLE_TO_HOME, signSession } from "@/lib/auth/session";
+import { isFreshAuth } from "@/lib/devices/replacement";
 import { getConvexClient } from "@/lib/convex/server-client";
+
+const STEP_UP_WINDOW_MS = 5 * 60 * 1000;
 
 export async function POST(request: Request) {
   const session = await getActiveSession({ allowEnrollment: true });
@@ -17,6 +20,23 @@ export async function POST(request: Request) {
   }
 
   try {
+    if (!isEnrollmentSession(session) && session.sid !== undefined) {
+      const actorToken = await mintActorToken({
+        userId: session.userId,
+        role: session.role,
+        sid: session.sid,
+      });
+      const stepUp = (await getConvexClient().query(api.sessions.getSessionStepUpStatus, {
+        actorToken,
+      })) as { lastStepUpAt: number | null };
+      if (!isFreshAuth(stepUp.lastStepUpAt ?? undefined, Date.now(), STEP_UP_WINDOW_MS)) {
+        return NextResponse.json(
+          { error: "Identity re-verification required.", code: "step-up-required" },
+          { status: 403 },
+        );
+      }
+    }
+
     const actorToken = await mintActorToken({ userId: session.userId, role: session.role });
     const result = await getConvexClient().action(api.passkeys.registerVerify, {
       actorToken,

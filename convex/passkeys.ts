@@ -242,36 +242,40 @@ export const authenticateOptions = action({
     > | null = null;
     if (args.email !== undefined && args.email.trim().length > 0) {
       user = await ctx.runQuery(internal.passkeysInternal.getUserByEmail, { email: args.email });
-      if (user === null || user.status === "suspended") {
-        throw new ConvexError("no passkey available for this account");
+      if (user !== null && user.status !== "suspended") {
+        const credentials = await ctx.runQuery(internal.passkeysInternal.listActiveCredentials, {
+          userId: user._id,
+        });
+        if (credentials.length > 0) {
+          const options = await generateAuthenticationOptions({
+            rpID,
+            allowCredentials: credentials.map((credential) => ({
+              id: credential.credentialId,
+              ...(credential.transports !== undefined
+                ? { transports: transportsOf(credential.transports) }
+                : {}),
+            })),
+            userVerification: "required",
+          });
+          await ctx.runMutation(internal.passkeysInternal.storeChallenge, {
+            challenge: options.challenge,
+            purpose: "authentication",
+            userId: user._id,
+          });
+          return options;
+        }
       }
-    }
-
-    const credentials =
-      user !== null
-        ? await ctx.runQuery(internal.passkeysInternal.listActiveCredentials, { userId: user._id })
-        : [];
-    if (user !== null && credentials.length === 0) {
-      throw new ConvexError("no passkey available for this account");
     }
 
     const options = await generateAuthenticationOptions({
       rpID,
-      allowCredentials: credentials.map((credential) => ({
-        id: credential.credentialId,
-        ...(credential.transports !== undefined
-          ? { transports: transportsOf(credential.transports) }
-          : {}),
-      })),
+      allowCredentials: [],
       userVerification: "required",
     });
-
     await ctx.runMutation(internal.passkeysInternal.storeChallenge, {
       challenge: options.challenge,
       purpose: "authentication",
-      ...(user !== null ? { userId: user._id } : {}),
     });
-
     return options;
   },
 });

@@ -17,6 +17,8 @@ const LEGAL: Array<[DeviceState, DeviceState]> = [
   ["suspended", "revoked"],
   ["active", "replaced"],
   ["revoked", "replaced"],
+  ["new", "revoked"],
+  ["enrolled", "revoked"],
 ];
 
 describe("device state machine definition", () => {
@@ -88,7 +90,11 @@ describe("canTransition (legal transitions)", () => {
     expect(canTransition("new", "active")).toBe(false);
     expect(canTransition("new", "enrolled")).toBe(true);
     expect(canTransition("enrolled", "suspended")).toBe(false);
-    expect(canTransition("enrolled", "revoked")).toBe(false);
+  });
+
+  it("allows administrative revocation before activation", () => {
+    expect(canTransition("new", "revoked")).toBe(true);
+    expect(canTransition("enrolled", "revoked")).toBe(true);
   });
 });
 
@@ -102,11 +108,11 @@ describe("assertTransition", () => {
   });
 
   it("throws on illegal transitions with a descriptive message", () => {
-    expect(() => assertTransition("new", "revoked")).toThrow(
-      "Illegal device transition: new -> revoked",
-    );
     expect(() => assertTransition("replaced", "active")).toThrow(
       "Illegal device transition: replaced -> active",
+    );
+    expect(() => assertTransition("enrolled", "suspended")).toThrow(
+      "Illegal device transition: enrolled -> suspended",
     );
   });
 

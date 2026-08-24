@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     const actorToken = await mintActorToken({
       userId: session.userId,
       role: session.role,
-      sid: session.sid,
+      ...(session.sid !== undefined ? { sid: session.sid } : {}),
     });
     if (action === "withdraw") {
       const result = await client.mutation(api.enrollment.withdrawBiometricConsent, { actorToken });

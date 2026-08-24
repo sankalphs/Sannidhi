@@ -6,7 +6,7 @@ import { hashInviteToken, randomToken } from "../src/lib/invites/token";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { verifyActorToken } from "./lib/actor";
+import { assertSameInstitution, requireAdminUser, verifyActorToken } from "./lib/actor";
 
 const roleValidator = v.union(
   v.literal("student"),
@@ -181,7 +181,9 @@ async function createInvitesInternal(
     ttlDays?: number;
   },
 ): Promise<CreatedInvite[]> {
-  const actor = await requireAdminActor(args.actorToken);
+  const admin = await requireAdminUser(ctx, args.actorToken);
+  assertSameInstitution(admin.institutionId, args.institutionId);
+  const claims = await verifyActorToken(args.actorToken);
   const institution = await ctx.db.get(args.institutionId);
   if (institution === null) throw new ConvexError("institution not found");
   if (args.invites.length === 0) throw new ConvexError("no invites provided");
@@ -194,7 +196,7 @@ async function createInvitesInternal(
     throw new ConvexError(`ttlDays must be between 1 and ${MAX_TTL_DAYS}`);
   }
 
-  const actorUserId = await resolveActorUserId(ctx, actor);
+  const actorUserId = await resolveActorUserId(ctx, claims);
   const expiresAt = Date.now() + ttlDays * 24 * 60 * 60 * 1000;
 
   const created: CreatedInvite[] = [];
@@ -240,17 +242,19 @@ export const importUsersCsv = mutation({
 });
 
 export const listInvites = query({
-  args: { institutionId: v.id("institutions") },
+  args: { actorToken: v.string() },
   handler: async (ctx, args) => {
+    const admin = await requireAdminUser(ctx, args.actorToken);
     const statuses = ["pending", "accepted", "revoked", "expired"] as const;
-    const invites = [];
+    const invites: Doc<"invites">[] = [];
     for (const status of statuses) {
       const page = await ctx.db
         .query("invites")
         .withIndex("by_institution_status", (q) =>
-          q.eq("institutionId", args.institutionId).eq("status", status),
+          q.eq("institutionId", admin.institutionId).eq("status", status),
         )
-        .collect();
+        .order("desc")
+        .take(MAX_LISTED_INVITES);
       invites.push(...page);
     }
     invites.sort((a, b) => b.createdAt - a.createdAt);
@@ -262,7 +266,7 @@ export const listInvites = query({
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", invite.email))
         .first();
-      const sameInstitution = user !== null && user.institutionId === args.institutionId;
+      const sameInstitution = user !== null && user.institutionId === admin.institutionId;
       rows.push({
         inviteId: invite._id,
         email: invite.email,
@@ -286,6 +290,10 @@ export const revokeInvite = mutation({
     const invite = await ctx.db.get(args.inviteId);
     if (invite === null) throw new ConvexError("invite not found");
     if (invite.status !== "pending") throw new ConvexError("invite is not pending");
+    assertSameInstitution(
+      (await requireAdminUser(ctx, args.actorToken)).institutionId,
+      invite.institutionId,
+    );
 
     await ctx.db.patch(args.inviteId, { status: "revoked" });
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {

@@ -158,7 +158,8 @@ export default defineSchema({
     stateReason: v.optional(v.string()),
   })
     .index("by_user", ["userId"])
-    .index("by_institution_state", ["institutionId", "state"]),
+    .index("by_institution_state", ["institutionId", "state"])
+    .index("by_institution_state_registered", ["institutionId", "state", "registeredAt"]),
 
   auth_challenges: defineTable({
     challenge: v.string(),
@@ -166,7 +167,9 @@ export default defineSchema({
     userId: v.optional(v.id("users")),
     expiresAt: v.number(),
     consumedAt: v.optional(v.number()),
-  }).index("by_challenge", ["challenge"]),
+  })
+    .index("by_challenge", ["challenge"])
+    .index("by_expiresAt", ["expiresAt"]),
 
   sessions: defineTable({
     userId: v.id("users"),
@@ -176,9 +179,11 @@ export default defineSchema({
     expiresAt: v.number(),
     revokedAt: v.optional(v.number()),
     lastSeenAt: v.optional(v.number()),
+    lastStepUpAt: v.optional(v.number()),
   })
     .index("by_tokenHash", ["tokenHash"])
-    .index("by_user", ["userId"]),
+    .index("by_user", ["userId"])
+    .index("by_expiresAt", ["expiresAt"]),
 
   device_verifications: defineTable({
     deviceId: v.id("devices"),
@@ -200,7 +205,8 @@ export default defineSchema({
     successorDeviceId: v.optional(v.id("devices")),
   })
     .index("by_status", ["status"])
-    .index("by_student", ["studentId"]),
+    .index("by_student", ["studentId"])
+    .index("by_status_requested", ["status", "requestedAt"]),
 
   biometric_records: defineTable({
     userId: v.id("users"),

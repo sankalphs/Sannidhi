@@ -108,14 +108,22 @@ export const storeChallenge = internalMutation({
 });
 
 export const consumeChallenge = internalMutation({
-  args: { challenge: v.string() },
+  args: { challenge: v.string(), userId: v.optional(v.id("users")) },
   handler: async (ctx, args) => {
+    const now = Date.now();
     const row = await ctx.db
       .query("auth_challenges")
       .withIndex("by_challenge", (q) => q.eq("challenge", args.challenge))
       .unique();
-    if (row === null || row.consumedAt !== undefined) return;
-    await ctx.db.patch(row._id, { consumedAt: Date.now() });
+    if (
+      row === null ||
+      !isChallengeUsable(row, "authentication", now) ||
+      (args.userId !== undefined && row.userId !== args.userId)
+    ) {
+      return { consumed: false as const };
+    }
+    await ctx.db.patch(row._id, { consumedAt: now });
+    return { consumed: true as const };
   },
 });
 
@@ -178,6 +186,7 @@ export const completeRegistration = internalMutation({
 
     const user = await ctx.db.get(args.userId);
     if (user === null) throw new Error("user not found");
+    if (user.status === "suspended") throw new Error("account suspended");
 
     if (user.status === "invited") {
       const invite = await findPendingInviteForUser(ctx, user);
@@ -269,6 +278,19 @@ export const revokeCredential = mutation({
       .unique();
     if (credential === null) throw new ConvexError("credential not found");
 
+    const credentialUser = await ctx.db.get(credential.userId);
+    if (credentialUser === null) throw new ConvexError("user not found");
+
+    let adminUser: Doc<"users"> | null;
+    try {
+      adminUser = await ctx.db.get(admin.userId as Id<"users">);
+    } catch {
+      throw new ConvexError("unauthorized");
+    }
+    if (adminUser === null || adminUser.institutionId !== credentialUser.institutionId) {
+      throw new ConvexError("unauthorized");
+    }
+
     const now = Date.now();
     let revokedSessions = 0;
     if (credential.revokedAt === undefined) {
@@ -289,9 +311,6 @@ export const revokeCredential = mutation({
       await ctx.db.patch(session._id, { revokedAt: now });
       revokedSessions += 1;
     }
-
-    const credentialUser = await ctx.db.get(credential.userId);
-    if (credentialUser === null) throw new ConvexError("user not found");
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
       institutionId: credentialUser.institutionId,

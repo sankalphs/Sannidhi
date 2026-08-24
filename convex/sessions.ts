@@ -1,6 +1,11 @@
 import { v } from "convex/values";
 
-import { SESSION_TTL_MS, hashSessionSid, randomSid } from "../src/lib/auth/token-hash";
+import {
+  SESSION_ABSOLUTE_MAX_MS,
+  SESSION_TTL_MS,
+  hashSessionSid,
+  randomSid,
+} from "../src/lib/auth/token-hash";
 import {
   internalMutation,
   mutation,
@@ -68,7 +73,9 @@ async function touchByTokenHash(
   const row = await getActiveRow(ctx, tokenHash);
   if (row === null) return null;
   const now = Date.now();
-  const expiresAt = now + slidingTtlMs;
+  const absoluteDeadline = row.createdAt + SESSION_ABSOLUTE_MAX_MS;
+  if (absoluteDeadline <= now) return null;
+  const expiresAt = Math.min(now + slidingTtlMs, absoluteDeadline);
   await ctx.db.patch(row._id, { lastSeenAt: now, expiresAt });
   return expiresAt;
 }
@@ -92,6 +99,33 @@ export const touchBySid = internalMutation({
     const tokenHash = await hashSessionSid(args.sid);
     await touchByTokenHash(ctx, tokenHash, SESSION_TTL_MS);
     return { ok: true as const };
+  },
+});
+
+export const markStepUp = internalMutation({
+  args: { sid: v.string() },
+  handler: async (ctx, args) => {
+    const tokenHash = await hashSessionSid(args.sid);
+    const row = await getActiveRow(ctx, tokenHash);
+    if (row === null) return { recorded: false as const };
+    const now = Date.now();
+    await ctx.db.patch(row._id, { lastStepUpAt: now, lastSeenAt: now });
+    return { recorded: true as const, lastStepUpAt: now };
+  },
+});
+
+export const getSessionStepUpStatus = query({
+  args: { actorToken: v.string() },
+  handler: async (ctx, args) => {
+    const claims = await verifyActorToken(args.actorToken);
+    if (claims.sid === undefined) return { lastStepUpAt: null };
+    const tokenHash = await hashSessionSid(claims.sid);
+    const row = await ctx.db
+      .query("sessions")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (row === null || !isActiveSession(row, Date.now())) return { lastStepUpAt: null };
+    return { lastStepUpAt: row.lastStepUpAt ?? null };
   },
 });
 

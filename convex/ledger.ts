@@ -1,11 +1,13 @@
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 
 import {
   computeEventHash,
   type LedgerHashInput,
   type LedgerEventCategory,
 } from "../src/lib/ledger/hash";
-import { internalMutation, query } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
+import { internalMutation, query, type QueryCtx } from "./_generated/server";
+import { resolveActorUser } from "./lib/actor";
 
 const categoryValidator = v.union(
   v.literal("device"),
@@ -44,9 +46,21 @@ export const appendLedgerEvent = internalMutation({
   },
 });
 
+const MAX_VERIFY_WINDOW = 2000;
+
+async function resolveCaller(ctx: QueryCtx, actorToken: string): Promise<Doc<"users">> {
+  const user = await resolveActorUser(ctx, actorToken);
+  if (user === null) throw new ConvexError("unauthorized");
+  return user;
+}
+
 export const history = query({
-  args: { subjectUserId: v.id("users") },
+  args: { actorToken: v.string(), subjectUserId: v.id("users") },
   handler: async (ctx, args) => {
+    const caller = await resolveCaller(ctx, args.actorToken);
+    if (caller._id !== args.subjectUserId && caller.role !== "admin" && caller.role !== "auditor") {
+      throw new ConvexError("unauthorized");
+    }
     return ctx.db
       .query("event_ledger")
       .withIndex("by_subject", (q) => q.eq("subjectUserId", args.subjectUserId))
@@ -55,20 +69,33 @@ export const history = query({
 });
 
 export const verifyChain = query({
-  args: { institutionId: v.id("institutions") },
+  args: {
+    actorToken: v.string(),
+    fromSeq: v.optional(v.number()),
+    limit: v.optional(v.number()),
+  },
   handler: async (ctx, args) => {
+    const caller = await resolveCaller(ctx, args.actorToken);
+    if (caller.role !== "admin" && caller.role !== "auditor") {
+      throw new ConvexError("unauthorized");
+    }
+
+    const fromSeq = Math.max(0, Math.floor(args.fromSeq ?? 0));
+    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 500)), MAX_VERIFY_WINDOW);
+
     const events = await ctx.db
       .query("event_ledger")
-      .withIndex("by_institution_seq", (q) => q.eq("institutionId", args.institutionId))
+      .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
+      .filter((q) => q.gte(q.field("seq"), fromSeq))
       .order("asc")
-      .collect();
+      .take(limit + 1);
 
-    let expectedSeq = 0;
+    let expectedSeq = fromSeq;
     let expectedPrevEventHash: string | undefined;
 
-    for (const event of events) {
+    for (const event of events.slice(0, limit)) {
       if (event.seq !== expectedSeq || event.prevEventHash !== expectedPrevEventHash) {
-        return { valid: false, brokenAtSeq: event.seq, count: events.length };
+        return { valid: false, brokenAtSeq: event.seq, count: event.seq - fromSeq };
       }
       const input: LedgerHashInput = {
         institutionId: event.institutionId,
@@ -82,12 +109,18 @@ export const verifyChain = query({
         prevEventHash: event.prevEventHash,
       };
       if ((await computeEventHash(input)) !== event.eventHash) {
-        return { valid: false, brokenAtSeq: event.seq, count: events.length };
+        return { valid: false, brokenAtSeq: event.seq, count: event.seq - fromSeq };
       }
       expectedSeq += 1;
       expectedPrevEventHash = event.eventHash;
     }
 
-    return { valid: true, brokenAtSeq: undefined, count: events.length };
+    const verifiedCount = Math.min(events.length, limit);
+    return {
+      valid: true,
+      brokenAtSeq: undefined,
+      count: verifiedCount,
+      ...(events.length > limit ? { nextCursor: events[limit - 1].seq + 1 } : {}),
+    };
   },
 });

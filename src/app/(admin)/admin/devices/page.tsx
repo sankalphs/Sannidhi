@@ -25,6 +25,7 @@ function formatDate(ms: number): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "Asia/Kolkata",
   });
 }
 
@@ -50,7 +51,7 @@ export default async function AdminDevicesPage() {
     role: session.role,
     ...(session.sid !== undefined ? { sid: session.sid } : {}),
   });
-  const institution = await client.query(api.users.getDefaultInstitution, {});
+  const institution = await client.query(api.users.getMyInstitution, { actorToken });
   if (institution === null) {
     return (
       <EmptyState
@@ -62,7 +63,7 @@ export default async function AdminDevicesPage() {
   }
 
   const [devices, requests] = await Promise.all([
-    client.query(api.devices.listDevices, { actorToken, institutionId: institution._id }),
+    client.query(api.devices.listDevices, { actorToken }),
     client.query(api.devices.listAllReplacementRequests, { actorToken }),
   ]);
   const pendingRequests = requests.filter((request) => request.status === "pending");
@@ -158,16 +159,13 @@ export default async function AdminDevicesPage() {
                         <DeviceActionButton action="activate" deviceId={device._id} />
                       ) : null}
                       {device.state === "suspended" ? (
-                        <>
-                          <DeviceActionButton action="activate" deviceId={device._id} />
-                          <DeviceActionButton action="revoke" deviceId={device._id} />
-                        </>
+                        <DeviceActionButton action="activate" deviceId={device._id} />
+                      ) : null}
+                      {["new", "enrolled", "suspended", "active"].includes(device.state) ? (
+                        <DeviceActionButton action="revoke" deviceId={device._id} />
                       ) : null}
                       {device.state === "active" ? (
-                        <>
-                          <DeviceActionButton action="suspend" deviceId={device._id} />
-                          <DeviceActionButton action="revoke" deviceId={device._id} />
-                        </>
+                        <DeviceActionButton action="suspend" deviceId={device._id} />
                       ) : null}
                     </td>
                   </tr>

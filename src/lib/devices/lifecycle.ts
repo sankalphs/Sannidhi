@@ -10,8 +10,8 @@ export const DEVICE_STATES = [
 export type DeviceState = (typeof DEVICE_STATES)[number];
 
 export const DEVICE_TRANSITIONS: Readonly<Record<DeviceState, readonly DeviceState[]>> = {
-  new: ["enrolled"],
-  enrolled: ["active"],
+  new: ["enrolled", "revoked"],
+  enrolled: ["active", "revoked"],
   active: ["suspended", "revoked", "replaced"],
   suspended: ["active", "revoked"],
   revoked: ["replaced"],

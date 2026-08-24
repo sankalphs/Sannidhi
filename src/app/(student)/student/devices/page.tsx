@@ -34,6 +34,10 @@ export default async function StudentDevicesPage() {
     client.query(api.devices.listMyReplacementRequests, { actorToken }),
     client.query(api.enrollment.getMyBiometricRecord, { actorToken }),
   ]);
+  const loadFailed = devicesResult.status === "rejected";
+  if (loadFailed) {
+    console.error("[student-devices] device query failed", devicesResult.reason);
+  }
   const devices = devicesResult.status === "fulfilled" ? devicesResult.value : [];
   const requests = requestsResult.status === "fulfilled" ? requestsResult.value : [];
   const biometricRecord = recordResult.status === "fulfilled" ? recordResult.value : null;
@@ -46,8 +50,18 @@ export default async function StudentDevicesPage() {
           The approved personal device you use for attendance check-in.
         </p>
       </div>
-      <DeviceManager initialDevices={devices} initialRequests={requests} />
-      <BiometricsCard initialRecord={biometricRecord} />
+      {loadFailed ? (
+        <EmptyState
+          icon={Smartphone}
+          title="Could not load your devices"
+          description="Something went wrong while loading your devices. Please refresh the page and try again."
+        />
+      ) : (
+        <>
+          <DeviceManager initialDevices={devices} initialRequests={requests} />
+          <BiometricsCard initialRecord={biometricRecord} />
+        </>
+      )}
     </div>
   );
 }

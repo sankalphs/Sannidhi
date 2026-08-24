@@ -2,11 +2,21 @@ import { NextResponse } from "next/server";
 
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
+import { deviceErrorResponse } from "@/lib/api/device-errors";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
+import { isFreshAuth } from "@/lib/devices/replacement";
 import { getConvexClient } from "@/lib/convex/server-client";
 
 const FRESH_AUTH_WINDOW_MS = 5 * 60 * 1000;
+
+async function hasFreshStepUp(actorToken: string): Promise<boolean> {
+  const client = getConvexClient();
+  const stepUp = (await client.query(api.sessions.getSessionStepUpStatus, {
+    actorToken,
+  })) as { lastStepUpAt: number | null };
+  return isFreshAuth(stepUp.lastStepUpAt ?? undefined, Date.now(), FRESH_AUTH_WINDOW_MS);
+}
 
 export async function POST(request: Request) {
   const session = await getActiveSession();
@@ -50,14 +60,9 @@ export async function POST(request: Request) {
       return NextResponse.json(result);
     }
     if (action === "verify-successor") {
-      const fresh = (await client.query(api.sessions.getSessionFreshAuth, { actorToken })) as {
-        lastSeenAt: number | null;
-      };
-      const freshAuth =
-        fresh.lastSeenAt !== null && Date.now() - fresh.lastSeenAt <= FRESH_AUTH_WINDOW_MS;
-      if (!freshAuth && session.role !== "admin") {
+      if (session.role !== "admin" && !(await hasFreshStepUp(actorToken))) {
         return NextResponse.json(
-          { error: "identity re-verification required", code: "step-up-required" },
+          { error: "Identity re-verification required.", code: "step-up-required" },
           { status: 403 },
         );
       }
@@ -70,10 +75,6 @@ export async function POST(request: Request) {
     const result = await client.mutation(api.devices.activateDevice, args);
     return NextResponse.json(result);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Device action failed";
-    return NextResponse.json(
-      { error: message },
-      { status: message.includes("unauthorized") ? 403 : 400 },
-    );
+    return deviceErrorResponse(action, error);
   }
 }

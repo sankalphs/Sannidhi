@@ -1,23 +1,15 @@
 import { jwtVerify } from "jose";
+import { ConvexError } from "convex/values";
 
 import {
   ACTOR_TOKEN_ALGORITHM,
   ACTOR_TOKEN_MAX_AGE_SECONDS,
+  getActorSecret,
   type ActorTokenClaims,
 } from "../../src/lib/auth/actor-token";
 import { ROLES, type Role } from "../../src/lib/auth/session";
-
-function getActorSecret(): Uint8Array {
-  const secret = process.env.SESSION_SECRET;
-  if (secret === undefined) {
-    throw new Error("SESSION_SECRET must be set");
-  }
-  const encoded = new TextEncoder().encode(secret);
-  if (encoded.byteLength < 16) {
-    throw new Error("SESSION_SECRET must be at least 16 bytes");
-  }
-  return new Uint8Array(encoded);
-}
+import type { Doc, Id } from "../_generated/dataModel";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 
 export async function verifyActorToken(token: string): Promise<ActorTokenClaims> {
   let payload: Record<string, unknown>;
@@ -52,4 +44,44 @@ export async function verifyActorToken(token: string): Promise<ActorTokenClaims>
     claims.sid = sid;
   }
   return claims;
+}
+
+export async function resolveActorUser(
+  ctx: MutationCtx | QueryCtx,
+  token: string,
+): Promise<Doc<"users"> | null> {
+  const claims = await verifyActorToken(token);
+  try {
+    return await ctx.db.get(claims.userId as Id<"users">);
+  } catch {
+    return null;
+  }
+}
+
+export async function requireAdminUser(
+  ctx: MutationCtx | QueryCtx,
+  token: string,
+): Promise<Doc<"users">> {
+  let claims: ActorTokenClaims;
+  try {
+    claims = await verifyActorToken(token);
+  } catch (error) {
+    throw new ConvexError(error instanceof Error ? error.message : "unauthorized");
+  }
+  if (claims.role !== "admin") throw new ConvexError("unauthorized");
+  let user: Doc<"users"> | null;
+  try {
+    user = await ctx.db.get(claims.userId as Id<"users">);
+  } catch {
+    throw new ConvexError("unauthorized");
+  }
+  if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  return user;
+}
+
+export function assertSameInstitution(
+  adminInstitutionId: Id<"institutions">,
+  targetInstitutionId: Id<"institutions">,
+): void {
+  if (adminInstitutionId !== targetInstitutionId) throw new ConvexError("unauthorized");
 }

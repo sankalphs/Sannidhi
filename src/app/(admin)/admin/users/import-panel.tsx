@@ -69,9 +69,13 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
   }
 
   async function copyLink(token: string) {
-    await navigator.clipboard.writeText(`${appUrl}/invite/${token}`);
-    setCopiedToken(token);
-    setTimeout(() => setCopiedToken((current) => (current === token ? null : current)), 1500);
+    try {
+      await navigator.clipboard.writeText(`${appUrl}/invite/${token}`);
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken((current) => (current === token ? null : current)), 1500);
+    } catch {
+      setError("Clipboard access was denied. Copy the link manually instead.");
+    }
   }
 
   return (

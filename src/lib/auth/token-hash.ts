@@ -4,6 +4,8 @@ export const SID_BYTES = 32;
 
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
+export const SESSION_ABSOLUTE_MAX_MS = 30 * 24 * 60 * 60 * 1000;
+
 export const ENROLLMENT_SESSION_TTL_MS = 15 * 60 * 1000;
 
 function toHex(bytes: Uint8Array): string {

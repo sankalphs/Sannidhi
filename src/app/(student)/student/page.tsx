@@ -1,40 +1,14 @@
-import { api } from "../../../../convex/_generated/api";
 import { Check, Circle, ClipboardList, History } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { mintActorToken } from "@/lib/auth/actor-token";
-import { getActiveSession } from "@/lib/auth/server";
-import { getConvexClient } from "@/lib/convex/server-client";
+import { loadEnrollmentGate } from "@/lib/enrollment/load";
 import type { EnrollmentGateResult } from "@/lib/enrollment/gate";
 import { ENROLLMENT_STEPS, missingStepCopy } from "@/lib/enrollment/ui";
 
 export const dynamic = "force-dynamic";
-
-const FULLY_LOCKED: EnrollmentGateResult = {
-  locked: true,
-  completedSteps: { account: false, passkey: false, device: false },
-  missingSteps: ["account", "passkey", "device"],
-  biometricConsentRecorded: false,
-};
-
-async function loadEnrollmentGate(): Promise<EnrollmentGateResult | null> {
-  const session = await getActiveSession();
-  if (session === null) return null;
-  try {
-    const client = getConvexClient();
-    const actorToken = await mintActorToken({
-      userId: session.userId,
-      role: session.role,
-      ...(session.sid !== undefined ? { sid: session.sid } : {}),
-    });
-    return await client.query(api.enrollment.getMyEnrollmentStatus, { actorToken });
-  } catch {
-    return FULLY_LOCKED;
-  }
-}
 
 function EnrollmentChecklist({
   completedSteps,
@@ -83,9 +57,7 @@ export default async function StudentPage() {
         <h1 className="text-2xl font-semibold tracking-tight">Student dashboard</h1>
         <p className="text-muted-foreground text-sm">Your attendance at a glance.</p>
       </div>
-      {gate !== null && gate.locked ? (
-        <EnrollmentChecklist completedSteps={gate.completedSteps} />
-      ) : null}
+      {gate.locked ? <EnrollmentChecklist completedSteps={gate.completedSteps} /> : null}
       <EmptyState
         icon={History}
         title="Attendance history"

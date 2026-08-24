@@ -1,34 +1,13 @@
-import { api } from "../../../../../convex/_generated/api";
 import { BookOpen } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { LockedEmptyState } from "@/components/shell/locked-empty-state";
-import { mintActorToken } from "@/lib/auth/actor-token";
-import { getActiveSession } from "@/lib/auth/server";
-import { getConvexClient } from "@/lib/convex/server-client";
-import type { MissingEnrollmentStep } from "@/lib/enrollment/gate";
-import { ENROLLMENT_STEPS } from "@/lib/enrollment/ui";
+import { loadMissingEnrollmentSteps } from "@/lib/enrollment/load";
 
 export const dynamic = "force-dynamic";
 
 export default async function StudentHistoryPage() {
-  const session = await getActiveSession();
-
-  let missingSteps: MissingEnrollmentStep[] = [...ENROLLMENT_STEPS];
-  if (session !== null) {
-    try {
-      const client = getConvexClient();
-      const actorToken = await mintActorToken({
-        userId: session.userId,
-        role: session.role,
-        ...(session.sid !== undefined ? { sid: session.sid } : {}),
-      });
-      const status = await client.query(api.enrollment.getMyEnrollmentStatus, { actorToken });
-      missingSteps = status.locked ? [...status.missingSteps] : [];
-    } catch {
-      missingSteps = [...ENROLLMENT_STEPS];
-    }
-  }
+  const missingSteps = await loadMissingEnrollmentSteps();
 
   return (
     <div className="flex flex-col gap-6">

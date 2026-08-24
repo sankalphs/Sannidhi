@@ -185,21 +185,27 @@ export const seedDemoData = internalMutation({
       createdAt: now,
     });
 
-    await ctx.db.insert("invites", {
-      institutionId,
-      email: invitedEmail,
-      role: "student",
-      tokenHash: await hashInviteToken(DEMO_INVITE_TOKEN),
-      status: "pending",
-      invitedByUserId: adminId,
-      createdAt: now,
-      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-    });
+    const demoInviteEnabled =
+      process.env.SEED_DEMO_INVITE === "1" || process.env.CONVEX_CLOUD_URL === undefined;
+    let inviteCount = 0;
+    if (demoInviteEnabled) {
+      await ctx.db.insert("invites", {
+        institutionId,
+        email: invitedEmail,
+        role: "student",
+        tokenHash: await hashInviteToken(DEMO_INVITE_TOKEN),
+        status: "pending",
+        invitedByUserId: adminId,
+        createdAt: now,
+        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+      });
+      inviteCount = 1;
+    }
 
     return {
       institutions: 1,
       users: userData.length + 1,
-      invites: 1,
+      invites: inviteCount,
       courses: courseData.length,
       sections: sectionIds.length,
       venues: venueIds.length,
