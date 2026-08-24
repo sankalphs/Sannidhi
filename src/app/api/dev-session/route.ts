@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { api } from "../../../../convex/_generated/api";
-import { isDevLoginEnabled } from "@/lib/auth/dev-login";
+import { isDemoLoginEnabled } from "@/lib/auth/dev-login";
 import { COOKIE_NAME, ROLES, signSession, type Role } from "@/lib/auth/session";
 import { getConvexClient } from "@/lib/convex/server-client";
 
@@ -22,7 +22,7 @@ async function resolveDemoUserId(role: Role): Promise<string | null> {
 }
 
 export async function POST(request: Request) {
-  if (!isDevLoginEnabled()) return notFound();
+  if (!isDemoLoginEnabled()) return notFound();
   let body: unknown;
   try {
     body = await request.json();
@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  if (!isDevLoginEnabled()) return notFound();
+  if (!isDemoLoginEnabled()) return notFound();
   const store = await cookies();
   store.delete(COOKIE_NAME);
   return NextResponse.json({ ok: true });

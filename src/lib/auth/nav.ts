@@ -2,6 +2,7 @@ import {
   BookOpen,
   ClipboardList,
   GraduationCap,
+  Inbox,
   Landmark,
   LayoutDashboard,
   QrCode,
@@ -39,6 +40,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   admin: [
     { label: "Overview", href: "/admin", icon: LayoutDashboard },
     { label: "Users", href: "/admin/users", icon: Users },
+    { label: "Access requests", href: "/admin/requests", icon: Inbox },
     { label: "Devices", href: "/admin/devices", icon: Smartphone },
     { label: "Courses & sections", href: "/admin/courses", icon: BookOpen },
     { label: "Policies", href: "/admin/policies", icon: Landmark },

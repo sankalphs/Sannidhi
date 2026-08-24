@@ -38,47 +38,45 @@ export default async function InviteRedemptionPage({
   if (result === null || result.valid === false) {
     const reason = result !== null ? REASON_COPY[result.reason] : undefined;
     return (
-      <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4 text-center">
-        <div className="bg-card flex max-w-md flex-col items-center gap-3 rounded-xl border p-8">
-          <ShieldX className="text-destructive size-8" />
-          <h1 className="text-xl font-semibold tracking-tight">Invite unavailable</h1>
-          <p className="text-muted-foreground text-sm">
-            {reason ?? "This invite link could not be verified."}
-          </p>
-          <Link href="/" className="text-primary text-sm underline-offset-4 hover:underline">
-            Back to home
-          </Link>
-        </div>
-      </main>
+      <div className="border-border bg-card flex flex-col items-center gap-4 rounded-xl border p-8 text-center">
+        <span className="border-destructive/35 text-destructive bg-destructive/10 inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 font-mono text-[11px] font-medium tracking-[0.12em] uppercase">
+          <ShieldX className="size-3.5" />
+          Invite unavailable
+        </span>
+        <h1 className="font-display text-2xl tracking-tight">This link does not check out.</h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          {reason ?? "This invite link could not be verified."}
+        </p>
+        <Link href="/" className="text-primary text-sm underline-offset-4 hover:underline">
+          Back to home
+        </Link>
+      </div>
     );
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-6 px-4">
-      <div className="bg-card flex w-full max-w-md flex-col gap-5 rounded-xl border p-8">
-        <div className="flex flex-col gap-1 text-center">
-          <p className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-            {result.institutionName ?? "Your institution"} invites you
-          </p>
-          <h1 className="text-2xl font-semibold tracking-tight">Activate your account</h1>
-        </div>
-
-        <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-lg border p-4 text-sm">
-          <dt className="text-muted-foreground">Email</dt>
-          <dd className="truncate font-mono text-xs">{result.email}</dd>
-          <dt className="text-muted-foreground">Role</dt>
-          <dd>{formatRole(result.role)}</dd>
-          <dt className="text-muted-foreground">Link expires</dt>
-          <dd>{formatDate(result.expiresAt)}</dd>
-        </dl>
-
-        <p className="text-muted-foreground text-sm">
-          Set up your passkey to activate your account. Your passkey stays on your device — no
-          passwords, no shared secrets.
+    <div className="flex flex-col gap-7">
+      <div className="flex flex-col gap-3 text-center sm:text-left">
+        <p className="text-muted-foreground font-mono text-xs font-medium tracking-[0.16em] uppercase">
+          {result.institutionName ?? "Your institution"} invites you
         </p>
-
-        <PasskeyEnrollmentStep token={token} />
+        <h1 className="font-display text-4xl tracking-tight">Activate your account</h1>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          Set up your passkey to finish enrolling. Your passkey stays on your device — no passwords,
+          no shared secrets.
+        </p>
       </div>
-    </main>
+
+      <dl className="border-border bg-card grid grid-cols-[auto_1fr] gap-x-4 gap-y-2.5 rounded-xl border p-5 text-sm">
+        <dt className="text-muted-foreground">Email</dt>
+        <dd className="truncate font-mono text-xs">{result.email}</dd>
+        <dt className="text-muted-foreground">Role</dt>
+        <dd className="capitalize">{formatRole(result.role)}</dd>
+        <dt className="text-muted-foreground">Link expires</dt>
+        <dd className="font-mono text-xs">{formatDate(result.expiresAt)}</dd>
+      </dl>
+
+      <PasskeyEnrollmentStep token={token} />
+    </div>
   );
 }

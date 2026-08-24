@@ -58,8 +58,8 @@ export function PasskeyLoginButton() {
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <Button onClick={signInWithPasskey} disabled={pending}>
+    <div className="flex flex-col items-stretch gap-2">
+      <Button size="lg" className="w-full" onClick={signInWithPasskey} disabled={pending}>
         <Fingerprint />
         {pending ? "Waiting for your passkey…" : "Sign in with passkey"}
       </Button>

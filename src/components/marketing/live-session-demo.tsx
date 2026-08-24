@@ -107,7 +107,14 @@ function FinderPattern({ x, y }: { x: number; y: number }) {
       const core = row >= 2 && row <= 4 && col >= 2 && col <= 4;
       if (!edge && !core) continue;
       cells.push(
-        <rect key={`${row}-${col}`} x={x + col} y={y + row} width={1} height={1} fill="currentColor" />,
+        <rect
+          key={`${row}-${col}`}
+          x={x + col}
+          y={y + row}
+          width={1}
+          height={1}
+          fill="currentColor"
+        />,
       );
     }
   }
@@ -131,10 +138,10 @@ export function LiveSessionDemo() {
       verdictIndex.current += 1;
       entryKey.current += 1;
       setFeed((current) =>
-        [{ key: entryKey.current, name: student.name, id: student.id, at: clockNow(), verdict }, ...current].slice(
-          0,
-          MAX_FEED_ROWS,
-        ),
+        [
+          { key: entryKey.current, name: student.name, id: student.id, at: clockNow(), verdict },
+          ...current,
+        ].slice(0, MAX_FEED_ROWS),
       );
     };
 
@@ -159,7 +166,7 @@ export function LiveSessionDemo() {
   const modules = useQrModules(token);
 
   return (
-    <div className="border-primary/60 bg-primary text-primary-foreground overflow-hidden rounded-xl border shadow-[0_24px_60px_-24px] shadow-primary/40">
+    <div className="border-primary/60 bg-primary text-primary-foreground shadow-primary/40 overflow-hidden rounded-xl border shadow-[0_24px_60px_-24px]">
       <div className="border-primary-foreground/15 flex items-center justify-between border-b px-5 py-3.5">
         <div className="flex flex-col">
           <span className="font-mono text-[11px] tracking-[0.14em] uppercase opacity-70">
@@ -242,7 +249,7 @@ export function LiveSessionDemo() {
                 </div>
                 <VerdictStamp
                   verdict={entry.verdict}
-                  className="shrink-0 border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground"
+                  className="border-primary-foreground/20 bg-primary-foreground/10 text-primary-foreground shrink-0"
                 />
               </li>
             ))}

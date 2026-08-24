@@ -131,8 +131,8 @@ export default function Home() {
               </h1>
               <p className="text-muted-foreground max-w-xl text-lg leading-relaxed">
                 Sannidhi replaces the roll call. Students check in with a passkey in seconds, the
-                risk engine asks for more proof only when evidence is thin, and every decision
-                lands in a tamper-evident ledger.
+                risk engine asks for more proof only when evidence is thin, and every decision lands
+                in a tamper-evident ledger.
               </p>
               <div className="flex flex-wrap items-center gap-3">
                 <Button size="lg" asChild>
@@ -216,19 +216,19 @@ export default function Home() {
                 One ecosystem. Four ways in.
               </h2>
               <p className="text-muted-foreground">
-                Every role gets its own surface with exactly the powers it needs — and nothing
-                more. Demo access lets you walk each one with seeded data.
+                Every role gets its own surface with exactly the powers it needs — and nothing more.
+                Demo access lets you walk each one with seeded data.
               </p>
             </div>
-            <div className="mt-10 grid gap-px overflow-hidden rounded-xl border bg-border/70 md:grid-cols-2">
+            <div className="bg-border/70 mt-10 grid gap-px overflow-hidden rounded-xl border md:grid-cols-2">
               {PANELS.map((panel, index) => (
                 <Link
                   key={panel.eyebrow}
                   href={panel.href}
-                  className="group hover:bg-accent relative flex flex-col gap-4 bg-card p-6 transition-colors focus-visible:bg-accent focus-visible:outline-none sm:p-8"
+                  className="group hover:bg-accent bg-card focus-visible:bg-accent relative flex flex-col gap-4 p-6 transition-colors focus-visible:outline-none sm:p-8"
                 >
                   <span
-                    className="absolute top-6 right-6 font-mono text-[11px] text-muted-foreground/60 sm:top-8 sm:right-8"
+                    className="text-muted-foreground/60 absolute top-6 right-6 font-mono text-[11px] sm:top-8 sm:right-8"
                     aria-hidden="true"
                   >
                     {String(index + 1).padStart(2, "0")}
@@ -297,8 +297,8 @@ export default function Home() {
                 Bring honest attendance to your institution.
               </h2>
               <p className="text-primary-foreground/80">
-                Tell us about your campus and we will set up your departments, courses, and
-                policies — then invite your people.
+                Tell us about your campus and we will set up your departments, courses, and policies
+                — then invite your people.
               </p>
             </div>
             <Button

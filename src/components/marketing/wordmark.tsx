@@ -23,13 +23,7 @@ export function Seal({ className }: { className?: string }) {
   );
 }
 
-export function Wordmark({
-  className,
-  href = "/",
-}: {
-  className?: string;
-  href?: string | null;
-}) {
+export function Wordmark({ className, href = "/" }: { className?: string; href?: string | null }) {
   const content = (
     <span className={cn("flex items-center gap-2.5", className)}>
       <Seal />
@@ -38,7 +32,7 @@ export function Wordmark({
   );
   if (href === null) return content;
   return (
-    <Link href={href} className="rounded-md focus-visible:ring-ring focus-visible:outline-none">
+    <Link href={href} className="focus-visible:ring-ring rounded-md focus-visible:outline-none">
       {content}
     </Link>
   );
