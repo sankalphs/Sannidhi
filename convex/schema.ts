@@ -52,9 +52,11 @@ export default defineSchema({
     dayOfWeek: v.number(),
     startMinutes: v.number(),
     endMinutes: v.number(),
+    facultyId: v.optional(v.id("users")),
   })
     .index("by_section", ["sectionId"])
-    .index("by_venue", ["venueId"]),
+    .index("by_venue", ["venueId"])
+    .index("by_faculty_day", ["facultyId", "dayOfWeek"]),
 
   enrollments: defineTable({
     studentId: v.id("users"),
