@@ -21,7 +21,4 @@
 
 - **GitHub** — hosting, commits, PRs, and review comments (CodeRabbit + Copilot feedback arrives here).
 - **Entire CLI** — enabled in this repo; tracks agent sessions as checkpoints with extra context and timing.
-  - `entire status` — current repo/session state
-  - `entire activity` / `entire recap` — activity overview and recent checkpoint summary
-  - `entire checkpoint search` — inspect past checkpoints
   - Run an `entire` command when you need to know what happened earlier or how much time was spent.
