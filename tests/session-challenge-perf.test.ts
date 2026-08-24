@@ -14,7 +14,7 @@ const CLASS_SIZE = 250;
 const T0 = 1_700_000_000_000;
 
 describe("session challenge classroom scale", () => {
-  it("mints and redeems a full classroom exactly once each within the latency budget", () => {
+  it("mints and redeems a full classroom exactly once each within the latency budget", async () => {
     const startedAt = Date.now();
     const store = new Map<string, StoredChallengeState>();
     const session: SessionContextState = {
@@ -26,17 +26,19 @@ describe("session challenge classroom scale", () => {
       windowEndsAt: T0 + 45 * 60 * 1000,
       status: "active",
     };
-    const minted: MintOutput[] = [];
-    for (let i = 0; i < CLASS_SIZE; i += 1) {
-      const row = mintChallengeToken({
-        sessionId: "perf-session",
-        institutionId: "inst-1",
-        courseId: "course-1",
-        sectionId: "sec-1",
-        venueId: "venue-1",
-        now: T0,
-      });
-      minted.push(row);
+    const minted: MintOutput[] = await Promise.all(
+      Array.from({ length: CLASS_SIZE }, () =>
+        mintChallengeToken({
+          sessionId: "perf-session",
+          institutionId: "inst-1",
+          courseId: "course-1",
+          sectionId: "sec-1",
+          venueId: "venue-1",
+          now: T0,
+        }),
+      ),
+    );
+    for (const row of minted) {
       store.set(row.nonceHash, {
         nonceHash: row.nonceHash,
         issuedAt: T0,
@@ -46,9 +48,9 @@ describe("session challenge classroom scale", () => {
     let validCount = 0;
     const firstPassNow = T0 + 1000;
     for (const row of minted) {
-      const verified = verifyChallengeToken(row.token);
-      const digest = verified.ok ? nonceDigest(verified.payload.n) : "";
-      const outcome = classifyRedeem({
+      const verified = await verifyChallengeToken(row.token);
+      const digest = verified.ok ? await nonceDigest(verified.payload.n) : "";
+      const outcome = await classifyRedeem({
         verified,
         stored: store.get(digest),
         session,
@@ -63,9 +65,9 @@ describe("session challenge classroom scale", () => {
     }
     expect(validCount).toBe(CLASS_SIZE);
     for (const row of minted) {
-      const verified = verifyChallengeToken(row.token);
-      const digest = verified.ok ? nonceDigest(verified.payload.n) : "";
-      const outcome = classifyRedeem({
+      const verified = await verifyChallengeToken(row.token);
+      const digest = verified.ok ? await nonceDigest(verified.payload.n) : "";
+      const outcome = await classifyRedeem({
         verified,
         stored: store.get(digest),
         session,

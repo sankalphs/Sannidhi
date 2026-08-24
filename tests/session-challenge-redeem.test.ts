@@ -29,31 +29,33 @@ type ClassificationCase = {
 };
 
 function buildFixture() {
-  const minted = mintChallengeToken({
-    sessionId: "sess-1",
-    institutionId: "inst-1",
-    courseId: "course-1",
-    sectionId: "sec-1",
-    venueId: "venue-1",
-    now: T0,
-  });
-  const verified = verifyChallengeToken(minted.token);
-  if (!verified.ok) throw new Error("fixture token failed verification");
-  const stored: StoredChallengeState = {
-    nonceHash: nonceDigest(minted.nonce),
-    issuedAt: T0,
-    expiresAt: minted.expiresAt,
-  };
-  const session: SessionContextState = {
-    institutionId: "inst-1",
-    sessionId: "sess-1",
-    courseId: "course-1",
-    sectionId: "sec-1",
-    venueId: "venue-1",
-    windowEndsAt: T0 + 30 * 1000,
-    status: "active",
-  };
-  return { minted, verified, stored, session };
+  return (async () => {
+    const minted = await mintChallengeToken({
+      sessionId: "sess-1",
+      institutionId: "inst-1",
+      courseId: "course-1",
+      sectionId: "sec-1",
+      venueId: "venue-1",
+      now: T0,
+    });
+    const verified = await verifyChallengeToken(minted.token);
+    if (!verified.ok) throw new Error("fixture token failed verification");
+    const stored: StoredChallengeState = {
+      nonceHash: await nonceDigest(minted.nonce),
+      issuedAt: T0,
+      expiresAt: minted.expiresAt,
+    };
+    const session: SessionContextState = {
+      institutionId: "inst-1",
+      sessionId: "sess-1",
+      courseId: "course-1",
+      sectionId: "sec-1",
+      venueId: "venue-1",
+      windowEndsAt: T0 + 30 * 1000,
+      status: "active",
+    };
+    return { minted, verified, stored, session };
+  })();
 }
 
 function resolveStored(
@@ -153,16 +155,16 @@ const CASES: ClassificationCase[] = [
 ];
 
 describe("session challenge redeem classification", () => {
-  it.each(CASES)("$name", (testCase) => {
-    const fixture = buildFixture();
+  it.each(CASES)("$name", async (testCase) => {
+    const fixture = await buildFixture();
     const session: SessionContextState = {
       ...fixture.session,
       ...(testCase.status !== undefined ? { status: testCase.status } : {}),
       ...(testCase.bindings ?? {}),
     };
     const verified =
-      testCase.token === undefined ? fixture.verified : verifyChallengeToken(testCase.token);
-    const outcome = classifyRedeem({
+      testCase.token === undefined ? fixture.verified : await verifyChallengeToken(testCase.token);
+    const outcome = await classifyRedeem({
       verified,
       stored: resolveStored(fixture.stored, testCase.stored),
       session,
@@ -172,11 +174,11 @@ describe("session challenge redeem classification", () => {
     expect(outcome.reasonCodes).toEqual(testCase.reasonCodes);
   });
 
-  it("surfaces the verification reason code for signature failures", () => {
-    const fixture = buildFixture();
+  it("surfaces the verification reason code for signature failures", async () => {
+    const fixture = await buildFixture();
     const tampered = `${fixture.minted.token.slice(0, -3)}abc`;
-    const outcome = classifyRedeem({
-      verified: verifyChallengeToken(tampered),
+    const outcome = await classifyRedeem({
+      verified: await verifyChallengeToken(tampered),
       stored: fixture.stored,
       session: fixture.session,
       now: T0 + 1000,
@@ -185,9 +187,9 @@ describe("session challenge redeem classification", () => {
     expect(outcome.reasonCodes).toEqual(["signature_invalid"]);
   });
 
-  it("collects every binding mismatch into one wrong_session outcome", () => {
-    const fixture = buildFixture();
-    const outcome = classifyRedeem({
+  it("collects every binding mismatch into one wrong_session outcome", async () => {
+    const fixture = await buildFixture();
+    const outcome = await classifyRedeem({
       verified: fixture.verified,
       stored: fixture.stored,
       session: {

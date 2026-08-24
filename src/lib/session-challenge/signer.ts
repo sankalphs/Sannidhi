@@ -1,5 +1,3 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
-
 const KEY_DOMAIN = "sannidhi:session-challenge:v1";
 
 const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/;
@@ -26,21 +24,81 @@ function getSecretBytes(): Uint8Array {
   if (encoded.byteLength < 16) {
     throw new Error("SESSION_SECRET must be at least 16 bytes");
   }
-  return new Uint8Array(encoded);
+  return encoded;
 }
 
-function deriveSigningKey(): Buffer {
-  return createHmac("sha256", getSecretBytes()).update(KEY_DOMAIN).digest();
+async function importHmacKey(bytes: Uint8Array): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    "raw",
+    bytes as BufferSource,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
 }
 
-function signPayloadString(payloadString: string): string {
-  return createHmac("sha256", deriveSigningKey()).update(payloadString, "utf8").digest("base64url");
+let cachedKeySecret: string | undefined;
+let cachedSigningKey: Promise<CryptoKey> | undefined;
+
+async function getSigningKey(): Promise<CryptoKey> {
+  const secret = process.env.SESSION_SECRET ?? "";
+  if (cachedSigningKey !== undefined && cachedKeySecret === secret) {
+    return cachedSigningKey;
+  }
+  const rawKey = await importHmacKey(getSecretBytes());
+  const domainMac = new Uint8Array(
+    await crypto.subtle.sign("HMAC", rawKey, new TextEncoder().encode(KEY_DOMAIN)),
+  );
+  const derived = importHmacKey(domainMac);
+  cachedKeySecret = secret;
+  cachedSigningKey = derived;
+  return derived;
 }
 
-export function signChallengeToken(payload: ChallengePayload): string {
+export function bytesToBase64url(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function base64urlToBytes(value: string): Uint8Array {
+  const padded = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(padded + "=".repeat((4 - (padded.length % 4)) % 4));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) {
+    return false;
+  }
+  let difference = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    difference |= a[i] ^ b[i];
+  }
+  return difference === 0;
+}
+
+async function signPayloadString(payloadString: string): Promise<string> {
+  const mac = new Uint8Array(
+    await crypto.subtle.sign(
+      "HMAC",
+      await getSigningKey(),
+      new TextEncoder().encode(payloadString),
+    ),
+  );
+  return bytesToBase64url(mac);
+}
+
+export async function signChallengeToken(payload: ChallengePayload): Promise<string> {
   const payloadString = JSON.stringify(payload);
-  const encodedPayload = Buffer.from(payloadString, "utf8").toString("base64url");
-  return `${encodedPayload}.${signPayloadString(payloadString)}`;
+  const encodedPayload = bytesToBase64url(new TextEncoder().encode(payloadString));
+  return `${encodedPayload}.${await signPayloadString(payloadString)}`;
 }
 
 function isNonEmptyString(value: unknown): value is string {
@@ -48,7 +106,9 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function isChallengePayload(value: unknown): value is ChallengePayload {
-  if (value === null || typeof value !== "object") return false;
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
   const candidate = value as Record<string, unknown>;
   return (
     isNonEmptyString(candidate.sid) &&
@@ -62,7 +122,9 @@ function isChallengePayload(value: unknown): value is ChallengePayload {
   );
 }
 
-export function verifyChallengeSignature(token: string): SignedChallengeVerification {
+export async function verifyChallengeSignature(
+  token: string,
+): Promise<SignedChallengeVerification> {
   const parts = token.split(".");
   if (parts.length !== 2) {
     return { ok: false, reasonCode: "token_malformed" };
@@ -72,10 +134,11 @@ export function verifyChallengeSignature(token: string): SignedChallengeVerifica
   if (!BASE64URL_PATTERN.test(encodedPayload) || !BASE64URL_PATTERN.test(signature)) {
     return { ok: false, reasonCode: "token_malformed" };
   }
-  const payloadString = Buffer.from(encodedPayload, "base64url").toString("utf8");
-  const expected = Buffer.from(signPayloadString(payloadString), "base64url");
-  const provided = Buffer.from(signature, "base64url");
-  if (provided.length !== expected.length || !timingSafeEqual(provided, expected)) {
+  const payloadBytes = base64urlToBytes(encodedPayload);
+  const payloadString = new TextDecoder().decode(payloadBytes);
+  const expected = base64urlToBytes(await signPayloadString(payloadString));
+  const provided = base64urlToBytes(signature);
+  if (!timingSafeEqual(provided, expected)) {
     return { ok: false, reasonCode: "signature_invalid" };
   }
   let parsed: unknown;

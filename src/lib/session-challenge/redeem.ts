@@ -34,19 +34,19 @@ export type RedeemOutcome = {
 };
 
 type ClassifyArgs = {
-  verified: ReturnType<typeof verifyChallengeToken>;
+  verified: Awaited<ReturnType<typeof verifyChallengeToken>>;
   stored: StoredChallengeState | undefined;
   session: SessionContextState;
   now: number;
 };
 
-export function verifyChallengeToken(
+export async function verifyChallengeToken(
   token: string,
-): { ok: true; payload: ChallengePayload } | { ok: false; reasonCode: string } {
+): Promise<{ ok: true; payload: ChallengePayload } | { ok: false; reasonCode: string }> {
   return verifyChallengeSignature(token);
 }
 
-export function classifyRedeem(args: ClassifyArgs): RedeemOutcome {
+export async function classifyRedeem(args: ClassifyArgs): Promise<RedeemOutcome> {
   const { verified, stored, session, now } = args;
   if (!verified.ok) {
     return { verdict: "malformed", reasonCodes: [verified.reasonCode] };
@@ -79,7 +79,7 @@ export function classifyRedeem(args: ClassifyArgs): RedeemOutcome {
   if (stored.consumedAt !== undefined) {
     return { verdict: "replayed", reasonCodes: ["nonce_reused"] };
   }
-  if (stored.nonceHash !== nonceDigest(payload.n)) {
+  if (stored.nonceHash !== (await nonceDigest(payload.n))) {
     return { verdict: "replayed", reasonCodes: ["nonce_mismatch"] };
   }
   return { verdict: "valid", reasonCodes: [] };
