@@ -34,9 +34,19 @@ export default async function StudentDevicesPage() {
     client.query(api.devices.listMyReplacementRequests, { actorToken }),
     client.query(api.enrollment.getMyBiometricRecord, { actorToken }),
   ]);
-  const loadFailed = devicesResult.status === "rejected";
+  const loadFailed = devicesResult.status === "rejected" || requestsResult.status === "rejected";
   if (loadFailed) {
-    console.error("[student-devices] device query failed", devicesResult.reason);
+    console.error(
+      "[student-devices] device query failed",
+      devicesResult.status === "rejected"
+        ? devicesResult.reason
+        : requestsResult.status === "rejected"
+          ? requestsResult.reason
+          : undefined,
+    );
+  }
+  if (recordResult.status === "rejected") {
+    console.error("[student-devices] biometric record query failed", recordResult.reason);
   }
   const devices = devicesResult.status === "fulfilled" ? devicesResult.value : [];
   const requests = requestsResult.status === "fulfilled" ? requestsResult.value : [];
@@ -57,11 +67,9 @@ export default async function StudentDevicesPage() {
           description="Something went wrong while loading your devices. Please refresh the page and try again."
         />
       ) : (
-        <>
-          <DeviceManager initialDevices={devices} initialRequests={requests} />
-          <BiometricsCard initialRecord={biometricRecord} />
-        </>
+        <DeviceManager initialDevices={devices} initialRequests={requests} />
       )}
+      <BiometricsCard initialRecord={biometricRecord} />
     </div>
   );
 }

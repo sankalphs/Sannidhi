@@ -18,6 +18,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ENABLE_DEV_LOGIN: "1",
+      SESSION_SECRET: "local-dev-session-secret-0123456789",
     },
   },
 });
