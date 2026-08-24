@@ -69,7 +69,15 @@ export default async function StudentDevicesPage() {
       ) : (
         <DeviceManager initialDevices={devices} initialRequests={requests} />
       )}
-      <BiometricsCard initialRecord={biometricRecord} />
+      {recordResult.status === "rejected" ? (
+        <EmptyState
+          icon={Smartphone}
+          title="Could not load your biometric settings"
+          description="Something went wrong while loading your biometric consent status. Please refresh the page and try again."
+        />
+      ) : (
+        <BiometricsCard initialRecord={biometricRecord} />
+      )}
     </div>
   );
 }

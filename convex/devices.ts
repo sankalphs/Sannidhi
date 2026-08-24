@@ -278,7 +278,11 @@ export const activateDevice = mutation({
   handler: async (ctx, args) => {
     const claims = await requireActor(args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
-    assertOwnerOrAdmin(claims, device);
+    if (claims.role === "admin") {
+      assertSameInstitution(await requireAdminInstitution(ctx, args.actorToken), device.institutionId);
+    } else {
+      assertOwnerOrAdmin(claims, device);
+    }
 
     if (device.state === "suspended" && claims.role !== "admin") {
       throw new ConvexError("suspended devices can only be reinstated by an administrator");
@@ -689,10 +693,12 @@ export const listAllReplacementRequests = query({
     for (const status of statuses) {
       const page = await ctx.db
         .query("replacement_requests")
-        .withIndex("by_status_requested", (q) => q.eq("status", status))
+        .withIndex("by_institution_status_requested", (q) =>
+          q.eq("institutionId", institutionId).eq("status", status),
+        )
         .order("desc")
         .take(MAX_LISTED_DEVICES);
-      requests.push(...page.filter((request) => request.institutionId === institutionId));
+      requests.push(...page);
     }
 
     const rows = [];

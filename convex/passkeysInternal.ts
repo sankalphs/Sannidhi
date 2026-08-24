@@ -1,26 +1,14 @@
 import { ConvexError, v } from "convex/values";
 
 import { CHALLENGE_TTL_MS, isChallengeUsable } from "../src/lib/auth/challenge";
-import type { ActorTokenClaims } from "../src/lib/auth/actor-token";
 import type { Role } from "../src/lib/auth/session";
 import { activateUserAndAcceptInvite, findPendingInviteForUser } from "./invites";
 import { internal } from "./_generated/api";
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Doc } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation } from "./_generated/server";
-import { verifyActorToken } from "./lib/actor";
+import { requireAdminUser } from "./lib/actor";
 
 type CeremonyResult = { sid: string; expiresAt: number; role: Role };
-
-async function requireAdminActor(actorToken: string): Promise<ActorTokenClaims> {
-  let claims: ActorTokenClaims;
-  try {
-    claims = await verifyActorToken(actorToken);
-  } catch {
-    throw new ConvexError("unauthorized");
-  }
-  if (claims.role !== "admin") throw new ConvexError("unauthorized");
-  return claims;
-}
 
 export const getUserCore = internalQuery({
   args: { userId: v.id("users") },
@@ -270,8 +258,6 @@ export const completeAuthentication = internalMutation({
 export const revokeCredential = mutation({
   args: { actorToken: v.string(), credentialId: v.string() },
   handler: async (ctx, args) => {
-    const admin = await requireAdminActor(args.actorToken);
-
     const credential = await ctx.db
       .query("passkey_credentials")
       .withIndex("by_credentialId", (q) => q.eq("credentialId", args.credentialId))
@@ -281,13 +267,8 @@ export const revokeCredential = mutation({
     const credentialUser = await ctx.db.get(credential.userId);
     if (credentialUser === null) throw new ConvexError("user not found");
 
-    let adminUser: Doc<"users"> | null;
-    try {
-      adminUser = await ctx.db.get(admin.userId as Id<"users">);
-    } catch {
-      throw new ConvexError("unauthorized");
-    }
-    if (adminUser === null || adminUser.institutionId !== credentialUser.institutionId) {
+    const adminUser = await requireAdminUser(ctx, args.actorToken);
+    if (adminUser.institutionId !== credentialUser.institutionId) {
       throw new ConvexError("unauthorized");
     }
 
@@ -316,7 +297,7 @@ export const revokeCredential = mutation({
       institutionId: credentialUser.institutionId,
       category: "identity",
       type: "identity.passkey_revoked",
-      actorUserId: admin.userId as Id<"users">,
+      actorUserId: adminUser._id,
       subjectUserId: credential.userId,
       payload: { credentialId: credential.credentialId, revokedSessions },
     });

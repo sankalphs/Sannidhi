@@ -32,8 +32,15 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Generate Convex code
-        run: bunx convex dev --once --typecheck disable
+      - name: Start Convex backend
+        run: |
+          (echo n | bunx convex dev --typecheck disable > convex-dev.log 2>&1 &)
+          for i in $(seq 1 60); do
+            if curl -sf http://127.0.0.1:3210 >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          bunx convex env set SESSION_SECRET local-dev-session-secret-0123456789
+          bunx convex env set NEXT_PUBLIC_APP_URL http://localhost:3000
 
       - name: Lint
         run: bun run lint

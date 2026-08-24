@@ -28,7 +28,9 @@ type SessionDoc = {
 };
 
 function isActiveSession(row: SessionDoc, now: number): boolean {
-  return row.revokedAt === undefined && row.expiresAt > now;
+  if (row.revokedAt !== undefined || row.expiresAt <= now) return false;
+  if (row.createdAt + SESSION_ABSOLUTE_MAX_MS <= now) return false;
+  return true;
 }
 
 async function getActiveRow(

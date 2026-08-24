@@ -61,6 +61,12 @@ export const history = query({
     if (caller._id !== args.subjectUserId && caller.role !== "admin" && caller.role !== "auditor") {
       throw new ConvexError("unauthorized");
     }
+    if (caller._id !== args.subjectUserId) {
+      const subject = await ctx.db.get(args.subjectUserId);
+      if (subject === null || subject.institutionId !== caller.institutionId) {
+        throw new ConvexError("unauthorized");
+      }
+    }
     return ctx.db
       .query("event_ledger")
       .withIndex("by_subject", (q) => q.eq("subjectUserId", args.subjectUserId))
@@ -83,6 +89,19 @@ export const verifyChain = query({
     const fromSeq = Math.max(0, Math.floor(args.fromSeq ?? 0));
     const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 500)), MAX_VERIFY_WINDOW);
 
+    let expectedPrevEventHash: string | undefined;
+    if (fromSeq > 0) {
+      const predecessor = await ctx.db
+        .query("event_ledger")
+        .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
+        .filter((q) => q.eq(q.field("seq"), fromSeq - 1))
+        .first();
+      if (predecessor === undefined || predecessor === null) {
+        return { valid: false, brokenAtSeq: fromSeq - 1, count: 0 };
+      }
+      expectedPrevEventHash = predecessor.eventHash;
+    }
+
     const events = await ctx.db
       .query("event_ledger")
       .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
@@ -91,7 +110,6 @@ export const verifyChain = query({
       .take(limit + 1);
 
     let expectedSeq = fromSeq;
-    let expectedPrevEventHash: string | undefined;
 
     for (const event of events.slice(0, limit)) {
       if (event.seq !== expectedSeq || event.prevEventHash !== expectedPrevEventHash) {

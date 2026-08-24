@@ -206,7 +206,8 @@ export default defineSchema({
   })
     .index("by_status", ["status"])
     .index("by_student", ["studentId"])
-    .index("by_status_requested", ["status", "requestedAt"]),
+    .index("by_status_requested", ["status", "requestedAt"])
+    .index("by_institution_status_requested", ["institutionId", "status", "requestedAt"]),
 
   biometric_records: defineTable({
     userId: v.id("users"),
