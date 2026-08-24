@@ -61,7 +61,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 | --- | --- | --- |
 | 0 | Foundations: repo, CI/CD, data model, auth skeleton | Merged |
 | 1 | Identity enrollment, passkeys, device registration, RBAC | Merged (PR #11) |
-| 2 | Sessions & rotating QR check-in | Not started |
+| 2 | Sessions & rotating QR check-in | Merged (PR #12) |
 | 3 | Device trust, presence signals, risk decision engine | Not started |
 | 4 | Adaptive step-up security (liveness, face match, spot checks) | Not started |
 | 5 | Tamper-evident audit, corrections, offline resilience | Not started |
@@ -71,7 +71,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Status
 
-> **Phase 1 merged (PR #11)** — identity enrollment, passkey auth with revocable sessions, device lifecycle with controlled replacement flow, biometric consent capture, and the enrollment completion gate. Next up: Phase 2 sessions and rotating QR check-in.
+> **Phase 2 merged (PR #12)** — attendance sessions with one-tap start and guest creation, the rotating QR Session Challenge deep module (`mint`/`redeem` with atomic nonce consumption and replay detection), pause/close/restart lifecycle, student check-in with actionable outcomes, calendar + subject-wise attendance history with threshold projection, and a live verification board over Convex real-time subscriptions. Next up: Phase 3 device trust, presence signals, and the risk decision engine.
 
 ## Local development
 
