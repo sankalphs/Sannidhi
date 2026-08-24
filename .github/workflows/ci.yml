@@ -61,6 +61,9 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
+      - name: Seed demo data
+        run: bun run seed
+
       - name: E2E tests
         run: bun run test:e2e
 
