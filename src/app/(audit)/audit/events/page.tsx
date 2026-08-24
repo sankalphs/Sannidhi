@@ -1,14 +1,16 @@
 import { ScrollText } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function AuditEventsPage() {
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Event ledger</h1>
-        <p className="text-muted-foreground text-sm">Append-only attendance event history.</p>
-      </div>
+      <PageHeader
+        eyebrow="Auditor panel"
+        title="Event ledger"
+        description="Append-only attendance event history."
+      />
       <EmptyState
         icon={ScrollText}
         title="Event ledger"

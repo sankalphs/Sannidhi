@@ -2,6 +2,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { Smartphone } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
@@ -54,12 +55,11 @@ export default async function StudentDevicesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
-        <p className="text-muted-foreground text-sm">
-          The approved personal device you use for attendance check-in.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Student panel"
+        title="Devices"
+        description="The approved personal device you use for attendance check-in."
+      />
       {loadFailed ? (
         <EmptyState
           icon={Smartphone}

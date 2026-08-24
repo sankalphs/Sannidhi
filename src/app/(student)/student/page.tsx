@@ -2,6 +2,7 @@ import { Check, Circle, ClipboardList, History } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { loadEnrollmentGate } from "@/lib/enrollment/load";
@@ -16,7 +17,7 @@ function EnrollmentChecklist({
   completedSteps: EnrollmentGateResult["completedSteps"];
 }) {
   return (
-    <section className="flex flex-col gap-3 rounded-xl border p-4">
+    <section className="border-border bg-card flex flex-col gap-3 rounded-xl border p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold">Enrollment checklist</h2>
         <Badge variant="secondary">Attendance locked</Badge>
@@ -25,7 +26,7 @@ function EnrollmentChecklist({
         {ENROLLMENT_STEPS.map((step) => (
           <li key={step} className="flex items-center gap-2">
             {completedSteps[step] ? (
-              <Check className="text-primary size-4" />
+              <Check className="text-verdict-accept size-4" />
             ) : (
               <Circle className="text-muted-foreground size-4" />
             )}
@@ -53,21 +54,24 @@ export default async function StudentPage() {
   const gate = await loadEnrollmentGate();
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Student dashboard</h1>
-        <p className="text-muted-foreground text-sm">Your attendance at a glance.</p>
-      </div>
+      <PageHeader
+        eyebrow="Student panel"
+        title="Student dashboard"
+        description="Your attendance at a glance."
+      />
       {gate.locked ? <EnrollmentChecklist completedSteps={gate.completedSteps} /> : null}
-      <EmptyState
-        icon={History}
-        title="Attendance history"
-        description="Once sessions start being recorded, your attendance timeline will appear here."
-      />
-      <EmptyState
-        icon={ClipboardList}
-        title="Requests"
-        description="Correction and exemption requests you file will show up here."
-      />
+      <div className="grid gap-4 md:grid-cols-2">
+        <EmptyState
+          icon={History}
+          title="Attendance history"
+          description="Once sessions start being recorded, your attendance timeline will appear here."
+        />
+        <EmptyState
+          icon={ClipboardList}
+          title="Requests"
+          description="Correction and exemption requests you file will show up here."
+        />
+      </div>
     </div>
   );
 }

@@ -101,6 +101,11 @@ bun run dev
 
 Setting `ENABLE_DEV_LOGIN=1` in `.env.local` enables the role switcher on `/login`.
 
+For public demo deployments (including production), `ENABLE_DEMO_LOGIN=1` exposes the same
+persona picker to visitors with seeded data. Keep it off for real institutional deployments —
+demo sessions carry full role authority. The Convex deployment also needs `SANNIDHI_DEMO_MODE=1`
+plus seeded demo data (`bun run seed`) for student and faculty personas to resolve.
+
 Seed demo data against a running Convex backend:
 
 ```sh

@@ -271,4 +271,24 @@ export default defineSchema({
     .index("by_nonceHash", ["nonceHash"])
     .index("by_session_issued", ["sessionId", "issuedAt"])
     .index("by_expiresAt", ["expiresAt"]),
+
+  access_requests: defineTable({
+    institution: v.string(),
+    name: v.string(),
+    email: v.string(),
+    requestedRole: v.union(
+      v.literal("administrator"),
+      v.literal("faculty"),
+      v.literal("department_authority"),
+      v.literal("other"),
+    ),
+    note: v.optional(v.string()),
+    ipHash: v.optional(v.string()),
+    status: v.union(v.literal("new"), v.literal("reviewed")),
+    submittedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+  })
+    .index("by_status_submitted", ["status", "submittedAt"])
+    .index("by_email", ["email"])
+    .index("by_ipHash_submitted", ["ipHash", "submittedAt"]),
 });

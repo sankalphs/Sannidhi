@@ -3,6 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 import { Users } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
@@ -64,10 +65,7 @@ export default async function AdminUsersPage() {
   if (institution === null) {
     return (
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-          <p className="text-muted-foreground text-sm">People, roles, and enrollments.</p>
-        </div>
+        <PageHeader eyebrow="Admin" title="Users" description="People, roles, and enrollments." />
         <EmptyState
           icon={Users}
           title="No institution yet"
@@ -87,12 +85,11 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Users</h1>
-        <p className="text-muted-foreground text-sm">
-          People, roles, and enrollments at {institution.name}.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Users"
+        description={`People, roles, and enrollments at ${institution.name}.`}
+      />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Directory ({users.length})</h2>

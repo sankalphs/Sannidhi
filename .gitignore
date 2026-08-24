@@ -35,3 +35,5 @@ Thumbs.db
 .idea/
 .vercel
 .env*
+
+.playwright-mcp/

@@ -3,6 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 import { Smartphone } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
@@ -70,12 +71,11 @@ export default async function AdminDevicesPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Devices</h1>
-        <p className="text-muted-foreground text-sm">
-          Approved attendance devices and lifecycle administration at {institution.name}.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Devices"
+        description={`Approved attendance devices and lifecycle administration at ${institution.name}.`}
+      />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">

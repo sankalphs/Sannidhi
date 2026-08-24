@@ -3,29 +3,27 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { ROLES, ROLE_TO_HOME, type Role } from "@/lib/auth/session";
+import { cn } from "@/lib/utils";
+import { ROLE_TO_HOME, type Role } from "@/lib/auth/session";
 
-type ImpersonationButtonsProps = {
-  enabled: boolean;
+type PersonaPickerProps = {
+  highlightRole?: Role | null;
 };
 
-const ROLE_LABELS: Record<Role, string> = {
-  student: "Student",
-  faculty: "Faculty",
-  department_authority: "Department authority",
-  admin: "Admin",
-  auditor: "Auditor",
-};
+const PERSONAS: { role: Role; label: string; description: string }[] = [
+  { role: "student", label: "Student", description: "Check in, history, devices" },
+  { role: "faculty", label: "Faculty", description: "Sessions and live board" },
+  { role: "department_authority", label: "Dept authority", description: "Courses and policies" },
+  { role: "admin", label: "Admin", description: "People, devices, invites" },
+  { role: "auditor", label: "Auditor", description: "Read-only ledger" },
+];
 
-export function ImpersonationButtons({ enabled }: ImpersonationButtonsProps) {
+export function PersonaPicker({ highlightRole }: PersonaPickerProps) {
   const router = useRouter();
   const [pendingRole, setPendingRole] = useState<Role | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  if (!enabled) return null;
-
-  async function impersonate(role: Role) {
+  async function enterAs(role: Role) {
     setPendingRole(role);
     setError(null);
     try {
@@ -35,7 +33,7 @@ export function ImpersonationButtons({ enabled }: ImpersonationButtonsProps) {
         body: JSON.stringify({ role }),
       });
       if (!response.ok) {
-        setError(`Could not start the ${ROLE_LABELS[role]} session (error ${response.status}).`);
+        setError(`Could not start the ${role} session (error ${response.status}).`);
         return;
       }
       router.push(ROLE_TO_HOME[role]);
@@ -48,20 +46,35 @@ export function ImpersonationButtons({ enabled }: ImpersonationButtonsProps) {
   }
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="flex flex-wrap justify-center gap-2">
-        {ROLES.map((role) => (
-          <Button
-            key={role}
-            variant="outline"
-            onClick={() => void impersonate(role)}
-            disabled={pendingRole !== null}
-          >
-            {ROLE_LABELS[role]}
-          </Button>
-        ))}
+    <div className="flex flex-col gap-3" data-testid="persona-picker">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {PERSONAS.map((persona) => {
+          const highlighted = highlightRole === persona.role;
+          return (
+            <button
+              key={persona.role}
+              type="button"
+              data-testid={`persona-${persona.role}`}
+              disabled={pendingRole !== null}
+              onClick={() => void enterAs(persona.role)}
+              className={cn(
+                "hover:bg-accent focus-visible:ring-ring flex flex-col items-start gap-0.5 rounded-lg border px-3.5 py-2.5 text-left transition-colors focus-visible:outline-none disabled:cursor-wait disabled:opacity-60",
+                highlighted
+                  ? "border-primary bg-primary/5 ring-primary/40 ring-2"
+                  : "border-border",
+              )}
+            >
+              <span className="text-sm font-medium">{persona.label}</span>
+              <span className="text-muted-foreground text-xs">{persona.description}</span>
+            </button>
+          );
+        })}
       </div>
-      {error !== null && <p className="text-destructive text-sm">{error}</p>}
+      {error !== null && (
+        <p className="text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
