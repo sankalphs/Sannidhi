@@ -279,7 +279,10 @@ export const activateDevice = mutation({
     const claims = await requireActor(args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     if (claims.role === "admin") {
-      assertSameInstitution(await requireAdminInstitution(ctx, args.actorToken), device.institutionId);
+      assertSameInstitution(
+        await requireAdminInstitution(ctx, args.actorToken),
+        device.institutionId,
+      );
     } else {
       assertOwnerOrAdmin(claims, device);
     }

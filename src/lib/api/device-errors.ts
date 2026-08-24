@@ -32,8 +32,5 @@ export function deviceErrorResponse(scope: string, error: unknown): NextResponse
       return NextResponse.json({ error: entry.mapped.message }, { status: entry.mapped.status });
     }
   }
-  return NextResponse.json(
-    { error: "Something went wrong. Please try again." },
-    { status: 500 },
-  );
+  return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
 }
