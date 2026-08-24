@@ -55,6 +55,7 @@ export const seedDemoData = internalMutation({
 
     const studentIds: Id<"users">[] = [];
     let adminId: Id<"users"> | undefined;
+    let facultyId: Id<"users"> | undefined;
     for (const user of userData) {
       const userId = await ctx.db.insert("users", {
         institutionId,
@@ -69,9 +70,15 @@ export const seedDemoData = internalMutation({
       if (user.role === "admin") {
         adminId = userId;
       }
+      if (user.role === "faculty") {
+        facultyId = userId;
+      }
     }
     if (adminId === undefined) {
       throw new Error("seed data must include an admin user");
+    }
+    if (facultyId === undefined) {
+      throw new Error("seed data must include a faculty user");
     }
 
     const courseData = [
@@ -152,12 +159,41 @@ export const seedDemoData = internalMutation({
       slotCount += 1;
     }
 
+    const seedMoment = new Date(now);
+    const todayDayOfWeek = seedMoment.getDay();
+    const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
+    const currentMinutes = seedMoment.getHours() * 60 + seedMoment.getMinutes();
+    const liveStartMinutes = Math.max(0, currentMinutes - 15);
+    const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
+
+    await ctx.db.insert("timetable_slots", {
+      sectionId: sectionIds[0],
+      venueId: venueIds[0],
+      dayOfWeek: todayDayOfWeek,
+      startMinutes: liveStartMinutes,
+      endMinutes: liveEndMinutes,
+      facultyId,
+    });
+    await ctx.db.insert("timetable_slots", {
+      sectionId: sectionIds[1],
+      venueId: venueIds[1],
+      dayOfWeek: tomorrowDayOfWeek,
+      startMinutes: 600,
+      endMinutes: 660,
+      facultyId,
+    });
+    slotCount += 2;
+
     const enrollmentPlan = [
       [
         [0, 0],
         [0, 1],
+        [0, 2],
+        [0, 3],
       ],
       [
+        [1, 0],
+        [1, 1],
         [1, 2],
         [1, 3],
       ],
