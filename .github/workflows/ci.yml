@@ -41,6 +41,7 @@ jobs:
           done
           bunx convex env set SESSION_SECRET local-dev-session-secret-0123456789
           bunx convex env set NEXT_PUBLIC_APP_URL http://localhost:3000
+          bunx convex env set SANNIDHI_DEMO_MODE 1
 
       - name: Lint
         run: bun run lint
