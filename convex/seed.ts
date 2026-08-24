@@ -4,6 +4,49 @@ import { hashInviteToken } from "../src/lib/invites/token";
 
 const DEMO_INVITE_TOKEN = "demo-invite-token";
 
+const DEMO_TABLES = [
+  "session_challenges",
+  "class_sessions",
+  "attendance_events",
+  "event_ledger",
+  "enrollments",
+  "timetable_slots",
+  "sections",
+  "courses",
+  "venues",
+  "replacement_requests",
+  "device_verifications",
+  "biometric_records",
+  "passkey_credentials",
+  "devices",
+  "sessions",
+  "auth_challenges",
+  "invites",
+  "users",
+  "institutions",
+] as const;
+
+export const clearDemoData = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    if (process.env.SANNIDHI_DEMO_MODE !== "1") {
+      return { cleared: false as const, reason: "demo-mode-disabled" as const };
+    }
+    let deleted = 0;
+    for (const table of DEMO_TABLES) {
+      for (;;) {
+        const rows = await ctx.db.query(table).take(500);
+        if (rows.length === 0) break;
+        for (const row of rows) {
+          await ctx.db.delete(row._id);
+          deleted += 1;
+        }
+      }
+    }
+    return { cleared: true as const, deleted };
+  },
+});
+
 export const seedDemoData = internalMutation({
   args: {},
   handler: async (ctx) => {
@@ -62,6 +105,7 @@ export const seedDemoData = internalMutation({
         email: user.email,
         name: user.name,
         role: user.role,
+        status: "active",
         createdAt: now,
       });
       if (user.role === "student") {
@@ -211,6 +255,30 @@ export const seedDemoData = internalMutation({
       }
     }
 
+    let deviceCount = 0;
+    for (const [studentIndex, studentId] of studentIds.entries()) {
+      await ctx.db.insert("passkey_credentials", {
+        userId: studentId,
+        credentialId: `demo-credential-${studentIndex}`,
+        publicKey: "demo-public-key",
+        counter: 0,
+        label: "Demo passkey",
+        createdAt: now,
+        lastUsedAt: now,
+      });
+      await ctx.db.insert("devices", {
+        institutionId,
+        userId: studentId,
+        label: `Demo laptop ${studentIndex + 1}`,
+        platform: "web",
+        state: "active",
+        registeredAt: now,
+        activatedAt: now,
+        stateChangedAt: now,
+      });
+      deviceCount += 1;
+    }
+
     const invitedEmail = "meera.nair@sit.edu.in";
     await ctx.db.insert("users", {
       institutionId,
@@ -247,6 +315,7 @@ export const seedDemoData = internalMutation({
       venues: venueIds.length,
       timetableSlots: slotCount,
       enrollments: enrollmentCount,
+      devices: deviceCount,
     };
   },
 });

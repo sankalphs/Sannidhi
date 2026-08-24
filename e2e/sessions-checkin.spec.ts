@@ -28,7 +28,9 @@ test("faculty publishes a rotating QR token and the student checks in with it", 
     await facultyPage.waitForURL(/\/faculty\/sessions\//, { timeout: 60_000 });
 
     const qrToken = facultyPage.getByTestId("qr-token");
-    await expect(qrToken).toBeVisible({ timeout: 60_000 });
+    await expect
+      .poll(async () => ((await qrToken.textContent()) ?? "").trim(), { timeout: 60_000 })
+      .not.toHaveLength(0);
     const token = (await qrToken.textContent()) ?? "";
     expect(token.trim().length).toBeGreaterThan(0);
 

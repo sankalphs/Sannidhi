@@ -14,6 +14,11 @@ describe("convex/seed.ts", () => {
     expect(source).toContain('"already-seeded"');
   });
 
+  it("gates the clear utility behind demo mode", () => {
+    expect(source).toMatch(/export const clearDemoData = internalMutation\(/);
+    expect(source).toContain('process.env.SANNIDHI_DEMO_MODE !== "1"');
+  });
+
   it("computes today's weekday and brackets the current time for a live slot", () => {
     expect(source).toMatch(/const todayDayOfWeek = seedMoment\.getDay\(\)/);
     expect(source).toMatch(
@@ -33,5 +38,16 @@ describe("convex/seed.ts", () => {
     expect(source).toMatch(/insert\("enrollments"/);
     expect(source).toContain("studentIds[studentIndex]");
     expect(source).toContain("sectionIds[pair[1]]");
+  });
+
+  it("provisions an active device and passkey for every enrolled student", () => {
+    expect(source).toMatch(/insert\("passkey_credentials"/);
+    expect(source).toMatch(/insert\("devices"/);
+    expect(source).toContain('state: "active"');
+    expect(source).toContain("devices: deviceCount");
+  });
+
+  it("marks core seeded users active so the enrollment gate unlocks", () => {
+    expect(source).toContain('status: "active"');
   });
 });
