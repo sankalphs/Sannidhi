@@ -1,6 +1,16 @@
 import { ConvexError, v } from "convex/values";
 
-import { computeEventHash } from "../src/lib/ledger/hash";
+import type { Decision } from "../src/lib/decision";
+import {
+  challengePresenceSignal,
+  decide,
+  deviceTrustSignal,
+  evaluateLocationConsistency,
+  failurePresenceSignal,
+  geolocationSignal,
+  identitySessionSignal,
+  outcomeToAttendanceState,
+} from "../src/lib/risk";
 import {
   classifyRedeem,
   nonceDigest,
@@ -11,9 +21,15 @@ import {
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import {
+  appendAttendanceEvent,
+  bestDeviceForStudent,
+  CHECKIN_RATE_LIMIT_MAX_ATTEMPTS,
+  CHECKIN_RATE_LIMIT_WINDOW_MS,
+  countRecentChallengeAnomalies,
+  countRecentCheckinAttempts,
+} from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
-
-const SESSION_POLICY_VERSION = "phase2-session-v1";
 
 type FailureVerdict = Exclude<RedeemVerdict, "valid">;
 
@@ -78,10 +94,41 @@ export const getActiveForStudent = query({
 });
 
 export const redeemChallenge = mutation({
-  args: { actorToken: v.string(), token: v.string() },
+  args: {
+    actorToken: v.string(),
+    token: v.string(),
+    location: v.optional(
+      v.object({
+        latitude: v.number(),
+        longitude: v.number(),
+        accuracyMeters: v.optional(v.number()),
+        capturedAt: v.optional(v.number()),
+      }),
+    ),
+    locationConsent: v.optional(
+      v.union(v.literal("granted"), v.literal("denied"), v.literal("not_requested")),
+    ),
+    locationAvailability: v.optional(v.union(v.literal("ok"), v.literal("unavailable"))),
+  },
   handler: async (ctx, args) => {
     const caller = await requireActorUser(ctx, args.actorToken);
     const now = Date.now();
+
+    const attempts = await countRecentCheckinAttempts(ctx, { studentId: caller._id, now });
+    if (attempts >= CHECKIN_RATE_LIMIT_MAX_ATTEMPTS) {
+      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+        institutionId: caller.institutionId,
+        category: "attendance",
+        type: "checkin_rate_limited",
+        actorUserId: caller._id,
+        subjectUserId: caller._id,
+        payload: {
+          windowMs: CHECKIN_RATE_LIMIT_WINDOW_MS,
+          maxAttempts: CHECKIN_RATE_LIMIT_MAX_ATTEMPTS,
+        },
+      });
+      throw new ConvexError({ code: "checkin_rate_limited", retryAfterSeconds: 60 });
+    }
 
     const appendFailure = async (
       verdict: FailureVerdict,
@@ -101,6 +148,37 @@ export const redeemChallenge = mutation({
           ...(nonceHash !== undefined ? { nonceHash } : {}),
           ...(sessionId !== undefined ? { sessionId } : {}),
         },
+      });
+      if ((verdict === "replayed" || verdict === "wrong_session") && session !== null) {
+        await recordRejectedDecision(verdict);
+      }
+    };
+
+    const recordRejectedDecision = async (verdict: FailureVerdict): Promise<void> => {
+      if (session === null) return;
+      const device = await bestDeviceForStudent(ctx, caller._id);
+      const recentSecurityFailures = await countRecentChallengeAnomalies(ctx, {
+        studentId: caller._id,
+        now,
+      });
+      const decision: Decision = decide({
+        signals: [
+          identitySessionSignal(),
+          deviceTrustSignal(device),
+          failurePresenceSignal(verdict),
+        ],
+        anomalies: { recentSecurityFailures },
+        now,
+      });
+      if (decision.outcome !== "reject") return;
+      await appendAttendanceEvent(ctx, {
+        institutionId: session.institutionId,
+        studentId: caller._id,
+        sectionId: session.sectionId,
+        sessionId: session._id,
+        state: outcomeToAttendanceState(decision.outcome),
+        decision,
+        capturedAt: now,
       });
     };
 
@@ -205,69 +283,59 @@ export const redeemChallenge = mutation({
 
     await ctx.db.patch(storedDoc._id, { consumedAt: now, consumedByUserId: caller._id });
 
-    const lastEvent = await ctx.db
-      .query("attendance_events")
-      .withIndex("by_seq")
-      .order("desc")
-      .first();
-    const seq = lastEvent !== null ? lastEvent.seq + 1 : 0;
-    const prevEventHash = lastEvent?.eventHash;
+    const venue = await ctx.db.get(session.venueId);
 
-    const eventHash = await computeEventHash({
-      institutionId: session.institutionId,
-      category: "attendance",
-      type: "attendance.session_checkin",
-      subjectUserId: caller._id,
-      payload: {
-        studentId: caller._id,
-        sessionId: session._id,
-        sectionId: session.sectionId,
-        state: "session_verified",
-        origin: "online",
-        policyVersion: SESSION_POLICY_VERSION,
-      },
-      seq,
-      prevEventHash,
+    const locationOutcome = evaluateLocationConsistency({
+      fix: args.location ?? null,
+      consent: args.locationConsent ?? "not_requested",
+      availability: args.locationAvailability ?? "ok",
+      venue:
+        venue !== null
+          ? {
+              latitude: venue.latitude ?? null,
+              longitude: venue.longitude ?? null,
+              geofenceRadiusMeters: venue.geofenceRadiusMeters ?? null,
+            }
+          : null,
     });
 
-    const attendanceEventId = await ctx.db.insert("attendance_events", {
+    const device = await bestDeviceForStudent(ctx, caller._id);
+    const recentSecurityFailures = await countRecentChallengeAnomalies(ctx, {
+      studentId: caller._id,
+      now,
+    });
+    const decision = decide({
+      signals: [
+        identitySessionSignal(),
+        deviceTrustSignal(device),
+        challengePresenceSignal(session._id),
+        geolocationSignal(locationOutcome),
+      ],
+      anomalies: { recentSecurityFailures },
+      now,
+    });
+
+    const attendanceEventId = await appendAttendanceEvent(ctx, {
       institutionId: session.institutionId,
       studentId: caller._id,
       sectionId: session.sectionId,
-      state: "session_verified",
-      origin: "online",
-      policyVersion: SESSION_POLICY_VERSION,
-      seq,
-      prevEventHash,
-      eventHash,
-      decision: {
-        outcome: "accept",
-        evidence: {
-          signals: [
-            { category: "identity", source: "passkey_session", status: "verified" },
-            { category: "device", source: "registered_device", status: "trusted" },
-            { category: "presence", source: "qr_challenge", status: "verified" },
-          ],
-        },
-        reasonCodes: [],
-        policyVersion: SESSION_POLICY_VERSION,
-        decidedAt: now,
-      },
+      sessionId: session._id,
+      state: outcomeToAttendanceState(decision.outcome),
+      decision,
       capturedAt: now,
     });
 
-    const [course, venue] = await Promise.all([
-      ctx.db.get(session.courseId),
-      ctx.db.get(session.venueId),
-    ]);
+    const course = await ctx.db.get(session.courseId);
 
     return {
       verdict: "valid" as const,
       attendanceEventId,
-      state: "session_verified" as const,
+      state: outcomeToAttendanceState(decision.outcome),
       checkedInAt: now,
       courseCode: course?.code ?? "",
       venueName: venue?.name ?? "",
+      outcome: decision.outcome,
+      decision,
     };
   },
 });

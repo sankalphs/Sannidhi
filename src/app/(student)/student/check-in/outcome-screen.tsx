@@ -1,22 +1,68 @@
 "use client";
 
-import { CheckCircle2, RotateCcw, ScanLine, ShieldAlert } from "lucide-react";
+import {
+  ArrowUpCircle,
+  CheckCircle2,
+  Flag,
+  RotateCcw,
+  ScanLine,
+  ShieldAlert,
+  Timer,
+  XCircle,
+} from "lucide-react";
 
+import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { Decision } from "@/lib/decision";
 import { cn } from "@/lib/utils";
+import { explainDecision } from "@/lib/risk";
 
 export type FailureVerdict = "expired" | "replayed" | "wrong_session" | "malformed";
 
+export type DecisionSignal = Decision["evidence"]["signals"][number];
+
+export type DecisionOutcome = Decision["outcome"];
+
+export type DecisionLite = Decision;
+
 export type CheckInOutcome =
-  | { kind: "success"; courseCode: string; venueName: string; checkedInAt: number }
-  | { kind: "failure"; verdict: FailureVerdict; reasonCodes: string[] };
+  | {
+      kind: "success";
+      courseCode: string;
+      venueName: string;
+      checkedInAt: number;
+      decision: DecisionLite;
+    }
+  | { kind: "failure"; verdict: FailureVerdict; reasonCodes: string[] }
+  | { kind: "rate_limited"; retryAfterSeconds: number };
 
 const FAILURE_ICON: Record<FailureVerdict, typeof ScanLine> = {
   expired: RotateCcw,
   replayed: ShieldAlert,
   wrong_session: ShieldAlert,
   malformed: ScanLine,
+};
+
+const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
+  accept: "accept",
+  step_up: "step-up",
+  flag: "flag",
+  reject: "reject",
+};
+
+const SUCCESS_ICON: Record<DecisionOutcome, typeof ScanLine> = {
+  accept: CheckCircle2,
+  step_up: ArrowUpCircle,
+  flag: Flag,
+  reject: XCircle,
+};
+
+const SUCCESS_ICON_STYLES: Record<DecisionOutcome, string> = {
+  accept: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  step_up: "bg-verdict-stepup/15 text-verdict-stepup",
+  flag: "bg-verdict-flag/15 text-verdict-flag",
+  reject: "bg-destructive/15 text-destructive",
 };
 
 const EXPIRED_COPY = {
@@ -78,16 +124,10 @@ function formatCheckedInAt(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-export function OutcomeScreen({
-  outcome,
-  onRetry,
-}: {
-  outcome: CheckInOutcome;
-  onRetry: () => void;
-}) {
-  const success = outcome.kind === "success";
-  const copy = success ? null : failureCopy(outcome.verdict, outcome.reasonCodes);
-  const Icon = success ? CheckCircle2 : FAILURE_ICON[outcome.verdict];
+function SuccessScreen({ outcome }: { outcome: Extract<CheckInOutcome, { kind: "success" }> }) {
+  const explanation = explainDecision(outcome.decision, "student");
+  const decisionOutcome = outcome.decision.outcome;
+  const Icon = SUCCESS_ICON[decisionOutcome];
 
   return (
     <div
@@ -99,40 +139,95 @@ export function OutcomeScreen({
       <div
         className={cn(
           "flex size-14 items-center justify-center rounded-full",
-          success
-            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-            : "bg-destructive/15 text-destructive",
+          SUCCESS_ICON_STYLES[decisionOutcome],
         )}
       >
         <Icon className="size-8" />
       </div>
-      {outcome.kind === "success" ? (
-        <>
-          <h2 className="text-xl font-semibold">You&apos;re checked in</h2>
-          <p className="text-muted-foreground text-sm">
-            {outcome.courseCode} · {outcome.venueName} ·{" "}
-            <span suppressHydrationWarning>{formatCheckedInAt(outcome.checkedInAt)}</span>
-          </p>
-          <p className="max-w-md text-sm">Keep the app open until class ends.</p>
-        </>
-      ) : (
-        <>
-          <h2 className="text-xl font-semibold">{copy?.headline}</h2>
-          <p className="text-muted-foreground max-w-md text-sm">{copy?.message}</p>
-          {outcome.reasonCodes.length > 0 ? (
-            <div className="flex flex-wrap justify-center gap-1">
-              {outcome.reasonCodes.map((reason) => (
-                <Badge key={reason} variant="outline" className="font-mono text-[10px] uppercase">
-                  {reason}
-                </Badge>
-              ))}
-            </div>
-          ) : null}
-          <Button data-testid="try-again" onClick={onRetry}>
-            Try again
-          </Button>
-        </>
-      )}
+      <span data-testid="outcome-verdict">
+        <VerdictStamp verdict={OUTCOME_VERDICT[decisionOutcome]} />
+      </span>
+      <h2 className="text-xl font-semibold" data-testid="outcome-headline">
+        {explanation.headline}
+      </h2>
+      <p className="text-muted-foreground max-w-md text-sm">{explanation.message}</p>
+      {explanation.actions.length > 0 ? (
+        <ul className="flex max-w-md flex-col gap-1.5 text-left text-sm">
+          {explanation.actions.map((action) => (
+            <li key={action} className="flex items-start gap-2">
+              <CheckCircle2 className="text-muted-foreground mt-0.5 size-4 shrink-0" />
+              <span>{action}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className="text-muted-foreground text-sm">
+        {outcome.courseCode} · {outcome.venueName} ·{" "}
+        <span suppressHydrationWarning>{formatCheckedInAt(outcome.checkedInAt)}</span>
+      </p>
+      <p className="max-w-md text-sm">Keep the app open until class ends.</p>
+    </div>
+  );
+}
+
+function RateLimitedScreen({ retryAfterSeconds }: { retryAfterSeconds: number }) {
+  return (
+    <div
+      aria-live="polite"
+      className="flex flex-col items-center gap-4 rounded-xl border p-8 text-center"
+      data-testid="checkin-outcome"
+      role="status"
+    >
+      <div className="bg-destructive/15 text-destructive flex size-14 items-center justify-center rounded-full">
+        <Timer className="size-8" />
+      </div>
+      <h2 className="text-xl font-semibold">Too many attempts</h2>
+      <p className="text-muted-foreground max-w-md text-sm">
+        You have tried several codes in a row. Try again in about {retryAfterSeconds} seconds.
+      </p>
+    </div>
+  );
+}
+
+export function OutcomeScreen({
+  outcome,
+  onRetry,
+}: {
+  outcome: CheckInOutcome;
+  onRetry: () => void;
+}) {
+  if (outcome.kind === "success") return <SuccessScreen outcome={outcome} />;
+  if (outcome.kind === "rate_limited") {
+    return <RateLimitedScreen retryAfterSeconds={outcome.retryAfterSeconds} />;
+  }
+
+  const copy = failureCopy(outcome.verdict, outcome.reasonCodes);
+  const Icon = FAILURE_ICON[outcome.verdict];
+
+  return (
+    <div
+      aria-live="polite"
+      className="flex flex-col items-center gap-4 rounded-xl border p-8 text-center"
+      data-testid="checkin-outcome"
+      role="status"
+    >
+      <div className="bg-destructive/15 text-destructive flex size-14 items-center justify-center rounded-full">
+        <Icon className="size-8" />
+      </div>
+      <h2 className="text-xl font-semibold">{copy.headline}</h2>
+      <p className="text-muted-foreground max-w-md text-sm">{copy.message}</p>
+      {outcome.reasonCodes.length > 0 ? (
+        <div className="flex flex-wrap justify-center gap-1">
+          {outcome.reasonCodes.map((reason) => (
+            <Badge key={reason} variant="outline" className="font-mono text-[10px] uppercase">
+              {reason}
+            </Badge>
+          ))}
+        </div>
+      ) : null}
+      <Button data-testid="try-again" onClick={onRetry}>
+        Try again
+      </Button>
     </div>
   );
 }

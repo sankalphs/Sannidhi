@@ -7,7 +7,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 import { OutcomeScreen, type CheckInOutcome, type FailureVerdict } from "./outcome-screen";
@@ -23,13 +30,40 @@ export type ActiveClassSession = {
 
 type CameraState = "off" | "active" | "unavailable";
 
-function extractFailure(
-  cause: unknown,
-): { kind: "failure"; verdict: FailureVerdict; reasonCodes: string[] } | null {
+type GeoFix = {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+  capturedAt?: number;
+};
+
+type GeoState = {
+  fix: GeoFix | null;
+  consent: "granted" | "denied" | "not_requested";
+  availability?: "ok" | "unavailable";
+};
+
+type ExtractedFailure =
+  | { kind: "failure"; verdict: FailureVerdict; reasonCodes: string[] }
+  | { kind: "rate_limited"; retryAfterSeconds: number };
+
+function extractFailure(cause: unknown): ExtractedFailure | null {
   if (typeof cause !== "object" || cause === null || !("data" in cause)) return null;
   const data: unknown = (cause as { data?: unknown }).data;
   if (typeof data !== "object" || data === null) return null;
-  const payload = data as { code?: unknown; verdict?: unknown; reasonCodes?: unknown };
+  const payload = data as {
+    code?: unknown;
+    verdict?: unknown;
+    reasonCodes?: unknown;
+    retryAfterSeconds?: unknown;
+  };
+  if (payload.code === "checkin_rate_limited") {
+    return {
+      kind: "rate_limited",
+      retryAfterSeconds:
+        typeof payload.retryAfterSeconds === "number" ? payload.retryAfterSeconds : 60,
+    };
+  }
   if (
     payload.code !== "checkin_failed" ||
     (payload.verdict !== "expired" &&
@@ -43,6 +77,13 @@ function extractFailure(
     ? payload.reasonCodes.filter((reason): reason is string => typeof reason === "string")
     : [];
   return { kind: "failure", verdict: payload.verdict, reasonCodes };
+}
+
+function geoStatusLabel(geo: GeoState | null): string {
+  if (geo === null) return "Location off";
+  if (geo.fix !== null) return "Location ready";
+  if (geo.consent === "denied" || geo.consent === "not_requested") return "Location off";
+  return "Location unavailable";
 }
 
 function formatCountdown(totalSeconds: number): string {
@@ -75,7 +116,37 @@ export function CheckInPanel({
   const [submitting, setSubmitting] = useState(false);
   const [cameraState, setCameraState] = useState<CameraState>("off");
   const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const [geo, setGeo] = useState<GeoState | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!("geolocation" in navigator)) {
+      setGeo({ fix: null, consent: "not_requested" });
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setGeo({
+          fix: {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracyMeters: position.coords.accuracy,
+            capturedAt: position.timestamp,
+          },
+          consent: "granted",
+          availability: "ok",
+        });
+      },
+      (error) => {
+        if (error.code === 1) {
+          setGeo({ fix: null, consent: "denied" });
+        } else {
+          setGeo({ fix: null, consent: "granted", availability: "unavailable" });
+        }
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 30000 },
+    );
+  }, []);
 
   const submit = useCallback(
     async (token: string) => {
@@ -83,12 +154,21 @@ export function CheckInPanel({
       if (trimmed.length === 0 || submitting) return;
       setSubmitting(true);
       try {
-        const result = await redeemChallenge({ actorToken, token: trimmed });
+        const result = await redeemChallenge({
+          actorToken,
+          token: trimmed,
+          ...(geo !== null && geo.consent === "granted" && geo.fix !== null
+            ? { location: geo.fix }
+            : {}),
+          locationConsent: geo?.consent ?? "not_requested",
+          locationAvailability: geo?.availability ?? "ok",
+        });
         setOutcome({
           kind: "success",
           courseCode: result.courseCode,
           venueName: result.venueName,
           checkedInAt: result.checkedInAt,
+          decision: result.decision,
         });
       } catch (cause) {
         setOutcome(
@@ -99,7 +179,7 @@ export function CheckInPanel({
         setCode("");
       }
     },
-    [actorToken, redeemChallenge, submitting],
+    [actorToken, redeemChallenge, submitting, geo],
   );
 
   useEffect(() => {
@@ -216,6 +296,11 @@ export function CheckInPanel({
           <CardDescription>
             Point your camera at the rotating QR shown in class, or paste the check-in code below.
           </CardDescription>
+          <CardAction>
+            <Badge variant="secondary" data-testid="geo-status">
+              {geoStatusLabel(geo)}
+            </Badge>
+          </CardAction>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {cameraState === "unavailable" ? (

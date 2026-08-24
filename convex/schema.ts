@@ -44,6 +44,9 @@ export default defineSchema({
     institutionId: v.id("institutions"),
     name: v.string(),
     capacity: v.optional(v.number()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    geofenceRadiusMeters: v.optional(v.number()),
   }).index("by_institution", ["institutionId"]),
 
   timetable_slots: defineTable({
