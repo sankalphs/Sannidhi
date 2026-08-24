@@ -3,7 +3,7 @@
 import { api } from "../../../../../convex/_generated/api";
 import { useConvex, useQuery } from "convex/react";
 import { ChevronDown, ChevronRight, Loader2, ScrollText, ShieldCheck } from "lucide-react";
-import { useState, Fragment } from "react";
+import { Component, type ReactNode, useState, Fragment } from "react";
 
 import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { EmptyState } from "@/components/shell/empty-state";
@@ -21,6 +21,27 @@ const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
   reject: "reject",
 };
 
+class LedgerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null as Error | null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  render() {
+    if (this.state.error !== null) {
+      return (
+        <EmptyState
+          icon={ScrollText}
+          title="Ledger unavailable"
+          description="This account is not authorized to read the event ledger, or the query failed. Sign in with an administrator or auditor account."
+        />
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function formatClock(timestamp: number): string {
   const date = new Date(timestamp);
   const hh = String(date.getHours()).padStart(2, "0");
@@ -37,6 +58,14 @@ function extractDecision(payload: unknown): Decision | null {
 }
 
 export function LedgerEventsView({ actorToken }: { actorToken: string }) {
+  return (
+    <LedgerErrorBoundary>
+      <LedgerEventsViewInner actorToken={actorToken} />
+    </LedgerErrorBoundary>
+  );
+}
+
+function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   const convex = useConvex();
   const eventsResult = useQuery(api.ledger.listLedgerEvents, { actorToken, limit: 100 });
   const [expandedSeqs, setExpandedSeqs] = useState<ReadonlySet<number>>(new Set());
