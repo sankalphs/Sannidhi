@@ -31,6 +31,7 @@ async function requireAdminActor(actorToken: string): Promise<ActorTokenClaims> 
 
 export const submit = mutation({
   args: {
+    submitSecret: v.string(),
     institution: v.string(),
     name: v.string(),
     email: v.string(),
@@ -41,6 +42,14 @@ export const submit = mutation({
   },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
+    // Convex functions are reachable by any client, so this public mutation is
+    // guarded by a server-held secret: only the Next.js server route (which
+    // derives ipHash from trusted ingress headers) can pass it. Direct client
+    // calls fail here, which keeps the caller-supplied ipHash trustworthy.
+    if (args.submitSecret !== process.env.SESSION_SECRET) {
+      throw new ConvexError("unauthorized");
+    }
+
     // Honeypot: real users never fill this hidden field.
     if (args.website !== undefined && args.website.trim().length > 0) {
       return { ok: true };
@@ -72,7 +81,7 @@ export const submit = mutation({
       .order("desc")
       .take(MAX_PENDING_NEW_REQUESTS + 1);
     if (recentNew.length > MAX_PENDING_NEW_REQUESTS) {
-      throw new ConvexError("The request queue is full right now. Please try again in a few days.");
+      throw new ConvexError("queue_full");
     }
 
     const dayAgo = Date.now() - DAY_MS;
@@ -82,7 +91,7 @@ export const submit = mutation({
       .collect();
     const emailCount = byEmail.filter((request) => request.submittedAt >= dayAgo).length;
     if (emailCount >= MAX_REQUESTS_PER_EMAIL_PER_DAY) {
-      throw new ConvexError("Too many requests from this email. Try again tomorrow.");
+      throw new ConvexError("rate_limited_email");
     }
 
     if (args.ipHash !== undefined) {
@@ -93,7 +102,7 @@ export const submit = mutation({
         .take(MAX_REQUESTS_PER_IP_PER_DAY + 1);
       const ipCount = byIp.filter((request) => request.submittedAt >= dayAgo).length;
       if (ipCount >= MAX_REQUESTS_PER_IP_PER_DAY) {
-        throw new ConvexError("Too many requests from this network. Try again tomorrow.");
+        throw new ConvexError("rate_limited_ip");
       }
     }
 

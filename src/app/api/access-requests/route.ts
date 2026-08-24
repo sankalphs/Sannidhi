@@ -9,6 +9,22 @@ import { getConvexClient } from "@/lib/convex/server-client";
 const REQUESTED_ROLES = ["administrator", "faculty", "department_authority", "other"] as const;
 type RequestedRole = (typeof REQUESTED_ROLES)[number];
 
+/** Machine-readable ConvexError codes mapped to retriable statuses and user copy. */
+const RETRIABLE_ERRORS: Record<string, { status: 429 | 503; message: string }> = {
+  rate_limited_email: {
+    status: 429,
+    message: "Too many requests from this email. Try again tomorrow.",
+  },
+  rate_limited_ip: {
+    status: 429,
+    message: "Too many requests from this network. Try again tomorrow.",
+  },
+  queue_full: {
+    status: 503,
+    message: "The request queue is full right now. Please try again in a few days.",
+  },
+};
+
 type AccessRequestInput = {
   institution?: unknown;
   name?: unknown;
@@ -20,7 +36,9 @@ type AccessRequestInput = {
 
 /**
  * Best-effort client IP for abuse control. Only a salted hash of this value ever
- * reaches storage — the raw IP is never persisted.
+ * reaches storage — the raw IP is never persisted. Loopback addresses are exempt:
+ * they are the server itself, not a network client, and rate-limiting them would
+ * only break local development and smoke tests.
  */
 function clientIpHash(request: Request): string | undefined {
   const forwarded = request.headers.get("x-forwarded-for");
@@ -29,6 +47,7 @@ function clientIpHash(request: Request): string | undefined {
       ? (forwarded.split(",")[0]?.trim() ?? "")
       : (request.headers.get("x-real-ip")?.trim() ?? "");
   if (ip.length === 0) return undefined;
+  if (ip === "::1" || ip === "127.0.0.1" || ip === "localhost") return undefined;
   const salt = process.env.SESSION_SECRET ?? "sannidhi-access-request-salt";
   return createHash("sha256").update(`${salt}:${ip}`).digest("hex");
 }
@@ -60,6 +79,8 @@ export async function POST(request: Request) {
   try {
     const ipHash = clientIpHash(request);
     await getConvexClient().mutation(api.accessRequests.submit, {
+      // Server-held shared secret: the Convex mutation rejects direct client calls.
+      submitSecret: process.env.SESSION_SECRET ?? "",
       institution,
       name,
       email,
@@ -70,8 +91,18 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof ConvexError && typeof error.data === "string") {
-      const status = error.data.includes("Too many requests") ? 429 : 400;
-      return NextResponse.json({ error: error.data }, { status });
+      const retriable = RETRIABLE_ERRORS[error.data];
+      if (retriable !== undefined) {
+        return NextResponse.json({ error: retriable.message }, { status: retriable.status });
+      }
+      if (error.data === "unauthorized") {
+        console.error("access-requests: submit secret rejected by Convex");
+        return NextResponse.json(
+          { error: "Could not submit the request right now. Try again shortly." },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({ error: error.data }, { status: 400 });
     }
     console.warn("access-requests: submission failed", error);
     return NextResponse.json(
