@@ -4,9 +4,55 @@ import { hashInviteToken } from "../src/lib/invites/token";
 
 const DEMO_INVITE_TOKEN = "demo-invite-token";
 
+const DEMO_TABLES = [
+  "session_challenges",
+  "class_sessions",
+  "attendance_events",
+  "event_ledger",
+  "enrollments",
+  "timetable_slots",
+  "sections",
+  "courses",
+  "venues",
+  "replacement_requests",
+  "device_verifications",
+  "biometric_records",
+  "passkey_credentials",
+  "devices",
+  "sessions",
+  "auth_challenges",
+  "invites",
+  "users",
+  "institutions",
+] as const;
+
+export const clearDemoData = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    if (process.env.SANNIDHI_DEMO_MODE !== "1") {
+      return { cleared: false as const, reason: "demo-mode-disabled" as const };
+    }
+    let deleted = 0;
+    for (const table of DEMO_TABLES) {
+      for (;;) {
+        const rows = await ctx.db.query(table).take(500);
+        if (rows.length === 0) break;
+        for (const row of rows) {
+          await ctx.db.delete(row._id);
+          deleted += 1;
+        }
+      }
+    }
+    return { cleared: true as const, deleted };
+  },
+});
+
 export const seedDemoData = internalMutation({
   args: {},
   handler: async (ctx) => {
+    if (process.env.SANNIDHI_DEMO_MODE !== "1") {
+      return { seeded: false as const, reason: "demo-mode-disabled" as const };
+    }
     const existingInstitution = await ctx.db.query("institutions").first();
     if (existingInstitution !== null) {
       return { seeded: false as const, reason: "already-seeded" as const };
@@ -55,12 +101,14 @@ export const seedDemoData = internalMutation({
 
     const studentIds: Id<"users">[] = [];
     let adminId: Id<"users"> | undefined;
+    let facultyId: Id<"users"> | undefined;
     for (const user of userData) {
       const userId = await ctx.db.insert("users", {
         institutionId,
         email: user.email,
         name: user.name,
         role: user.role,
+        status: "active",
         createdAt: now,
       });
       if (user.role === "student") {
@@ -69,9 +117,15 @@ export const seedDemoData = internalMutation({
       if (user.role === "admin") {
         adminId = userId;
       }
+      if (user.role === "faculty") {
+        facultyId = userId;
+      }
     }
     if (adminId === undefined) {
       throw new Error("seed data must include an admin user");
+    }
+    if (facultyId === undefined) {
+      throw new Error("seed data must include a faculty user");
     }
 
     const courseData = [
@@ -152,12 +206,41 @@ export const seedDemoData = internalMutation({
       slotCount += 1;
     }
 
+    const seedMoment = new Date(now);
+    const todayDayOfWeek = seedMoment.getDay();
+    const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
+    const currentMinutes = seedMoment.getHours() * 60 + seedMoment.getMinutes();
+    const liveStartMinutes = Math.max(0, currentMinutes - 15);
+    const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
+
+    await ctx.db.insert("timetable_slots", {
+      sectionId: sectionIds[0],
+      venueId: venueIds[0],
+      dayOfWeek: todayDayOfWeek,
+      startMinutes: liveStartMinutes,
+      endMinutes: liveEndMinutes,
+      facultyId,
+    });
+    await ctx.db.insert("timetable_slots", {
+      sectionId: sectionIds[1],
+      venueId: venueIds[1],
+      dayOfWeek: tomorrowDayOfWeek,
+      startMinutes: 600,
+      endMinutes: 660,
+      facultyId,
+    });
+    slotCount += 2;
+
     const enrollmentPlan = [
       [
         [0, 0],
         [0, 1],
+        [0, 2],
+        [0, 3],
       ],
       [
+        [1, 0],
+        [1, 1],
         [1, 2],
         [1, 3],
       ],
@@ -173,6 +256,30 @@ export const seedDemoData = internalMutation({
         });
         enrollmentCount += 1;
       }
+    }
+
+    let deviceCount = 0;
+    for (const [studentIndex, studentId] of studentIds.entries()) {
+      await ctx.db.insert("passkey_credentials", {
+        userId: studentId,
+        credentialId: `demo-credential-${studentIndex}`,
+        publicKey: "demo-public-key",
+        counter: 0,
+        label: "Demo passkey",
+        createdAt: now,
+        lastUsedAt: now,
+      });
+      await ctx.db.insert("devices", {
+        institutionId,
+        userId: studentId,
+        label: `Demo laptop ${studentIndex + 1}`,
+        platform: "web",
+        state: "active",
+        registeredAt: now,
+        activatedAt: now,
+        stateChangedAt: now,
+      });
+      deviceCount += 1;
     }
 
     const invitedEmail = "meera.nair@sit.edu.in";
@@ -211,6 +318,7 @@ export const seedDemoData = internalMutation({
       venues: venueIds.length,
       timetableSlots: slotCount,
       enrollments: enrollmentCount,
+      devices: deviceCount,
     };
   },
 });

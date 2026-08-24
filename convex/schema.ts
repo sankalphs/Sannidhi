@@ -52,9 +52,11 @@ export default defineSchema({
     dayOfWeek: v.number(),
     startMinutes: v.number(),
     endMinutes: v.number(),
+    facultyId: v.optional(v.id("users")),
   })
     .index("by_section", ["sectionId"])
-    .index("by_venue", ["venueId"]),
+    .index("by_venue", ["venueId"])
+    .index("by_faculty_day", ["facultyId", "dayOfWeek"]),
 
   enrollments: defineTable({
     studentId: v.id("users"),
@@ -92,6 +94,7 @@ export default defineSchema({
     note: v.optional(v.string()),
   })
     .index("by_student_section", ["studentId", "sectionId"])
+    .index("by_section_captured", ["sectionId", "capturedAt"])
     .index("by_section_state", ["sectionId", "state"])
     .index("by_seq", ["seq"])
     .index("by_corrects_event", ["correctsEventId"]),
@@ -234,4 +237,38 @@ export default defineSchema({
     .index("by_institution_seq", ["institutionId", "seq"])
     .index("by_subject", ["subjectUserId"])
     .index("by_device", ["deviceId"]),
+
+  class_sessions: defineTable({
+    institutionId: v.id("institutions"),
+    courseId: v.id("courses"),
+    sectionId: v.id("sections"),
+    venueId: v.id("venues"),
+    facultyId: v.id("users"),
+    kind: v.union(v.literal("scheduled"), v.literal("guest")),
+    timetableSlotId: v.optional(v.id("timetable_slots")),
+    status: v.union(v.literal("active"), v.literal("paused"), v.literal("closed")),
+    startedAt: v.number(),
+    windowEndsAt: v.number(),
+    pausedAt: v.optional(v.number()),
+    closedAt: v.optional(v.number()),
+    restartOfSessionId: v.optional(v.id("class_sessions")),
+  })
+    .index("by_faculty_status", ["facultyId", "status"])
+    .index("by_section_started", ["sectionId", "startedAt"])
+    .index("by_institution_status", ["institutionId", "status"])
+    .index("by_status_windowEndsAt", ["status", "windowEndsAt"])
+    .index("by_windowEndsAt", ["windowEndsAt"]),
+
+  session_challenges: defineTable({
+    institutionId: v.id("institutions"),
+    sessionId: v.id("class_sessions"),
+    nonceHash: v.string(),
+    issuedAt: v.number(),
+    expiresAt: v.number(),
+    consumedAt: v.optional(v.number()),
+    consumedByUserId: v.optional(v.id("users")),
+  })
+    .index("by_nonceHash", ["nonceHash"])
+    .index("by_session_issued", ["sessionId", "issuedAt"])
+    .index("by_expiresAt", ["expiresAt"]),
 });

@@ -24,6 +24,23 @@ const eslintConfig = [
       "next-env.d.ts",
     ],
   },
+  {
+    files: ["src/app/**/*.{ts,tsx}", "src/components/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/lib/session-challenge/*", "**/lib/session-challenge/*"],
+              message:
+                "Import session challenge capabilities only from the @/lib/session-challenge index.",
+            },
+          ],
+        },
+      ],
+    },
+  },
   prettierConfig,
 ];
 

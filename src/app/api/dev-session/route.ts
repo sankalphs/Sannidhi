@@ -1,11 +1,24 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { api } from "../../../../convex/_generated/api";
 import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 import { COOKIE_NAME, ROLES, signSession, type Role } from "@/lib/auth/session";
+import { getConvexClient } from "@/lib/convex/server-client";
 
 function notFound() {
   return NextResponse.json({ error: "Not found" }, { status: 404 });
+}
+
+async function resolveDemoUserId(role: Role): Promise<string | null> {
+  if (role !== "student" && role !== "faculty") return null;
+  try {
+    const actor = await getConvexClient().query(api.demo.getDemoActor, { role });
+    return actor?.userId ?? null;
+  } catch (error) {
+    console.warn("dev-session: demo actor lookup failed", error);
+    return null;
+  }
 }
 
 export async function POST(request: Request) {
@@ -21,7 +34,8 @@ export async function POST(request: Request) {
   if (typeof role !== "string" || !ROLES.includes(role as Role)) {
     return NextResponse.json({ error: "Unknown role" }, { status: 400 });
   }
-  const token = await signSession({ userId: `dev-${role}`, role: role as Role });
+  const demoUserId = await resolveDemoUserId(role as Role);
+  const token = await signSession({ userId: demoUserId ?? `dev-${role}`, role: role as Role });
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
