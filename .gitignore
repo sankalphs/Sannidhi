@@ -9,8 +9,7 @@ out/
 build/
 dist/
 
-# Convex generated code
-convex/_generated/
+# Convex local state (generated bindings are committed for hosted builds)
 .convex/
 
 # TypeScript
