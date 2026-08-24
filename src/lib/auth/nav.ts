@@ -4,6 +4,7 @@ import {
   GraduationCap,
   Landmark,
   LayoutDashboard,
+  QrCode,
   ScrollText,
   Smartphone,
   Users,
@@ -21,6 +22,7 @@ export type NavItem = {
 export const ROLE_NAV: Record<Role, NavItem[]> = {
   student: [
     { label: "Overview", href: "/student", icon: LayoutDashboard },
+    { label: "Check in", href: "/student/check-in", icon: QrCode },
     { label: "Attendance history", href: "/student/history", icon: BookOpen },
     { label: "Devices", href: "/student/devices", icon: Smartphone },
     { label: "Requests", href: "/student/requests", icon: ClipboardList },
