@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
-import { OutcomeScreen, type CheckInOutcome, type FailureVerdict } from "./outcome-screen";
+import { OutcomeScreen, type CheckInOutcome } from "./outcome-screen";
 
 export type ActiveClassSession = {
   sessionId: string;
@@ -42,42 +42,6 @@ type GeoState = {
   consent: "granted" | "denied" | "not_requested";
   availability?: "ok" | "unavailable";
 };
-
-type ExtractedFailure =
-  | { kind: "failure"; verdict: FailureVerdict; reasonCodes: string[] }
-  | { kind: "rate_limited"; retryAfterSeconds: number };
-
-function extractFailure(cause: unknown): ExtractedFailure | null {
-  if (typeof cause !== "object" || cause === null || !("data" in cause)) return null;
-  const data: unknown = (cause as { data?: unknown }).data;
-  if (typeof data !== "object" || data === null) return null;
-  const payload = data as {
-    code?: unknown;
-    verdict?: unknown;
-    reasonCodes?: unknown;
-    retryAfterSeconds?: unknown;
-  };
-  if (payload.code === "checkin_rate_limited") {
-    return {
-      kind: "rate_limited",
-      retryAfterSeconds:
-        typeof payload.retryAfterSeconds === "number" ? payload.retryAfterSeconds : 60,
-    };
-  }
-  if (
-    payload.code !== "checkin_failed" ||
-    (payload.verdict !== "expired" &&
-      payload.verdict !== "replayed" &&
-      payload.verdict !== "wrong_session" &&
-      payload.verdict !== "malformed")
-  ) {
-    return null;
-  }
-  const reasonCodes = Array.isArray(payload.reasonCodes)
-    ? payload.reasonCodes.filter((reason): reason is string => typeof reason === "string")
-    : [];
-  return { kind: "failure", verdict: payload.verdict, reasonCodes };
-}
 
 function geoStatusLabel(geo: GeoState | null): string {
   if (geo === null) return "Location off";
@@ -163,17 +127,31 @@ export function CheckInPanel({
           locationConsent: geo?.consent ?? "not_requested",
           locationAvailability: geo?.availability ?? "ok",
         });
-        setOutcome({
-          kind: "success",
-          courseCode: result.courseCode,
-          venueName: result.venueName,
-          checkedInAt: result.checkedInAt,
-          decision: result.decision,
-        });
-      } catch (cause) {
-        setOutcome(
-          extractFailure(cause) ?? { kind: "failure", verdict: "malformed", reasonCodes: [] },
-        );
+        if (result.kind === "ok") {
+          setOutcome({
+            kind: "success",
+            courseCode: result.courseCode,
+            venueName: result.venueName,
+            checkedInAt: result.checkedInAt,
+            decision: {
+              outcome: result.outcome,
+              evidence: result.evidence,
+              reasonCodes: result.reasonCodes,
+              policyVersion: result.policyVersion,
+              decidedAt: result.decidedAt,
+            },
+          });
+        } else if (result.kind === "rate_limited") {
+          setOutcome({ kind: "rate_limited", retryAfterSeconds: result.retryAfterSeconds });
+        } else {
+          setOutcome({
+            kind: "failure",
+            verdict: result.verdict,
+            reasonCodes: result.reasonCodes,
+          });
+        }
+      } catch {
+        setOutcome({ kind: "failure", verdict: "malformed", reasonCodes: [] });
       } finally {
         setSubmitting(false);
         setCode("");

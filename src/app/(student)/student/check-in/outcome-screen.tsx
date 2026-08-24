@@ -124,7 +124,13 @@ function formatCheckedInAt(timestamp: number): string {
   return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function SuccessScreen({ outcome }: { outcome: Extract<CheckInOutcome, { kind: "success" }> }) {
+function SuccessScreen({
+  outcome,
+  onRetry,
+}: {
+  outcome: Extract<CheckInOutcome, { kind: "success" }>;
+  onRetry: () => void;
+}) {
   const explanation = explainDecision(outcome.decision, "student");
   const decisionOutcome = outcome.decision.outcome;
   const Icon = SUCCESS_ICON[decisionOutcome];
@@ -165,26 +171,13 @@ function SuccessScreen({ outcome }: { outcome: Extract<CheckInOutcome, { kind: "
         {outcome.courseCode} · {outcome.venueName} ·{" "}
         <span suppressHydrationWarning>{formatCheckedInAt(outcome.checkedInAt)}</span>
       </p>
-      <p className="max-w-md text-sm">Keep the app open until class ends.</p>
-    </div>
-  );
-}
-
-function RateLimitedScreen({ retryAfterSeconds }: { retryAfterSeconds: number }) {
-  return (
-    <div
-      aria-live="polite"
-      className="flex flex-col items-center gap-4 rounded-xl border p-8 text-center"
-      data-testid="checkin-outcome"
-      role="status"
-    >
-      <div className="bg-destructive/15 text-destructive flex size-14 items-center justify-center rounded-full">
-        <Timer className="size-8" />
-      </div>
-      <h2 className="text-xl font-semibold">Too many attempts</h2>
-      <p className="text-muted-foreground max-w-md text-sm">
-        You have tried several codes in a row. Try again in about {retryAfterSeconds} seconds.
-      </p>
+      {decisionOutcome === "accept" ? (
+        <p className="max-w-md text-sm">Keep the app open until class ends.</p>
+      ) : (
+        <Button data-testid="checkin-again" onClick={onRetry}>
+          Try again
+        </Button>
+      )}
     </div>
   );
 }
@@ -196,9 +189,28 @@ export function OutcomeScreen({
   outcome: CheckInOutcome;
   onRetry: () => void;
 }) {
-  if (outcome.kind === "success") return <SuccessScreen outcome={outcome} />;
+  if (outcome.kind === "success") return <SuccessScreen outcome={outcome} onRetry={onRetry} />;
   if (outcome.kind === "rate_limited") {
-    return <RateLimitedScreen retryAfterSeconds={outcome.retryAfterSeconds} />;
+    return (
+      <div
+        aria-live="polite"
+        className="flex flex-col items-center gap-4 rounded-xl border p-8 text-center"
+        data-testid="checkin-outcome"
+        role="status"
+      >
+        <div className="bg-destructive/15 text-destructive flex size-14 items-center justify-center rounded-full">
+          <Timer className="size-8" />
+        </div>
+        <h2 className="text-xl font-semibold">Too many attempts</h2>
+        <p className="text-muted-foreground max-w-md text-sm">
+          You have tried several codes in a row. Try again in about {outcome.retryAfterSeconds}{" "}
+          seconds.
+        </p>
+        <Button variant="outline" data-testid="checkin-again" onClick={onRetry}>
+          Back to scanner
+        </Button>
+      </div>
+    );
   }
 
   const copy = failureCopy(outcome.verdict, outcome.reasonCodes);
