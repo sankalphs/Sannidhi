@@ -60,7 +60,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 | Phase | Scope | Status |
 | --- | --- | --- |
 | 0 | Foundations: repo, CI/CD, data model, auth skeleton | Merged |
-| 1 | Identity enrollment, passkeys, device registration, RBAC | In review (PR #11) |
+| 1 | Identity enrollment, passkeys, device registration, RBAC | Merged (PR #11) |
 | 2 | Sessions & rotating QR check-in | Not started |
 | 3 | Device trust, presence signals, risk decision engine | Not started |
 | 4 | Adaptive step-up security (liveness, face match, spot checks) | Not started |
@@ -71,7 +71,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Status
 
-> **Phase 1 in review (PR #11)** — identity enrollment, passkeys, device lifecycle, biometric consent capture, and the enrollment completion gate implemented and under review; Phase 0 foundations merged (PR #10).
+> **Phase 1 merged (PR #11)** — identity enrollment, passkey auth with revocable sessions, device lifecycle with controlled replacement flow, biometric consent capture, and the enrollment completion gate. Next up: Phase 2 sessions and rotating QR check-in.
 
 ## Local development
 
