@@ -1,6 +1,7 @@
 export const PRESENCE_EVIDENCE_VERSION = "presence-evidence/v1";
 export const LOCATION_DEFAULT_RADIUS_METERS = 250;
 export const LOCATION_INCONCLUSIVE_MARGIN_METERS = 150;
+export const LOCATION_MAX_ACCURACY_MARGIN_METERS = 200;
 
 const EARTH_RADIUS_METERS = 6371008.8;
 
@@ -59,7 +60,10 @@ export function evaluateLocationConsistency(args: {
   }
 
   const radius = venue.geofenceRadiusMeters ?? LOCATION_DEFAULT_RADIUS_METERS;
-  const margin = Math.max(0, fix.accuracyMeters ?? 0);
+  const margin = Math.min(
+    LOCATION_MAX_ACCURACY_MARGIN_METERS,
+    Math.max(0, fix.accuracyMeters ?? 0),
+  );
   const distanceMeters = haversineMeters(fix, {
     latitude: venue.latitude,
     longitude: venue.longitude,

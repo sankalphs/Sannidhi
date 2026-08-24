@@ -17,7 +17,14 @@ export function reseedDemoData(): boolean {
 export default function globalSetup(): void {
   if (reseedDemoData()) {
     console.log("[sannidhi-e2e] demo data cleared and reseeded");
-  } else {
-    console.warn("[sannidhi-e2e] continuing without a deterministic reseed");
+    return;
   }
+  if (process.env.SANNIDHI_E2E_ALLOW_STALE_SEED === "1") {
+    console.warn("[sannidhi-e2e] continuing without a deterministic reseed");
+    return;
+  }
+  throw new Error(
+    "[sannidhi-e2e] demo reseed failed; aborting the suite. " +
+      "Set SANNIDHI_E2E_ALLOW_STALE_SEED=1 to run against stale data.",
+  );
 }

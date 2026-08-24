@@ -421,15 +421,24 @@ export const verifyManually = mutation({
     if (enrollment === null) throw new ConvexError("student_not_enrolled");
 
     const now = Date.now();
+
+    const existingVerified = await ctx.db
+      .query("attendance_events")
+      .withIndex("by_student_section", (q) =>
+        q.eq("studentId", args.studentId).eq("sectionId", session.sectionId),
+      )
+      .filter((q) => q.gte(q.field("capturedAt"), session.startedAt))
+      .first();
+    if (existingVerified !== null && existingVerified.state === "verified") {
+      return { ok: true as const, decision: existingVerified.decision ?? null };
+    }
+
     const device = await bestDeviceForStudent(ctx, args.studentId);
     const decision = decide({
       signals: [...manualAttestationSignals(trimmed), deviceTrustSignal(device)],
       anomalies: { recentSecurityFailures: 0 },
       now,
     });
-    if (decision.outcome !== "accept") {
-      throw new ConvexError("manual_verification_unexpected_outcome");
-    }
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
       institutionId: session.institutionId,

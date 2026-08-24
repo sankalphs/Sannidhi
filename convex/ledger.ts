@@ -102,13 +102,15 @@ export const listLedgerEvents = query({
     const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 100)), MAX_LEDGER_PAGE);
     const cursorSeq = args.cursorSeq;
 
-    const base = ctx.db
+    const rows = await ctx.db
       .query("event_ledger")
-      .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
-      .order("desc");
-    const paged =
-      cursorSeq !== undefined ? base.filter((q) => q.lt(q.field("seq"), cursorSeq)) : base;
-    const rows = await paged.take(limit);
+      .withIndex("by_institution_seq", (q) =>
+        cursorSeq !== undefined
+          ? q.eq("institutionId", caller.institutionId).lt("seq", cursorSeq)
+          : q.eq("institutionId", caller.institutionId),
+      )
+      .order("desc")
+      .take(limit);
 
     const events = await Promise.all(
       rows.map(async (row) => {

@@ -2,8 +2,9 @@
 
 import { api } from "../../../../../convex/_generated/api";
 import { useConvex, useQuery } from "convex/react";
+import type { FunctionReturnType } from "convex/server";
 import { ChevronDown, ChevronRight, Loader2, ScrollText, ShieldCheck } from "lucide-react";
-import { Component, type ReactNode, useState, Fragment } from "react";
+import { Component, type ReactNode, useEffect, useState, Fragment } from "react";
 
 import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { EmptyState } from "@/components/shell/empty-state";
@@ -13,6 +14,9 @@ import { Button } from "@/components/ui/button";
 import type { Decision } from "@/lib/decision";
 
 type DecisionOutcome = Decision["outcome"];
+
+type LedgerSnapshot = FunctionReturnType<typeof api.ledger.listLedgerEvents>;
+type LedgerEvent = LedgerSnapshot["events"][number];
 
 const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
   accept: "accept",
@@ -50,10 +54,39 @@ function formatClock(timestamp: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+const OUTCOME_VALUES: readonly string[] = ["accept", "step_up", "flag", "reject"];
+const CATEGORY_VALUES: readonly string[] = ["identity", "device", "presence", "person"];
+const MAX_LEDGER_PAGES = 20;
+const MAX_CHAIN_WINDOWS = 8;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isValidSignal(signal: unknown): signal is Decision["evidence"]["signals"][number] {
+  if (!isRecord(signal)) return false;
+  if (typeof signal.source !== "string" || typeof signal.status !== "string") return false;
+  if (!CATEGORY_VALUES.includes(signal.category as string)) return false;
+  return signal.detail === undefined || typeof signal.detail === "string";
+}
+
 function extractDecision(payload: unknown): Decision | null {
-  if (typeof payload !== "object" || payload === null || !("decision" in payload)) return null;
-  const decision = (payload as { decision?: unknown }).decision;
-  if (typeof decision !== "object" || decision === null) return null;
+  if (!isRecord(payload) || !isRecord(payload.decision)) return null;
+  const decision = payload.decision;
+  if (typeof decision.outcome !== "string" || !OUTCOME_VALUES.includes(decision.outcome)) {
+    return null;
+  }
+  if (
+    !Array.isArray(decision.reasonCodes) ||
+    !decision.reasonCodes.every((code) => typeof code === "string")
+  ) {
+    return null;
+  }
+  if (typeof decision.policyVersion !== "string" || typeof decision.decidedAt !== "number") {
+    return null;
+  }
+  if (!isRecord(decision.evidence) || !Array.isArray(decision.evidence.signals)) return null;
+  if (!decision.evidence.signals.every(isValidSignal)) return null;
   return decision as Decision;
 }
 
@@ -68,6 +101,7 @@ export function LedgerEventsView({ actorToken }: { actorToken: string }) {
 function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   const convex = useConvex();
   const eventsResult = useQuery(api.ledger.listLedgerEvents, { actorToken, limit: 100 });
+  const [olderEvents, setOlderEvents] = useState<LedgerEvent[]>([]);
   const [expandedSeqs, setExpandedSeqs] = useState<ReadonlySet<number>>(new Set());
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [chainStatus, setChainStatus] = useState<
@@ -77,7 +111,42 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
     | null
   >(null);
 
-  const events = eventsResult?.events ?? [];
+  useEffect(() => {
+    let cancelled = false;
+    setOlderEvents([]);
+    async function loadOlder() {
+      if (eventsResult === undefined || eventsResult.nextCursor === undefined) return;
+      const collected: LedgerEvent[] = [];
+      let cursorSeq: number | undefined = eventsResult.nextCursor;
+      try {
+        for (let page = 0; page < MAX_LEDGER_PAGES && cursorSeq !== undefined; page += 1) {
+          const result: LedgerSnapshot = await convex.query(api.ledger.listLedgerEvents, {
+            actorToken,
+            limit: 100,
+            ...(cursorSeq !== undefined ? { cursorSeq } : {}),
+          });
+          collected.push(...result.events);
+          cursorSeq = result.nextCursor;
+        }
+      } catch {
+        return;
+      }
+      if (!cancelled) setOlderEvents(collected);
+    }
+    void loadOlder();
+    return () => {
+      cancelled = true;
+    };
+  }, [convex, actorToken, eventsResult]);
+
+  const seenSeqs = new Set<number>();
+  const events = [...(eventsResult?.events ?? []), ...olderEvents]
+    .filter((event) => {
+      if (seenSeqs.has(event.seq)) return false;
+      seenSeqs.add(event.seq);
+      return true;
+    })
+    .sort((a, b) => b.seq - a.seq);
 
   function toggleExpanded(seq: number) {
     setExpandedSeqs((current) => {
@@ -95,12 +164,27 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
     if (verifyingChain) return;
     setVerifyingChain(true);
     try {
-      const result = await convex.query(api.ledger.verifyChain, { actorToken, limit: 500 });
-      setChainStatus(
-        result.valid
-          ? { state: "valid", count: result.count }
-          : { state: "broken", brokenAtSeq: result.brokenAtSeq ?? -1 },
-      );
+      type ChainWindow = FunctionReturnType<typeof api.ledger.verifyChain>;
+      let cursorSeq: number | undefined;
+      let verifiedCount = 0;
+      for (let window = 0; window < MAX_CHAIN_WINDOWS; window += 1) {
+        const result: ChainWindow = await convex.query(api.ledger.verifyChain, {
+          actorToken,
+          limit: 500,
+          ...(cursorSeq !== undefined ? { fromSeq: cursorSeq } : {}),
+        });
+        if (!result.valid) {
+          setChainStatus({ state: "broken", brokenAtSeq: result.brokenAtSeq ?? -1 });
+          return;
+        }
+        verifiedCount += result.count;
+        if (!("nextCursor" in result) || result.nextCursor === undefined) {
+          setChainStatus({ state: "valid", count: verifiedCount });
+          return;
+        }
+        cursorSeq = result.nextCursor;
+      }
+      setChainStatus({ state: "valid", count: verifiedCount });
     } catch {
       setChainStatus({ state: "error" });
     } finally {

@@ -147,6 +147,8 @@ export const redeemChallenge = mutation({
 
     const fail = (failure: RedeemFailure): RedeemResult => failure;
 
+    let session: Doc<"class_sessions"> | null = null;
+
     const appendFailure = async (
       verdict: FailureVerdict,
       reasonCodes: string[],
@@ -207,7 +209,6 @@ export const redeemChallenge = mutation({
     }
 
     const payload = verified.payload;
-    let session: Doc<"class_sessions"> | null = null;
     try {
       session = await ctx.db.get(payload.sid as Id<"class_sessions">);
     } catch {

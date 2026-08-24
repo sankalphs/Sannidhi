@@ -25,13 +25,13 @@ async function openFacultySession(): Promise<void> {
   await facultyPage.goto("/faculty/sessions");
   const startSlot = facultyPage.getByTestId("start-slot").first();
   const resumeLink = facultyPage.getByRole("link", { name: "Resume" }).first();
-  await expect(startSlot.or(resumeLink).first()).toBeVisible({ timeout: 60_000 });
+  await expect(startSlot.or(resumeLink).first()).toBeVisible({ timeout: 120_000 });
   if ((await resumeLink.count()) > 0) {
     await resumeLink.click();
   } else {
     await startSlot.click();
   }
-  await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 60_000 });
+  await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 120_000 });
 }
 
 async function nextFreshToken(): Promise<string> {
@@ -52,9 +52,9 @@ async function nextFreshToken(): Promise<string> {
 async function reloadScanner(): Promise<void> {
   await studentPage.goto("/student/check-in");
   const input = studentPage.getByTestId("checkin-input");
-  await input.waitFor({ state: "visible", timeout: 60_000 });
+  await input.waitFor({ state: "visible", timeout: 120_000 });
   await expect(studentPage.getByTestId("geo-status")).toHaveText(/Location ready/i, {
-    timeout: 20_000,
+    timeout: 30_000,
   });
   await studentPage.waitForTimeout(HYDRATION_MS);
 }

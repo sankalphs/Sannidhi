@@ -136,13 +136,13 @@ describe("radius and margin semantics", () => {
     expect(evaluate(fix, venue).verdict).toBe("inconclusive");
   });
 
-  it("accuracy margin pulls a mismatch into consistent at tight boundaries", () => {
+  it("accuracy margin pulls a mismatch into consistent within the capped margin", () => {
     const venue = { ...VENUE, geofenceRadiusMeters: 100 };
-    const fix = fixNorthOfVenue(0.004);
+    const fix = fixNorthOfVenue(0.00225);
     const d = haversineMeters(fix, VENUE);
-    expect(d).toBeGreaterThan(400);
+    expect(d).toBeGreaterThan(240);
 
-    const insideByMargin = evaluate({ ...fix, accuracyMeters: Math.round(d) - 20 }, venue);
+    const insideByMargin = evaluate({ ...fix, accuracyMeters: 180 }, venue);
     expect(insideByMargin).toEqual({
       verdict: "consistent",
       distanceMeters: d,
@@ -151,23 +151,32 @@ describe("radius and margin semantics", () => {
 
   it("accuracy margin lands in the inconclusive band between radius and margin", () => {
     const venue = { ...VENUE, geofenceRadiusMeters: 100 };
-    const fix = fixNorthOfVenue(0.004);
+    const fix = fixNorthOfVenue(0.0027);
     const d = haversineMeters(fix, VENUE);
 
-    const inconclusive = evaluate({ ...fix, accuracyMeters: Math.round(d) - 200 }, venue);
+    const inconclusive = evaluate({ ...fix, accuracyMeters: 120 }, venue);
     expect(inconclusive.verdict).toBe("inconclusive");
     expect(inconclusive).toMatchObject({ distanceMeters: d });
   });
 
   it("still reports mismatch once distance exceeds radius plus accuracy margin", () => {
     const venue = { ...VENUE, geofenceRadiusMeters: 100 };
-    const fix = fixNorthOfVenue(0.004);
+    const fix = fixNorthOfVenue(0.0045);
     const d = haversineMeters(fix, VENUE);
 
-    const mismatch = evaluate({ ...fix, accuracyMeters: Math.round(d) - 300 }, venue);
-    expect(Math.round(d) - 300).toBeGreaterThan(100);
+    const mismatch = evaluate({ ...fix, accuracyMeters: Math.round(d) - 320 }, venue);
     expect(mismatch.verdict).toBe("mismatch");
     expect((mismatch as Extract<LocationOutcome, { verdict: "mismatch" }>).distanceMeters).toBe(d);
+  });
+
+  it("caps client-supplied accuracy so absurd precision cannot fake consistency", () => {
+    const venue = { ...VENUE, geofenceRadiusMeters: 100 };
+    const fix = fixNorthOfVenue(0.0072);
+    const d = haversineMeters(fix, VENUE);
+    expect(d).toBeGreaterThan(700);
+
+    const spoofed = evaluate({ ...fix, accuracyMeters: 5000 }, venue);
+    expect(spoofed.verdict).toBe("mismatch");
   });
 
   it("clamps negative accuracy to a zero margin", () => {

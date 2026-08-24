@@ -80,6 +80,10 @@ export function ManualVerifyDialog({
     if (!pending) onClose();
   }
 
+  function handleCancel(event: React.SyntheticEvent<HTMLDialogElement>) {
+    if (pending) event.preventDefault();
+  }
+
   return (
     <dialog
       ref={dialogRef}
@@ -87,6 +91,7 @@ export function ManualVerifyDialog({
       aria-modal="true"
       aria-label={`Verify ${student.name} manually`}
       onClose={requestClose}
+      onCancel={handleCancel}
       onClick={(event) => {
         if (event.target === dialogRef.current) requestClose();
       }}

@@ -11,12 +11,10 @@ export const SECURITY_ANOMALY_EVENT_TYPES = [
 ] as const;
 
 export const RATE_LIMIT_EVENT_TYPES = [
-  "attendance.session_checkin",
   "challenge_expired_use",
   "challenge_replayed",
   "wrong_session_challenge",
   "malformed_challenge",
-  "checkin_rate_limited",
 ] as const;
 
 export const CHECKIN_RATE_LIMIT_WINDOW_MS = 60_000;
@@ -119,11 +117,11 @@ export async function countRecentSecurityEvents(
   const cutoff = args.now - args.sinceMs;
   const rows: Array<Doc<"event_ledger">> = await ctx.db
     .query("event_ledger")
-    .withIndex("by_subject", (q) => q.eq("subjectUserId", args.studentId))
+    .withIndex("by_subject_created", (q) =>
+      q.eq("subjectUserId", args.studentId).gte("createdAt", cutoff),
+    )
     .collect();
-  return rows.filter(
-    (row) => row.createdAt >= cutoff && row.category === "attendance" && types.includes(row.type),
-  ).length;
+  return rows.filter((row) => row.category === "attendance" && types.includes(row.type)).length;
 }
 
 export async function countRecentCheckinAttempts(
