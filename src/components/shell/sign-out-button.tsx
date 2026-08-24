@@ -6,20 +6,14 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 
-type SignOutButtonProps = {
-  devLoginEnabled: boolean;
-};
-
-export function SignOutButton({ devLoginEnabled }: SignOutButtonProps) {
+export function SignOutButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
-
-  if (!devLoginEnabled) return null;
 
   async function handleSignOut() {
     setPending(true);
     try {
-      await fetch("/api/dev-session", { method: "DELETE" });
+      await fetch("/api/auth/session", { method: "DELETE" });
       router.push("/");
       router.refresh();
     } finally {
