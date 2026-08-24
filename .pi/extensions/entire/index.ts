@@ -22,7 +22,7 @@ export default function (pi: ExtensionAPI) {
   const nested = Boolean(process.env.ENTIRE_PI_NESTED);
   process.env.ENTIRE_PI_NESTED = "1";
 
-  const ENTIRE_CMD = "entire";
+  const ENTIRE_CMD = 'entire';
   let pendingSkillEvents: Array<{ skill_name: string; invocation: string; timestamp: string }> = [];
 
   // fireHook pipes data to `entire hooks pi <hookName>` and resolves with the
