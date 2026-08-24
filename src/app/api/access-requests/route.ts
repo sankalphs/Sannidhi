@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { ConvexError } from "convex/values";
 import { NextResponse } from "next/server";
 
@@ -15,6 +17,21 @@ type AccessRequestInput = {
   note?: unknown;
   website?: unknown;
 };
+
+/**
+ * Best-effort client IP for abuse control. Only a salted hash of this value ever
+ * reaches storage — the raw IP is never persisted.
+ */
+function clientIpHash(request: Request): string | undefined {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const ip =
+    forwarded !== null
+      ? (forwarded.split(",")[0]?.trim() ?? "")
+      : (request.headers.get("x-real-ip")?.trim() ?? "");
+  if (ip.length === 0) return undefined;
+  const salt = process.env.SESSION_SECRET ?? "sannidhi-access-request-salt";
+  return createHash("sha256").update(`${salt}:${ip}`).digest("hex");
+}
 
 export async function POST(request: Request) {
   let body: AccessRequestInput;
@@ -41,6 +58,7 @@ export async function POST(request: Request) {
   }
 
   try {
+    const ipHash = clientIpHash(request);
     await getConvexClient().mutation(api.accessRequests.submit, {
       institution,
       name,
@@ -48,6 +66,7 @@ export async function POST(request: Request) {
       requestedRole,
       ...(note !== undefined ? { note } : {}),
       ...(website !== undefined ? { website } : {}),
+      ...(ipHash !== undefined ? { ipHash } : {}),
     });
   } catch (error) {
     if (error instanceof ConvexError && typeof error.data === "string") {

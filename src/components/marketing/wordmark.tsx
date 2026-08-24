@@ -32,7 +32,10 @@ export function Wordmark({ className, href = "/" }: { className?: string; href?:
   );
   if (href === null) return content;
   return (
-    <Link href={href} className="focus-visible:ring-ring rounded-md focus-visible:outline-none">
+    <Link
+      href={href}
+      className="focus-visible:ring-ring rounded-md focus-visible:ring-2 focus-visible:outline-none"
+    >
       {content}
     </Link>
   );

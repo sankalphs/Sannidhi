@@ -283,10 +283,12 @@ export default defineSchema({
       v.literal("other"),
     ),
     note: v.optional(v.string()),
+    ipHash: v.optional(v.string()),
     status: v.union(v.literal("new"), v.literal("reviewed")),
     submittedAt: v.number(),
     reviewedAt: v.optional(v.number()),
   })
     .index("by_status_submitted", ["status", "submittedAt"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_ipHash_submitted", ["ipHash", "submittedAt"]),
 });

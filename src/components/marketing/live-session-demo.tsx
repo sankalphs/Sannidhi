@@ -175,8 +175,8 @@ export function LiveSessionDemo() {
           <span className="text-sm font-medium">Tuesday · 09:30 · Seminar Hall 2</span>
         </div>
         <span className="bg-chalk text-chalk-foreground inline-flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] font-semibold tracking-[0.12em] uppercase">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60" />
+          <span className="relative flex size-2 motion-reduce:animate-none">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-60 motion-reduce:hidden" />
             <span className="relative inline-flex size-2 rounded-full bg-current" />
           </span>
           Live
@@ -218,7 +218,7 @@ export function LiveSessionDemo() {
             <div className="bg-primary-foreground/20 h-1 w-full overflow-hidden rounded-full">
               <div
                 key={token}
-                className="bg-chalk h-full rounded-full"
+                className="bg-chalk h-full rounded-full motion-reduce:[animation:none]"
                 style={{
                   animation: "demo-countdown 8s linear forwards",
                   transformOrigin: "left",

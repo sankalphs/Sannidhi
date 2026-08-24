@@ -8,6 +8,8 @@ import { verifyActorToken } from "./lib/actor";
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_LISTED_REQUESTS = 100;
 const MAX_REQUESTS_PER_EMAIL_PER_DAY = 3;
+const MAX_REQUESTS_PER_IP_PER_DAY = 5;
+const MAX_PENDING_NEW_REQUESTS = 500;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const requestedRoleValidator = v.union(
@@ -35,6 +37,7 @@ export const submit = mutation({
     requestedRole: requestedRoleValidator,
     note: v.optional(v.string()),
     website: v.optional(v.string()),
+    ipHash: v.optional(v.string()),
   },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
@@ -61,14 +64,37 @@ export const submit = mutation({
       throw new ConvexError("Notes are limited to 1000 characters");
     }
 
+    // Bounded scan against unbounded queue growth: newest entries first, and
+    // refuse when the "new" queue already holds the cap.
+    const recentNew = await ctx.db
+      .query("access_requests")
+      .withIndex("by_status_submitted", (q) => q.eq("status", "new"))
+      .order("desc")
+      .take(MAX_PENDING_NEW_REQUESTS + 1);
+    if (recentNew.length > MAX_PENDING_NEW_REQUESTS) {
+      throw new ConvexError("The request queue is full right now. Please try again in a few days.");
+    }
+
     const dayAgo = Date.now() - DAY_MS;
-    const recent = await ctx.db
+    const byEmail = await ctx.db
       .query("access_requests")
       .withIndex("by_email", (q) => q.eq("email", email))
       .collect();
-    const recentCount = recent.filter((request) => request.submittedAt >= dayAgo).length;
-    if (recentCount >= MAX_REQUESTS_PER_EMAIL_PER_DAY) {
+    const emailCount = byEmail.filter((request) => request.submittedAt >= dayAgo).length;
+    if (emailCount >= MAX_REQUESTS_PER_EMAIL_PER_DAY) {
       throw new ConvexError("Too many requests from this email. Try again tomorrow.");
+    }
+
+    if (args.ipHash !== undefined) {
+      const byIp = await ctx.db
+        .query("access_requests")
+        .withIndex("by_ipHash_submitted", (q) => q.eq("ipHash", args.ipHash))
+        .order("desc")
+        .take(MAX_REQUESTS_PER_IP_PER_DAY + 1);
+      const ipCount = byIp.filter((request) => request.submittedAt >= dayAgo).length;
+      if (ipCount >= MAX_REQUESTS_PER_IP_PER_DAY) {
+        throw new ConvexError("Too many requests from this network. Try again tomorrow.");
+      }
     }
 
     await ctx.db.insert("access_requests", {
@@ -77,6 +103,7 @@ export const submit = mutation({
       email,
       requestedRole: args.requestedRole,
       ...(note !== undefined && note.length > 0 ? { note } : {}),
+      ...(args.ipHash !== undefined ? { ipHash: args.ipHash } : {}),
       status: "new",
       submittedAt: Date.now(),
     });

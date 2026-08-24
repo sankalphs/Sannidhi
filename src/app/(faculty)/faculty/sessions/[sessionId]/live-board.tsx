@@ -58,8 +58,8 @@ export function LiveBoard({
       <CardHeader>
         <CardTitle>Live roster</CardTitle>
         <CardDescription className="flex items-center gap-1.5">
-          <span className="relative flex size-2">
-            <span className="bg-muted-foreground/60 absolute inline-flex size-full animate-ping rounded-full opacity-75" />
+          <span className="relative flex size-2 motion-reduce:animate-none">
+            <span className="bg-muted-foreground/60 absolute inline-flex size-full animate-ping rounded-full opacity-75 motion-reduce:hidden" />
             <span className="bg-muted-foreground relative inline-flex size-2 rounded-full" />
           </span>
           Updated live
