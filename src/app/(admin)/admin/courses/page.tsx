@@ -1,14 +1,16 @@
 import { BookOpen } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 
 export default function AdminCoursesPage() {
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Courses & sections</h1>
-        <p className="text-muted-foreground text-sm">Course catalog and section rosters.</p>
-      </div>
+      <PageHeader
+        eyebrow="Admin"
+        title="Courses & sections"
+        description="Course catalog and section rosters."
+      />
       <EmptyState
         icon={BookOpen}
         title="Courses & sections"

@@ -2,6 +2,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { CalendarDays } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getCachedConvexClient } from "@/lib/convex/server-client";
@@ -35,12 +36,11 @@ export default async function FacultySessionsPage() {
     console.error("[faculty-sessions] schedule query failed", cause);
     return (
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Class sessions</h1>
-          <p className="text-muted-foreground text-sm">
-            Start, monitor, and close your class sessions.
-          </p>
-        </div>
+        <PageHeader
+          eyebrow="Faculty panel"
+          title="Class sessions"
+          description="Start, monitor, and close your class sessions."
+        />
         <EmptyState
           icon={CalendarDays}
           title="Could not load your schedule"
@@ -52,12 +52,11 @@ export default async function FacultySessionsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Class sessions</h1>
-        <p className="text-muted-foreground text-sm">
-          Start, monitor, and close your class sessions.
-        </p>
-      </div>
+      <PageHeader
+        eyebrow="Faculty panel"
+        title="Class sessions"
+        description="Start, monitor, and close your class sessions."
+      />
       <ScheduleList actorToken={actorToken} initialRows={rows} />
     </div>
   );

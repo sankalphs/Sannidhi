@@ -135,13 +135,18 @@ export function QrPanel({
       : null;
 
   return (
-    <Card className={cn(!isActive && "opacity-60")}>
+    <Card
+      className={cn(
+        "border-primary-foreground/15 bg-primary text-primary-foreground shadow-primary/50 shadow-[0_16px_48px_-24px]",
+        !isActive && "opacity-60",
+      )}
+    >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <QrCode className="size-4" />
           Check-in QR
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="text-primary-foreground/70">
           {isActive
             ? "Students scan to check in. The code rotates automatically."
             : sessionStatus === "paused"
@@ -151,18 +156,19 @@ export function QrPanel({
       </CardHeader>
       <CardContent className="flex flex-col items-center gap-4">
         {!isActive ? (
-          <div className="bg-muted text-muted-foreground flex aspect-square w-full max-w-[280px] items-center justify-center rounded-lg">
+          <div className="bg-primary-foreground/10 text-primary-foreground/50 flex aspect-square w-full max-w-[280px] items-center justify-center rounded-lg">
             <QrCode className="size-10" />
           </div>
         ) : error !== null ? (
           <div className="flex flex-col items-center gap-3 py-6">
-            <p className="text-destructive text-center text-sm" data-testid="qr-error">
+            <p className="text-center text-sm" data-testid="qr-error">
               {error}
             </p>
             <Button
               variant="outline"
               size="sm"
               data-testid="qr-retry"
+              className="border-primary-foreground/25 text-primary-foreground hover:bg-primary-foreground/10 hover:text-primary-foreground"
               onClick={() => setAttempt((value) => value + 1)}
             >
               <RefreshCw />
@@ -174,7 +180,7 @@ export function QrPanel({
             <div className="mx-auto w-fit rounded-lg bg-white p-3">
               <img src={dataUrl} alt="Session QR code" width={280} height={280} />
             </div>
-            <p className="text-muted-foreground text-sm tabular-nums">
+            <p className="text-primary-foreground/70 font-mono text-sm tracking-[0.08em] tabular-nums">
               Refreshes in {secondsLeft}s
             </p>
             <data data-testid="qr-token" className="hidden">
@@ -185,8 +191,10 @@ export function QrPanel({
             </data>
           </>
         ) : (
-          <div className="bg-muted flex aspect-square w-full max-w-[280px] animate-pulse items-center justify-center rounded-lg">
-            {publishing ? <Loader2 className="text-muted-foreground size-6 animate-spin" /> : null}
+          <div className="bg-primary-foreground/10 flex aspect-square w-full max-w-[280px] animate-pulse items-center justify-center rounded-lg">
+            {publishing ? (
+              <Loader2 className="text-primary-foreground/70 size-6 animate-spin" />
+            ) : null}
           </div>
         )}
       </CardContent>

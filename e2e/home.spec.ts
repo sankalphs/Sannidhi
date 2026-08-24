@@ -5,7 +5,9 @@ test("home page renders the redesigned landing", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Attendance that holds up under audit." }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: "Sign in", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("banner").getByRole("link", { name: "Sign in", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("link", { name: "Request institution access" })).toBeVisible();
 });
 

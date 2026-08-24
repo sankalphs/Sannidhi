@@ -3,6 +3,7 @@ import { ScanLine } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { LockedEmptyState } from "@/components/shell/locked-empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
@@ -40,10 +41,11 @@ export default async function StudentCheckInPage() {
   if (missingSteps.length > 0) {
     return (
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Check in</h1>
-          <p className="text-muted-foreground text-sm">Scan or paste the class check-in code.</p>
-        </div>
+        <PageHeader
+          eyebrow="Student panel"
+          title="Check in"
+          description="Scan or paste the class check-in code."
+        />
         <LockedEmptyState missingSteps={missingSteps} />
       </div>
     );
@@ -53,10 +55,11 @@ export default async function StudentCheckInPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Check in</h1>
-        <p className="text-muted-foreground text-sm">Scan or paste the class check-in code.</p>
-      </div>
+      <PageHeader
+        eyebrow="Student panel"
+        title="Check in"
+        description="Scan or paste the class check-in code."
+      />
       {loaded === null ? (
         <EmptyState
           icon={ScanLine}

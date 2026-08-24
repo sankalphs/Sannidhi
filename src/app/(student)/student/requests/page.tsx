@@ -2,6 +2,7 @@ import { ClipboardList } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { LockedEmptyState } from "@/components/shell/locked-empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import { loadMissingEnrollmentSteps } from "@/lib/enrollment/load";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +12,11 @@ export default async function StudentRequestsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Requests</h1>
-        <p className="text-muted-foreground text-sm">Corrections, exemptions and on-duty.</p>
-      </div>
+      <PageHeader
+        eyebrow="Student panel"
+        title="Requests"
+        description="Corrections, exemptions and on-duty."
+      />
       {missingSteps.length > 0 ? (
         <LockedEmptyState missingSteps={missingSteps} />
       ) : (

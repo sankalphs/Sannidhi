@@ -3,6 +3,7 @@ import { BookOpen } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { LockedEmptyState } from "@/components/shell/locked-empty-state";
+import { PageHeader } from "@/components/shell/page-header";
 import {
   DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
   summarizeAttendance,
@@ -49,10 +50,11 @@ export default async function StudentHistoryPage() {
   if (missingSteps.length > 0) {
     return (
       <div className="flex flex-col gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Attendance history</h1>
-          <p className="text-muted-foreground text-sm">Calendar and subject-wise views.</p>
-        </div>
+        <PageHeader
+          eyebrow="Student panel"
+          title="Attendance history"
+          description="Calendar and subject-wise views."
+        />
         <LockedEmptyState missingSteps={missingSteps} />
       </div>
     );
@@ -92,10 +94,11 @@ export default async function StudentHistoryPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Attendance history</h1>
-        <p className="text-muted-foreground text-sm">Calendar and subject-wise views.</p>
-      </div>
+      <PageHeader
+        eyebrow="Student panel"
+        title="Attendance history"
+        description="Calendar and subject-wise views."
+      />
       {rows.length === 0 ? (
         <EmptyState
           icon={BookOpen}

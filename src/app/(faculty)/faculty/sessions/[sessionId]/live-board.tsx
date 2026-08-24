@@ -7,8 +7,10 @@ import { useQuery } from "convex/react";
 import { Users } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { VerdictStamp } from "@/components/marketing/verdict-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export type BoardSnapshot = FunctionReturnType<typeof api.classSessions.getBoard>;
 type BoardRow = BoardSnapshot["rows"][number];
@@ -25,10 +27,10 @@ function formatClock(timestamp: number): string {
 }
 
 function StateBadge({ state }: { state: RowState }) {
-  if (state === "verified") return <Badge>Verified</Badge>;
-  if (state === "flagged") return <Badge variant="destructive">Flagged</Badge>;
+  if (state === "verified") return <VerdictStamp verdict="accept" label="Verified" />;
+  if (state === "flagged") return <VerdictStamp verdict="flag" label="Flagged" />;
   if (state === "pending") return <Badge variant="secondary">Pending</Badge>;
-  return <Badge variant="outline">Rejected</Badge>;
+  return <VerdictStamp verdict="reject" label="Rejected" />;
 }
 
 export function LiveBoard({
@@ -65,14 +67,25 @@ export function LiveBoard({
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge data-testid="board-count-verified">Verified {countByState("verified")}</Badge>
-          <Badge variant="destructive" data-testid="board-count-flagged">
+          <Badge
+            data-testid="board-count-verified"
+            className="border-verdict-accept/35 bg-verdict-accept/10 text-verdict-accept"
+          >
+            Verified {countByState("verified")}
+          </Badge>
+          <Badge
+            data-testid="board-count-flagged"
+            className="border-verdict-flag/40 bg-verdict-flag/10 text-verdict-flag"
+          >
             Flagged {countByState("flagged")}
           </Badge>
           <Badge variant="secondary" data-testid="board-count-pending">
             Pending {countByState("pending")}
           </Badge>
-          <Badge variant="outline" data-testid="board-count-rejected">
+          <Badge
+            data-testid="board-count-rejected"
+            className="border-verdict-reject/35 bg-verdict-reject/10 text-verdict-reject"
+          >
             Rejected {countByState("rejected")}
           </Badge>
         </div>

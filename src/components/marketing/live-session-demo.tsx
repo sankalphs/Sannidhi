@@ -183,8 +183,8 @@ export function LiveSessionDemo() {
         </span>
       </div>
 
-      <div className="flex items-center gap-6 px-5 py-5 sm:gap-8">
-        <div className="flex flex-col items-center gap-3">
+      <div className="flex flex-col items-center gap-6 px-5 py-5 sm:flex-row sm:gap-8">
+        <div className="flex w-full flex-col items-center gap-3 sm:w-auto">
           <div className="rounded-lg bg-white p-2.5 text-[oklch(0.25_0.03_170)] shadow-inner">
             <svg
               viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`}
@@ -231,7 +231,7 @@ export function LiveSessionDemo() {
           </div>
         </div>
 
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex w-full min-w-0 flex-1 flex-col gap-1.5">
           <p className="font-mono text-[11px] tracking-[0.14em] uppercase opacity-70">
             Verification board
           </p>
