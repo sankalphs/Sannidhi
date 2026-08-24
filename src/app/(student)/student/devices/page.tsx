@@ -6,6 +6,7 @@ import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
 
+import { BiometricsCard } from "./biometrics-card";
 import { DeviceManager } from "./device-manager";
 
 export const dynamic = "force-dynamic";
@@ -28,10 +29,14 @@ export default async function StudentDevicesPage() {
     role: session.role,
     ...(session.sid !== undefined ? { sid: session.sid } : {}),
   });
-  const [devices, requests] = await Promise.all([
+  const [devicesResult, requestsResult, recordResult] = await Promise.allSettled([
     client.query(api.devices.listMyDevices, { actorToken }),
     client.query(api.devices.listMyReplacementRequests, { actorToken }),
+    client.query(api.enrollment.getMyBiometricRecord, { actorToken }),
   ]);
+  const devices = devicesResult.status === "fulfilled" ? devicesResult.value : [];
+  const requests = requestsResult.status === "fulfilled" ? requestsResult.value : [];
+  const biometricRecord = recordResult.status === "fulfilled" ? recordResult.value : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -42,6 +47,7 @@ export default async function StudentDevicesPage() {
         </p>
       </div>
       <DeviceManager initialDevices={devices} initialRequests={requests} />
+      <BiometricsCard initialRecord={biometricRecord} />
     </div>
   );
 }

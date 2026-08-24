@@ -59,8 +59,8 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 | Phase | Scope | Status |
 | --- | --- | --- |
-| 0 | Foundations: repo, CI/CD, data model, auth skeleton | In review (PR #10) |
-| 1 | Identity enrollment, passkeys, device registration, RBAC | Not started |
+| 0 | Foundations: repo, CI/CD, data model, auth skeleton | Merged |
+| 1 | Identity enrollment, passkeys, device registration, RBAC | In review (PR #11) |
 | 2 | Sessions & rotating QR check-in | Not started |
 | 3 | Device trust, presence signals, risk decision engine | Not started |
 | 4 | Adaptive step-up security (liveness, face match, spot checks) | Not started |
@@ -71,7 +71,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Status
 
-> **Phase 0 in review** — requirements finalized in `docs/report.md`; architecture direction recorded in `docs/report.md` §20; foundations implemented and under review (PR #10).
+> **Phase 1 in review (PR #11)** — identity enrollment, passkeys, device lifecycle, biometric consent capture, and the enrollment completion gate implemented and under review; Phase 0 foundations merged (PR #10).
 
 ## Local development
 
