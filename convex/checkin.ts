@@ -180,6 +180,29 @@ export const redeemChallenge = mutation({
       });
     }
 
+    if (caller.role !== "student") {
+      await appendFailure("wrong_session", ["not_enrolled"], nonceHash, session._id);
+      throw new ConvexError({
+        code: "checkin_failed",
+        verdict: "wrong_session",
+        reasonCodes: ["not_enrolled"],
+      });
+    }
+
+    const enrollment = await ctx.db
+      .query("enrollments")
+      .withIndex("by_student", (q) => q.eq("studentId", caller._id))
+      .filter((q) => q.eq(q.field("sectionId"), session.sectionId))
+      .first();
+    if (enrollment === null) {
+      await appendFailure("wrong_session", ["not_enrolled"], nonceHash, session._id);
+      throw new ConvexError({
+        code: "checkin_failed",
+        verdict: "wrong_session",
+        reasonCodes: ["not_enrolled"],
+      });
+    }
+
     await ctx.db.patch(storedDoc._id, { consumedAt: now, consumedByUserId: caller._id });
 
     const lastEvent = await ctx.db

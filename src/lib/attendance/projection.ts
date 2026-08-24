@@ -31,7 +31,7 @@ export function summarizeAttendance(
   let rejectedCount = 0;
 
   for (const record of records) {
-    if (record.state === "verified") verifiedCount += 1;
+    if (record.state === "verified" || record.state === "corrected") verifiedCount += 1;
     else if (record.state === "flagged") flaggedCount += 1;
     else if (record.state === "pending") pendingCount += 1;
     else if (record.state === "rejected") rejectedCount += 1;

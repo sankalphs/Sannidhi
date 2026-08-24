@@ -23,8 +23,14 @@ test("faculty publishes a rotating QR token and the student checks in with it", 
 
     await facultyPage.goto("/faculty/sessions");
     const startSlot = facultyPage.getByTestId("start-slot").first();
-    await startSlot.waitFor({ state: "visible", timeout: 60_000 });
-    await startSlot.click();
+    const resumeLink = facultyPage.getByRole("link", { name: "Resume" }).first();
+
+    if ((await resumeLink.count()) > 0) {
+      await resumeLink.click();
+    } else {
+      await startSlot.waitFor({ state: "visible", timeout: 60_000 });
+      await startSlot.click();
+    }
     await facultyPage.waitForURL(/\/faculty\/sessions\//, { timeout: 60_000 });
 
     const qrToken = facultyPage.getByTestId("qr-token");

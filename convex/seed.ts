@@ -50,6 +50,9 @@ export const clearDemoData = internalMutation({
 export const seedDemoData = internalMutation({
   args: {},
   handler: async (ctx) => {
+    if (process.env.SANNIDHI_DEMO_MODE !== "1") {
+      return { seeded: false as const, reason: "demo-mode-disabled" as const };
+    }
     const existingInstitution = await ctx.db.query("institutions").first();
     if (existingInstitution !== null) {
       return { seeded: false as const, reason: "already-seeded" as const };

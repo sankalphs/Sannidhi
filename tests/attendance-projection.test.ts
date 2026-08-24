@@ -36,7 +36,7 @@ describe("summarizeAttendance", () => {
     expect(summary.canMiss).toBe(1);
   });
 
-  it("counts each distinct state exactly once in mixed records", () => {
+  it("counts corrected records as verified and each distinct state exactly once in mixed records", () => {
     const summary = summarizeAttendance(
       records(
         "verified",
@@ -50,7 +50,7 @@ describe("summarizeAttendance", () => {
         "rejected",
       ),
     );
-    expect(summary.verifiedCount).toBe(2);
+    expect(summary.verifiedCount).toBe(4);
     expect(summary.flaggedCount).toBe(2);
     expect(summary.pendingCount).toBe(1);
     expect(summary.rejectedCount).toBe(2);

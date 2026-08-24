@@ -335,6 +335,21 @@ export const getBoard = query({
       .withIndex("by_section", (q) => q.eq("sectionId", session.sectionId))
       .collect();
 
+    const sessionEvents = await ctx.db
+      .query("attendance_events")
+      .withIndex("by_section_captured", (q) =>
+        q.eq("sectionId", session.sectionId).gte("capturedAt", session.startedAt),
+      )
+      .collect();
+
+    const latestByStudent = new Map<Id<"users">, Doc<"attendance_events">>();
+    for (const event of sessionEvents) {
+      const current = latestByStudent.get(event.studentId);
+      if (current === undefined || event.capturedAt >= current.capturedAt) {
+        latestByStudent.set(event.studentId, event);
+      }
+    }
+
     const rows: Array<{
       studentId: Id<"users">;
       studentName: string;
@@ -347,15 +362,7 @@ export const getBoard = query({
     for (const enrollment of enrollments) {
       const student = await ctx.db.get(enrollment.studentId);
       if (student === null) continue;
-      const events = await ctx.db
-        .query("attendance_events")
-        .withIndex("by_student_section", (q) =>
-          q.eq("studentId", enrollment.studentId).eq("sectionId", session.sectionId),
-        )
-        .collect();
-      const latest = events
-        .filter((event) => event.capturedAt >= session.startedAt)
-        .sort((a, b) => b.capturedAt - a.capturedAt)[0];
+      const latest = latestByStudent.get(enrollment.studentId);
       rows.push({
         studentId: student._id,
         studentName: student.name,
@@ -393,6 +400,7 @@ export const listSessionOptions = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
     const caller = await requireActorUser(ctx, args.actorToken);
+    requireFaculty(caller);
 
     const courses = (
       await ctx.db

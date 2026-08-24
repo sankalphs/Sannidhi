@@ -5,11 +5,15 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { resolveActorUser } from "./lib/actor";
 
-function localDateKey(timestamp: number): string {
-  const date = new Date(timestamp);
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
+const UTC_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "UTC",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function utcDateKey(timestamp: number): string {
+  return UTC_DATE_KEY_FORMATTER.format(timestamp);
 }
 
 function projectHistoryState(state: Doc<"attendance_events">["state"]): AttendanceRecordState {
@@ -48,8 +52,8 @@ export const studentHistory = query({
 
     const latestByKey = new Map<string, { dateKey: string; event: Doc<"attendance_events"> }>();
     for (const event of events) {
-      latestByKey.set(`${localDateKey(event.capturedAt)}:${event.sectionId}`, {
-        dateKey: localDateKey(event.capturedAt),
+      latestByKey.set(`${utcDateKey(event.capturedAt)}:${event.sectionId}`, {
+        dateKey: utcDateKey(event.capturedAt),
         event,
       });
     }

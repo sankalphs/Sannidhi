@@ -56,6 +56,13 @@ function failureCopy(
     if (reason === "session_closed") {
       return { headline: "Session closed", message: "This session is closed." };
     }
+    if (reason === "not_enrolled") {
+      return {
+        headline: "Not enrolled in this class",
+        message:
+          "You are not enrolled in this class section, so your attendance can't be recorded. Contact the admin office.",
+      };
+    }
     if (reason.endsWith("_mismatch")) return MISMATCH_COPY;
   }
   if (verdict === "expired") return EXPIRED_COPY;

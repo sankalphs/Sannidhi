@@ -55,6 +55,8 @@ const STATE_LEGEND_LABELS: Record<AttendanceRecordState, string> = {
   corrected: "Corrected",
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -63,9 +65,13 @@ function toDateKey(year: number, monthIndex: number, day: number): string {
   return `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
 }
 
-function localTodayKey(): string {
-  const today = new Date();
-  return toDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+function utcDateKeyFromMs(ms: number): string {
+  const date = new Date(ms);
+  return toDateKey(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+function utcTodayKey(): string {
+  return utcDateKeyFromMs(Date.now());
 }
 
 function projectionSentence(summary: AttendanceSummary, thresholdPercent: number): string {
@@ -78,8 +84,8 @@ function projectionSentence(summary: AttendanceSummary, thresholdPercent: number
 
 function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
   const [view, setView] = useState(() => {
-    const today = new Date();
-    return { year: today.getFullYear(), monthIndex: today.getMonth() };
+    const now = new Date();
+    return { year: now.getUTCFullYear(), monthIndex: now.getUTCMonth() };
   });
 
   const byDateKey = useMemo(() => {
@@ -92,31 +98,28 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
     return map;
   }, [records]);
 
-  const daysInMonth = new Date(view.year, view.monthIndex + 1, 0).getDate();
-  const firstWeekday = new Date(view.year, view.monthIndex, 1).getDay();
+  const monthStartMs = Date.UTC(view.year, view.monthIndex, 1);
+  const daysInMonth = new Date(Date.UTC(view.year, view.monthIndex + 1, 0)).getUTCDate();
+  const firstWeekday = new Date(monthStartMs).getUTCDay();
   const leadingDays = firstWeekday;
   const trailingDays = (7 - ((leadingDays + daysInMonth) % 7)) % 7;
   const totalCells = leadingDays + daysInMonth + trailingDays;
-  const firstCellDate = new Date(view.year, view.monthIndex, 1 - leadingDays);
-  const todayKey = localTodayKey();
+  const firstCellMs = monthStartMs - leadingDays * DAY_MS;
+  const todayKey = utcTodayKey();
 
   const cells: Array<{ dateKey: string; inMonth: boolean }> = [];
   for (let index = 0; index < totalCells; index += 1) {
-    const current = new Date(
-      firstCellDate.getFullYear(),
-      firstCellDate.getMonth(),
-      firstCellDate.getDate() + index,
-    );
+    const current = new Date(firstCellMs + index * DAY_MS);
     cells.push({
-      dateKey: toDateKey(current.getFullYear(), current.getMonth(), current.getDate()),
-      inMonth: current.getMonth() === view.monthIndex && current.getFullYear() === view.year,
+      dateKey: utcDateKeyFromMs(current.getTime()),
+      inMonth: current.getUTCMonth() === view.monthIndex && current.getUTCFullYear() === view.year,
     });
   }
 
   function shiftMonth(delta: number) {
     setView((previous) => {
-      const next = new Date(previous.year, previous.monthIndex + delta, 1);
-      return { year: next.getFullYear(), monthIndex: next.getMonth() };
+      const next = new Date(Date.UTC(previous.year, previous.monthIndex + delta, 1));
+      return { year: next.getUTCFullYear(), monthIndex: next.getUTCMonth() };
     });
   }
 

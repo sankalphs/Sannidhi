@@ -116,7 +116,7 @@ export function CheckInPanel({
     let detecting = false;
 
     const DetectorCtor = window.BarcodeDetector;
-    if (!DetectorCtor) {
+    if (!DetectorCtor || !navigator.mediaDevices) {
       setCameraState("unavailable");
       return;
     }
@@ -145,6 +145,10 @@ export function CheckInPanel({
         if (video !== null) {
           video.srcObject = mediaStream;
           await video.play().catch(() => {});
+        }
+        if (cancelled || videoRef.current === null) {
+          stopEverything();
+          return;
         }
         setCameraState("active");
         timer = setInterval(() => {

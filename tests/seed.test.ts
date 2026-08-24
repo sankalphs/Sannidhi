@@ -19,6 +19,13 @@ describe("convex/seed.ts", () => {
     expect(source).toContain('process.env.SANNIDHI_DEMO_MODE !== "1"');
   });
 
+  it("gates seeding itself behind demo mode", () => {
+    const seedBody = source.slice(source.indexOf("seedDemoData"));
+    expect(seedBody.indexOf('SANNIDHI_DEMO_MODE !== "1"')).toBeLessThan(
+      seedBody.indexOf('"already-seeded"'),
+    );
+  });
+
   it("computes today's weekday and brackets the current time for a live slot", () => {
     expect(source).toMatch(/const todayDayOfWeek = seedMoment\.getDay\(\)/);
     expect(source).toMatch(

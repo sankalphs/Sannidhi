@@ -32,12 +32,7 @@ const eslintConfig = [
         {
           patterns: [
             {
-              group: [
-                "@/lib/session-challenge/*",
-                "../lib/session-challenge/*",
-                "../../lib/session-challenge/*",
-                "../../../lib/session-challenge/*",
-              ],
+              group: ["@/lib/session-challenge/*", "**/lib/session-challenge/*"],
               message:
                 "Import session challenge capabilities only from the @/lib/session-challenge index.",
             },

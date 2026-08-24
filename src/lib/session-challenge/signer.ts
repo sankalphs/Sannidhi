@@ -73,6 +73,14 @@ function base64urlToBytes(value: string): Uint8Array {
   return bytes;
 }
 
+function safeBase64urlDecode(value: string): Uint8Array | null {
+  try {
+    return base64urlToBytes(value);
+  } catch {
+    return null;
+  }
+}
+
 function timingSafeEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) {
     return false;
@@ -134,10 +142,18 @@ export async function verifyChallengeSignature(
   if (!BASE64URL_PATTERN.test(encodedPayload) || !BASE64URL_PATTERN.test(signature)) {
     return { ok: false, reasonCode: "token_malformed" };
   }
-  const payloadBytes = base64urlToBytes(encodedPayload);
+  const payloadBytes = safeBase64urlDecode(encodedPayload);
+  const provided = safeBase64urlDecode(signature);
+  if (payloadBytes === null || provided === null) {
+    return { ok: false, reasonCode: "token_malformed" };
+  }
   const payloadString = new TextDecoder().decode(payloadBytes);
-  const expected = base64urlToBytes(await signPayloadString(payloadString));
-  const provided = base64urlToBytes(signature);
+  let expected: Uint8Array;
+  try {
+    expected = base64urlToBytes(await signPayloadString(payloadString));
+  } catch {
+    return { ok: false, reasonCode: "token_malformed" };
+  }
   if (!timingSafeEqual(provided, expected)) {
     return { ok: false, reasonCode: "signature_invalid" };
   }

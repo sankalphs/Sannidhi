@@ -15,7 +15,8 @@ async function resolveDemoUserId(role: Role): Promise<string | null> {
   try {
     const actor = await getConvexClient().query(api.demo.getDemoActor, { role });
     return actor?.userId ?? null;
-  } catch {
+  } catch (error) {
+    console.warn("dev-session: demo actor lookup failed", error);
     return null;
   }
 }

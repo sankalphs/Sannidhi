@@ -94,6 +94,16 @@ describe("session challenge minting", () => {
     expect((await verifyChallengeToken("!!!!!.?????")).ok).toBe(false);
   });
 
+  it("classifies undecodable base64url segments as token_malformed instead of throwing", async () => {
+    const { token } = await mintChallengeToken(BASE_INPUT);
+    const [payloadPart, signaturePart] = token.split(".");
+    for (const candidate of ["A.B", "A.AAA", "AAA.B", `${payloadPart}.B`, `B.${signaturePart}`]) {
+      const verified = await verifyChallengeToken(candidate);
+      expect(verified.ok).toBe(false);
+      if (!verified.ok) expect(verified.reasonCode).toBe("token_malformed");
+    }
+  });
+
   it("rejects tokens signed with a different secret", async () => {
     const original = process.env.SESSION_SECRET;
     process.env.SESSION_SECRET = "challenge-secret-alpha-0123456789";

@@ -94,6 +94,7 @@ export default defineSchema({
     note: v.optional(v.string()),
   })
     .index("by_student_section", ["studentId", "sectionId"])
+    .index("by_section_captured", ["sectionId", "capturedAt"])
     .index("by_section_state", ["sectionId", "state"])
     .index("by_seq", ["seq"])
     .index("by_corrects_event", ["correctsEventId"]),
@@ -255,6 +256,7 @@ export default defineSchema({
     .index("by_faculty_status", ["facultyId", "status"])
     .index("by_section_started", ["sectionId", "startedAt"])
     .index("by_institution_status", ["institutionId", "status"])
+    .index("by_status_windowEndsAt", ["status", "windowEndsAt"])
     .index("by_windowEndsAt", ["windowEndsAt"]),
 
   session_challenges: defineTable({
