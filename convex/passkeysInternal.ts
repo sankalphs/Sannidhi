@@ -107,6 +107,32 @@ export const storeChallenge = internalMutation({
   },
 });
 
+export const consumeChallenge = internalMutation({
+  args: { challenge: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("auth_challenges")
+      .withIndex("by_challenge", (q) => q.eq("challenge", args.challenge))
+      .unique();
+    if (row === null || row.consumedAt !== undefined) return;
+    await ctx.db.patch(row._id, { consumedAt: Date.now() });
+  },
+});
+
+export const updateCredentialCounter = internalMutation({
+  args: {
+    credentialRecordId: v.id("passkey_credentials"),
+    newCounter: v.number(),
+    lastUsedAt: v.number(),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.credentialRecordId, {
+      counter: args.newCounter,
+      lastUsedAt: args.lastUsedAt,
+    });
+  },
+});
+
 export const completeRegistration = internalMutation({
   args: {
     challenge: v.string(),

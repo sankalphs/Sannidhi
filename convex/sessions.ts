@@ -86,6 +86,15 @@ export const touch = internalMutation({
   },
 });
 
+export const touchBySid = internalMutation({
+  args: { sid: v.string() },
+  handler: async (ctx, args) => {
+    const tokenHash = await hashSessionSid(args.sid);
+    await touchByTokenHash(ctx, tokenHash, SESSION_TTL_MS);
+    return { ok: true as const };
+  },
+});
+
 export const revokeBySid = internalMutation({
   args: { sid: v.string() },
   handler: async (ctx, args) => {
@@ -145,6 +154,21 @@ export const getSessionStatus = query({
     return row !== null
       ? { active: true, expiresAt: row.expiresAt }
       : { active: false, expiresAt: null };
+  },
+});
+
+export const getSessionFreshAuth = query({
+  args: { actorToken: v.string() },
+  handler: async (ctx, args) => {
+    const claims = await verifyActorToken(args.actorToken);
+    if (claims.sid === undefined) return { lastSeenAt: null };
+    const tokenHash = await hashSessionSid(claims.sid);
+    const row = await ctx.db
+      .query("sessions")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (row === null || !isActiveSession(row, Date.now())) return { lastSeenAt: null };
+    return { lastSeenAt: row.lastSeenAt ?? null };
   },
 });
 

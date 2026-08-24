@@ -10,6 +10,7 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
   { prefix: "/faculty", roles: ["faculty"] },
   { prefix: "/admin", roles: ["admin", "department_authority"] },
   { prefix: "/admin/users", roles: ["admin"] },
+  { prefix: "/admin/devices", roles: ["admin"] },
   { prefix: "/audit", roles: ["auditor", "admin"] },
 ];
 

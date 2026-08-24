@@ -180,6 +180,28 @@ export default defineSchema({
     .index("by_tokenHash", ["tokenHash"])
     .index("by_user", ["userId"]),
 
+  device_verifications: defineTable({
+    deviceId: v.id("devices"),
+    codeHash: v.string(),
+    expiresAt: v.number(),
+    attempts: v.number(),
+    consumedAt: v.optional(v.number()),
+  }).index("by_device", ["deviceId"]),
+
+  replacement_requests: defineTable({
+    institutionId: v.id("institutions"),
+    studentId: v.id("users"),
+    oldDeviceId: v.id("devices"),
+    reason: v.string(),
+    status: v.union(v.literal("pending"), v.literal("approved"), v.literal("rejected")),
+    requestedAt: v.number(),
+    decidedByUserId: v.optional(v.id("users")),
+    decidedAt: v.optional(v.number()),
+    successorDeviceId: v.optional(v.id("devices")),
+  })
+    .index("by_status", ["status"])
+    .index("by_student", ["studentId"]),
+
   biometric_records: defineTable({
     userId: v.id("users"),
     consentVersion: v.string(),

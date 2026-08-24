@@ -5,6 +5,7 @@ import {
   Landmark,
   LayoutDashboard,
   ScrollText,
+  Smartphone,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +22,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   student: [
     { label: "Overview", href: "/student", icon: LayoutDashboard },
     { label: "Attendance history", href: "/student/history", icon: BookOpen },
+    { label: "Devices", href: "/student/devices", icon: Smartphone },
     { label: "Requests", href: "/student/requests", icon: ClipboardList },
   ],
   faculty: [
@@ -35,6 +37,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
   admin: [
     { label: "Overview", href: "/admin", icon: LayoutDashboard },
     { label: "Users", href: "/admin/users", icon: Users },
+    { label: "Devices", href: "/admin/devices", icon: Smartphone },
     { label: "Courses & sections", href: "/admin/courses", icon: BookOpen },
     { label: "Policies", href: "/admin/policies", icon: Landmark },
     { label: "Event ledger", href: "/audit/events", icon: ScrollText },

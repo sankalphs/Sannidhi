@@ -33,7 +33,7 @@ async function requireActor(actorToken: string): Promise<ActorTokenClaims> {
   }
 }
 
-function resolveRelyingParty(): { rpID: string; origin: string } {
+export function resolveRelyingParty(): { rpID: string; origin: string } {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl === undefined || appUrl.trim().length === 0) {
     throw new ConvexError(
@@ -50,7 +50,7 @@ function resolveRelyingParty(): { rpID: string; origin: string } {
 
 type CeremonyResponse = RegistrationResponseJSON | AuthenticationResponseJSON;
 
-function parseCeremonyResponse(value: unknown): CeremonyResponse {
+export function parseCeremonyResponse(value: unknown): CeremonyResponse {
   if (typeof value !== "object" || value === null) {
     throw new ConvexError("malformed ceremony response");
   }
@@ -66,7 +66,7 @@ function parseCeremonyResponse(value: unknown): CeremonyResponse {
   return value as CeremonyResponse;
 }
 
-function extractChallenge(response: CeremonyResponse): string {
+export function extractChallenge(response: CeremonyResponse): string {
   let parsed: unknown;
   try {
     parsed = JSON.parse(
