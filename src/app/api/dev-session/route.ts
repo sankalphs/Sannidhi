@@ -10,10 +10,21 @@ function notFound() {
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
+type DemoResolvableRole = "student" | "faculty" | "admin" | "auditor";
+
+const DEMO_RESOLVABLE_ROLES: readonly DemoResolvableRole[] = [
+  "student",
+  "faculty",
+  "admin",
+  "auditor",
+];
+
 async function resolveDemoUserId(role: Role): Promise<string | null> {
-  if (role !== "student" && role !== "faculty") return null;
+  if (!DEMO_RESOLVABLE_ROLES.includes(role as DemoResolvableRole)) return null;
   try {
-    const actor = await getConvexClient().query(api.demo.getDemoActor, { role });
+    const actor = await getConvexClient().query(api.demo.getDemoActor, {
+      role: role as DemoResolvableRole,
+    });
     return actor?.userId ?? null;
   } catch (error) {
     console.warn("dev-session: demo actor lookup failed", error);

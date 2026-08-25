@@ -44,6 +44,9 @@ export default defineSchema({
     institutionId: v.id("institutions"),
     name: v.string(),
     capacity: v.optional(v.number()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    geofenceRadiusMeters: v.optional(v.number()),
   }).index("by_institution", ["institutionId"]),
 
   timetable_slots: defineTable({
@@ -236,6 +239,8 @@ export default defineSchema({
   })
     .index("by_institution_seq", ["institutionId", "seq"])
     .index("by_subject", ["subjectUserId"])
+    .index("by_subject_created", ["subjectUserId", "createdAt"])
+    .index("by_subject_category_type_created", ["subjectUserId", "category", "type", "createdAt"])
     .index("by_device", ["deviceId"]),
 
   class_sessions: defineTable({

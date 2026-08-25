@@ -1,11 +1,14 @@
 import { ConvexError, v } from "convex/values";
 
+import { decide, deviceTrustSignal, manualAttestationSignals } from "../src/lib/risk";
 import {
   SESSION_CHALLENGE_ROTATION_HINT_MS,
   mintChallengeToken,
 } from "../src/lib/session-challenge";
+import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { appendAttendanceEvent, bestDeviceForStudent } from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
 
 const DEFAULT_WINDOW_MINUTES = 45;
@@ -393,6 +396,72 @@ export const getBoard = query({
       },
       rows,
     };
+  },
+});
+
+export const verifyManually = mutation({
+  args: {
+    actorToken: v.string(),
+    sessionId: v.id("class_sessions"),
+    studentId: v.id("users"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const caller = await requireActorUser(ctx, args.actorToken);
+    const session = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
+
+    const trimmed = args.reason.trim();
+    if (trimmed.length < 10) throw new ConvexError("reason_too_short");
+
+    const enrollment = await ctx.db
+      .query("enrollments")
+      .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+      .filter((q) => q.eq(q.field("sectionId"), session.sectionId))
+      .first();
+    if (enrollment === null) throw new ConvexError("student_not_enrolled");
+
+    const now = Date.now();
+
+    const existingVerified = await ctx.db
+      .query("attendance_events")
+      .withIndex("by_student_section", (q) =>
+        q.eq("studentId", args.studentId).eq("sectionId", session.sectionId),
+      )
+      .filter((q) => q.gte(q.field("capturedAt"), session.startedAt))
+      .first();
+    if (existingVerified !== null && existingVerified.state === "verified") {
+      return { ok: true as const, decision: existingVerified.decision ?? null };
+    }
+
+    const device = await bestDeviceForStudent(ctx, args.studentId);
+    const decision = decide({
+      signals: [...manualAttestationSignals(trimmed), deviceTrustSignal(device)],
+      anomalies: { recentSecurityFailures: 0 },
+      now,
+    });
+
+    await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+      institutionId: session.institutionId,
+      category: "attendance",
+      type: "attendance.manual_verified",
+      actorUserId: caller._id,
+      subjectUserId: args.studentId,
+      payload: { sessionId: session._id, studentId: args.studentId, reason: trimmed, decision },
+    });
+
+    await appendAttendanceEvent(ctx, {
+      institutionId: session.institutionId,
+      studentId: args.studentId,
+      sectionId: session.sectionId,
+      sessionId: session._id,
+      state: "verified",
+      decision,
+      capturedAt: now,
+      recordedByUserId: caller._id,
+      note: trimmed,
+    });
+
+    return { ok: true as const, decision };
   },
 });
 

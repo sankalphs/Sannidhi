@@ -19,6 +19,7 @@ import type * as history from "../history.js";
 import type * as invites from "../invites.js";
 import type * as ledger from "../ledger.js";
 import type * as lib_actor from "../lib/actor.js";
+import type * as lib_attendance_event from "../lib/attendance_event.js";
 import type * as maintenance from "../maintenance.js";
 import type * as passkeys from "../passkeys.js";
 import type * as passkeysInternal from "../passkeysInternal.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   invites: typeof invites;
   ledger: typeof ledger;
   "lib/actor": typeof lib_actor;
+  "lib/attendance_event": typeof lib_attendance_event;
   maintenance: typeof maintenance;
   passkeys: typeof passkeys;
   passkeysInternal: typeof passkeysInternal;

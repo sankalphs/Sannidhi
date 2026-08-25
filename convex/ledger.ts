@@ -5,7 +5,7 @@ import {
   type LedgerHashInput,
   type LedgerEventCategory,
 } from "../src/lib/ledger/hash";
-import type { Doc } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, query, type QueryCtx } from "./_generated/server";
 import { resolveActorUser } from "./lib/actor";
 
@@ -47,6 +47,7 @@ export const appendLedgerEvent = internalMutation({
 });
 
 const MAX_VERIFY_WINDOW = 2000;
+const MAX_LEDGER_PAGE = 200;
 
 async function resolveCaller(ctx: QueryCtx, actorToken: string): Promise<Doc<"users">> {
   const user = await resolveActorUser(ctx, actorToken);
@@ -71,6 +72,71 @@ export const history = query({
       .query("event_ledger")
       .withIndex("by_subject", (q) => q.eq("subjectUserId", args.subjectUserId))
       .collect();
+  },
+});
+
+async function safeGetUser(
+  ctx: QueryCtx,
+  userId: Id<"users"> | undefined,
+): Promise<Doc<"users"> | null> {
+  if (userId === undefined) return null;
+  try {
+    return await ctx.db.get(userId);
+  } catch {
+    return null;
+  }
+}
+
+export const listLedgerEvents = query({
+  args: {
+    actorToken: v.string(),
+    limit: v.optional(v.number()),
+    cursorSeq: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const caller = await resolveCaller(ctx, args.actorToken);
+    if (caller.role !== "admin" && caller.role !== "auditor") {
+      throw new ConvexError("unauthorized");
+    }
+
+    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 100)), MAX_LEDGER_PAGE);
+    const cursorSeq = args.cursorSeq;
+
+    const rows = await ctx.db
+      .query("event_ledger")
+      .withIndex("by_institution_seq", (q) =>
+        cursorSeq !== undefined
+          ? q.eq("institutionId", caller.institutionId).lt("seq", cursorSeq)
+          : q.eq("institutionId", caller.institutionId),
+      )
+      .order("desc")
+      .take(limit);
+
+    const events = await Promise.all(
+      rows.map(async (row) => {
+        const [subject, actor] = await Promise.all([
+          safeGetUser(ctx, row.subjectUserId),
+          safeGetUser(ctx, row.actorUserId),
+        ]);
+        return {
+          _id: row._id,
+          seq: row.seq,
+          createdAt: row.createdAt,
+          category: row.category,
+          type: row.type,
+          eventHash: row.eventHash,
+          payload: row.payload,
+          subjectName: subject?.name ?? null,
+          subjectEmail: subject?.email ?? null,
+          actorName: actor?.name ?? null,
+        };
+      }),
+    );
+
+    return {
+      events,
+      ...(events.length === limit ? { nextCursor: events[events.length - 1].seq } : {}),
+    };
   },
 });
 

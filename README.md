@@ -62,7 +62,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 | 0 | Foundations: repo, CI/CD, data model, auth skeleton | Merged |
 | 1 | Identity enrollment, passkeys, device registration, RBAC | Merged (PR #11) |
 | 2 | Sessions & rotating QR check-in | Merged (PR #12) |
-| 3 | Device trust, presence signals, risk decision engine | Not started |
+| 3 | Device trust, presence signals, risk decision engine | In review (PR #15) |
 | 4 | Adaptive step-up security (liveness, face match, spot checks) | Not started |
 | 5 | Tamper-evident audit, corrections, offline resilience | Not started |
 | 6 | Analytics & insights | Not started |
@@ -71,7 +71,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Status
 
-> **Phase 2 merged (PR #12)** — attendance sessions with one-tap start and guest creation, the rotating QR Session Challenge deep module (`mint`/`redeem` with atomic nonce consumption and replay detection), pause/close/restart lifecycle, student check-in with actionable outcomes, calendar + subject-wise attendance history with threshold projection, and a live verification board over Convex real-time subscriptions. Next up: Phase 3 device trust, presence signals, and the risk decision engine.
+> **Phase 3 in review (PR #15)** — the Risk Decision deep module (`decide(signals) → Decision` behind `src/lib/risk/`) fuses identity passkey sessions, registered-device trust state, the redeemed QR session challenge, and consented geolocation (supporting evidence only, venue-geofence consistency with accuracy margins) into Accept / Step-up / Flag / Reject verdicts. Thresholds, weakness weighting, anomaly escalation (3+ security failures in 10 minutes), and policy-version stamping (`risk-engine/v1`) stay hidden inside the module; student check-in and faculty manual verification both enter through it. Decisions persist through the Event Ledger append seam — including rejected attempts for replay/wrong-session, which now survive the transaction — and power tiered explanations: student guidance, faculty reason codes on the live board, and the admin/auditor event-ledger viewer with full evidence trails plus chain verification. Check-in attempts are rate-limited (5 per minute). Next up: Phase 4 adaptive step-up security (liveness, face match, spot re-checks).
 
 ## Local development
 

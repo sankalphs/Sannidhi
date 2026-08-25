@@ -168,9 +168,27 @@ export const seedDemoData = internalMutation({
     }
 
     const venueData = [
-      { name: "Lecture Hall LH-1", capacity: 120 },
-      { name: "Computing Lab CL-2", capacity: 60 },
-      { name: "Seminar Room SR-3", capacity: 40 },
+      {
+        name: "Lecture Hall LH-1",
+        capacity: 120,
+        latitude: 12.9716,
+        longitude: 77.5946,
+        geofenceRadiusMeters: 250,
+      },
+      {
+        name: "Computing Lab CL-2",
+        capacity: 60,
+        latitude: 12.9723,
+        longitude: 77.5955,
+        geofenceRadiusMeters: 250,
+      },
+      {
+        name: "Seminar Room SR-3",
+        capacity: 40,
+        latitude: 12.9709,
+        longitude: 77.5937,
+        geofenceRadiusMeters: 250,
+      },
     ];
 
     const venueIds: Id<"venues">[] = [];
@@ -179,6 +197,9 @@ export const seedDemoData = internalMutation({
         institutionId,
         name: venue.name,
         capacity: venue.capacity,
+        latitude: venue.latitude,
+        longitude: venue.longitude,
+        geofenceRadiusMeters: venue.geofenceRadiusMeters,
       });
       venueIds.push(venueId);
     }
@@ -259,6 +280,7 @@ export const seedDemoData = internalMutation({
     }
 
     let deviceCount = 0;
+    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
     for (const [studentIndex, studentId] of studentIds.entries()) {
       await ctx.db.insert("passkey_credentials", {
         userId: studentId,
@@ -269,6 +291,17 @@ export const seedDemoData = internalMutation({
         createdAt: now,
         lastUsedAt: now,
       });
+      await ctx.db.insert("devices", {
+        institutionId,
+        userId: studentId,
+        label: "Demo Phone",
+        platform: "iOS 26",
+        state: "active",
+        registeredAt: weekAgo,
+        activatedAt: weekAgo,
+        stateChangedAt: weekAgo,
+      });
+      deviceCount += 1;
       await ctx.db.insert("devices", {
         institutionId,
         userId: studentId,

@@ -3,11 +3,18 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 
-const DEMO_ROLES = v.union(v.literal("student"), v.literal("faculty"));
+const DEMO_ROLES = v.union(
+  v.literal("student"),
+  v.literal("faculty"),
+  v.literal("admin"),
+  v.literal("auditor"),
+);
 
 const DEMO_EMAILS = {
   student: "aarav.patel@sit.edu.in",
   faculty: "priya.menon@sit.edu.in",
+  admin: "ananya.iyer@sit.edu.in",
+  auditor: "rohan.gupta@sit.edu.in",
 } as const;
 
 export const getDemoActor = query({
