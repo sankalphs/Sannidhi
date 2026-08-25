@@ -92,7 +92,7 @@ export function LoginMethods() {
         aria-labelledby="login-tab-passkey"
         tabIndex={0}
         className={cn(
-          "flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          "focus-visible:ring-ring/50 flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]",
           method === "passkey" ? "flex" : "hidden",
         )}
       >
@@ -107,7 +107,7 @@ export function LoginMethods() {
         aria-labelledby="login-tab-password"
         tabIndex={0}
         className={cn(
-          "flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          "focus-visible:ring-ring/50 flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]",
           method === "password" ? "flex" : "hidden",
         )}
       >

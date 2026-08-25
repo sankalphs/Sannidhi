@@ -56,7 +56,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
         <a
           href="#main-content"
-          className="bg-primary text-primary-foreground sr-only focus:not-sr-only focus:top-3 focus:left-3 focus:z-50 focus:fixed focus:rounded-md focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
+          className="bg-primary text-primary-foreground sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-50 focus:rounded-md focus:px-4 focus:py-2 focus:text-sm focus:font-medium"
         >
           Skip to content
         </a>
