@@ -1,4 +1,4 @@
-import { Check, Circle, ClipboardList, History } from "lucide-react";
+import { Check, Circle, ClipboardList, Fingerprint, History } from "lucide-react";
 import Link from "next/link";
 
 import { EmptyState } from "@/components/shell/empty-state";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { loadEnrollmentGate } from "@/lib/enrollment/load";
 import type { EnrollmentGateResult } from "@/lib/enrollment/gate";
+import { isPasskeyRecommended } from "@/lib/enrollment/gate";
 import { ENROLLMENT_STEPS, missingStepCopy } from "@/lib/enrollment/ui";
 
 export const dynamic = "force-dynamic";
@@ -31,14 +32,42 @@ function EnrollmentChecklist({
               <Circle className="text-muted-foreground size-4" />
             )}
             <span>{missingStepCopy(step)}</span>
-            <Badge variant={completedSteps[step] ? "default" : "outline"}>
-              {completedSteps[step] ? "done" : "pending"}
-            </Badge>
+            {completedSteps[step] ? (
+              <Badge variant="default">done</Badge>
+            ) : step === "passkey" ? (
+              <Badge variant="secondary">recommended</Badge>
+            ) : (
+              <Badge variant="outline">pending</Badge>
+            )}
           </li>
         ))}
       </ul>
       <p className="text-muted-foreground text-sm">
         Finish these steps on your devices page to unlock attendance features.
+      </p>
+      <Link
+        href="/student/devices"
+        className={buttonVariants({ variant: "outline", size: "sm", className: "w-fit" })}
+      >
+        Go to devices
+      </Link>
+    </section>
+  );
+}
+
+function PasskeyRecommendation() {
+  return (
+    <section className="border-border bg-card flex flex-col gap-2 rounded-xl border p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="flex items-center gap-2 text-lg font-semibold">
+          <Fingerprint className="size-4" />
+          Add a passkey
+        </h2>
+        <Badge variant="secondary">Recommended</Badge>
+      </div>
+      <p className="text-muted-foreground text-sm leading-relaxed">
+        Attendance works with your password, but a passkey is faster, phishing-resistant, and
+        required for step-up checks when something looks risky.
       </p>
       <Link
         href="/student/devices"
@@ -60,6 +89,7 @@ export default async function StudentPage() {
         description="Your attendance at a glance."
       />
       {gate.locked ? <EnrollmentChecklist completedSteps={gate.completedSteps} /> : null}
+      {isPasskeyRecommended(gate) ? <PasskeyRecommendation /> : null}
       <div className="grid gap-4 md:grid-cols-2">
         <EmptyState
           icon={History}

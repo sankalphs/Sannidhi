@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { PersonaPicker } from "@/app/(auth)/login/impersonation-buttons";
-import { PasskeyLoginButton } from "@/app/(auth)/login/passkey-login-button";
+import { LoginMethods } from "@/app/(auth)/login/login-methods";
 import { isDemoLoginEnabled } from "@/lib/auth/dev-login";
 import { ROLES, type Role } from "@/lib/auth/session";
 
@@ -28,11 +28,12 @@ export default async function LoginPage({
         </p>
         <h1 className="font-display text-4xl tracking-tight">Sign in</h1>
         <p className="text-muted-foreground text-sm leading-relaxed">
-          Use the passkey registered to your Sannidhi account — no passwords, no shared secrets.
+          Prefer a passkey for phishing-resistant sign-in — or fall back to your USN/email and
+          password on shared devices.
         </p>
       </div>
 
-      <PasskeyLoginButton />
+      <LoginMethods />
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3">
@@ -60,6 +61,13 @@ export default async function LoginPage({
 
       <p className="text-muted-foreground text-sm">
         Invited by your institution? Open the link from your invite email to activate your passkey.
+      </p>
+
+      <p className="text-muted-foreground text-sm">
+        Don&apos;t have an account?{" "}
+        <Link href="/signup" className="hover:text-foreground underline underline-offset-4">
+          Sign up
+        </Link>
       </p>
 
       <Link

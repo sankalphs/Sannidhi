@@ -23,7 +23,8 @@ export type EnrollmentGateResult = {
   reason?: string;
 };
 
-const STEP_ORDER: MissingEnrollmentStep[] = ["account", "passkey", "device"];
+/** Passkeys are recommended for phishing resistance but never block attendance on their own. */
+const REQUIRED_STEPS: Array<Exclude<MissingEnrollmentStep, "passkey">> = ["account", "device"];
 
 export function evaluateEnrollmentGate(input: EnrollmentGateInput): EnrollmentGateResult {
   const completedSteps = {
@@ -32,7 +33,7 @@ export function evaluateEnrollmentGate(input: EnrollmentGateInput): EnrollmentGa
     device: input.deviceState === "active",
   };
 
-  const missingSteps = STEP_ORDER.filter((step) => !completedSteps[step]);
+  const missingSteps = REQUIRED_STEPS.filter((step) => !completedSteps[step]);
   const locked = missingSteps.length > 0;
 
   return {
@@ -42,4 +43,11 @@ export function evaluateEnrollmentGate(input: EnrollmentGateInput): EnrollmentGa
     biometricConsentRecorded: input.biometricConsentRecorded,
     ...(locked ? { reason: `Enrollment incomplete: ${missingSteps.join(", ")}` } : {}),
   };
+}
+
+/** True when attendance is unlocked but registering a passkey is still advisable. */
+export function isPasskeyRecommended(
+  result: Pick<EnrollmentGateResult, "locked" | "completedSteps">,
+): boolean {
+  return !result.locked && !result.completedSteps.passkey;
 }
