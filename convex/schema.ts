@@ -14,6 +14,7 @@ export default defineSchema({
     institutionId: v.id("institutions"),
     email: v.string(),
     name: v.string(),
+    usn: v.optional(v.string()),
     role: v.union(
       v.literal("student"),
       v.literal("faculty"),
@@ -25,7 +26,15 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_institution", ["institutionId"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_institution_usn", ["institutionId", "usn"]),
+
+  password_credentials: defineTable({
+    userId: v.id("users"),
+    hash: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
 
   courses: defineTable({
     institutionId: v.id("institutions"),

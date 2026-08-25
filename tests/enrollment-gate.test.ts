@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateEnrollmentGate, type EnrollmentGateInput } from "@/lib/enrollment/gate";
+import {
+  evaluateEnrollmentGate,
+  isPasskeyRecommended,
+  type EnrollmentGateInput,
+} from "@/lib/enrollment/gate";
 import type { DeviceState } from "@/lib/devices/lifecycle";
 
 const UNLOCKED: EnrollmentGateInput = {
@@ -31,10 +35,22 @@ describe("evaluateEnrollmentGate", () => {
     }
   });
 
-  it("locks when no usable passkey exists", () => {
+  it("treats the passkey as recommended — a missing passkey alone never locks", () => {
     const result = evaluateEnrollmentGate({ ...UNLOCKED, hasUsablePasskey: false });
-    expect(result.locked).toBe(true);
-    expect(result.missingSteps).toEqual(["passkey"]);
+    expect(result.locked).toBe(false);
+    expect(result.missingSteps).toEqual([]);
+    expect(result.completedSteps.passkey).toBe(false);
+    expect(result.reason).toBeUndefined();
+  });
+
+  it("flags the passkey as recommended whenever it is absent, even when locked", () => {
+    const lockedResult = evaluateEnrollmentGate({ ...UNLOCKED, deviceState: "enrolled" });
+    expect(lockedResult.locked).toBe(true);
+    expect(isPasskeyRecommended(lockedResult)).toBe(false);
+
+    const unlockedResult = evaluateEnrollmentGate({ ...UNLOCKED, hasUsablePasskey: false });
+    expect(isPasskeyRecommended(unlockedResult)).toBe(true);
+    expect(isPasskeyRecommended(evaluateEnrollmentGate(UNLOCKED))).toBe(false);
   });
 
   it("locks until the device reaches the active state", () => {
@@ -53,21 +69,21 @@ describe("evaluateEnrollmentGate", () => {
     }
   });
 
-  it("reports multiple missing steps in canonical order", () => {
+  it("reports missing required steps in canonical order, ignoring the passkey", () => {
     const result = evaluateEnrollmentGate({
       accountStatus: "invited",
       hasUsablePasskey: false,
       deviceState: "new",
       biometricConsentRecorded: false,
     });
-    expect(result.missingSteps).toEqual(["account", "passkey", "device"]);
+    expect(result.missingSteps).toEqual(["account", "device"]);
 
     const partial = evaluateEnrollmentGate({
       ...UNLOCKED,
       hasUsablePasskey: false,
       deviceState: "enrolled",
     });
-    expect(partial.missingSteps).toEqual(["passkey", "device"]);
+    expect(partial.missingSteps).toEqual(["device"]);
 
     const accountAndDevice = evaluateEnrollmentGate({
       ...UNLOCKED,
@@ -78,8 +94,8 @@ describe("evaluateEnrollmentGate", () => {
   });
 
   it("explains why it is locked via reason", () => {
-    const result = evaluateEnrollmentGate({ ...UNLOCKED, hasUsablePasskey: false });
-    expect(result.reason).toBe("Enrollment incomplete: passkey");
+    const result = evaluateEnrollmentGate({ ...UNLOCKED, deviceState: null });
+    expect(result.reason).toBe("Enrollment incomplete: device");
   });
 
   it("does not let biometric consent block or unlock the gate", () => {

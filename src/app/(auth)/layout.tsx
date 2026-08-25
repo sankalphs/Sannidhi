@@ -24,8 +24,8 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
             Trust is earned per check-in.
           </p>
           <p className="text-primary-foreground/80 text-sm leading-relaxed">
-            Passkeys instead of passwords. Session challenges that expire in seconds. A ledger that
-            remembers every decision — and explains it.
+            Passkeys first, passwords as a safety net. Session challenges that expire in seconds. A
+            ledger that remembers every decision — and explains it.
           </p>
           <div className="flex flex-wrap gap-2">
             <VerdictStamp
