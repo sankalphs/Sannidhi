@@ -28,7 +28,10 @@ test.describe.serial("password signup and login", () => {
     await form.getByLabel("Confirm password").fill(PASSWORD);
     await form.getByRole("button", { name: "Create account" }).click();
 
-    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
+    // First signup POST in a run pays dev-server route compilation; allow for it.
+    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"), {
+      timeout: 20_000,
+    });
     await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
 
     // Password-only account still shows required enrollment steps (device pending).
@@ -65,7 +68,9 @@ test.describe.serial("password signup and login", () => {
     await form.getByLabel("Password").fill(PASSWORD);
     await form.getByRole("button", { name: "Sign in with password" }).click();
 
-    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
+    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"), {
+      timeout: 20_000,
+    });
     await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
   });
 
@@ -78,7 +83,9 @@ test.describe.serial("password signup and login", () => {
     await form.getByLabel("Password").fill(PASSWORD);
     await form.getByRole("button", { name: "Sign in with password" }).click();
 
-    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
+    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"), {
+      timeout: 20_000,
+    });
     await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
   });
 

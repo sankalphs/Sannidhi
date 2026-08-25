@@ -84,24 +84,34 @@ export function LoginMethods() {
         })}
       </div>
 
+      {/* Both panels stay mounted so each tab's aria-controls resolves and in-progress
+          input survives switching; the hidden panel is skipped by tab and screen readers. */}
       <div
         role="tabpanel"
-        id={`login-panel-${method}`}
-        aria-labelledby={`login-tab-${method}`}
+        id="login-panel-passkey"
+        aria-labelledby="login-tab-passkey"
         tabIndex={0}
-        className="focus-visible:ring-ring/50 flex flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]"
-      >
-        {method === "passkey" ? (
-          <>
-            <PasskeyLoginButton />
-            <p className="text-muted-foreground text-sm">
-              Use the passkey registered to your Sannidhi account — no passwords, no shared
-              secrets.
-            </p>
-          </>
-        ) : (
-          <PasswordLoginForm />
+        className={cn(
+          "flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          method === "passkey" ? "flex" : "hidden",
         )}
+      >
+        <PasskeyLoginButton />
+        <p className="text-muted-foreground text-sm">
+          Use the passkey registered to your Sannidhi account — no passwords, no shared secrets.
+        </p>
+      </div>
+      <div
+        role="tabpanel"
+        id="login-panel-password"
+        aria-labelledby="login-tab-password"
+        tabIndex={0}
+        className={cn(
+          "flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          method === "password" ? "flex" : "hidden",
+        )}
+      >
+        <PasswordLoginForm />
       </div>
     </div>
   );
