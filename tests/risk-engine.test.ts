@@ -9,6 +9,7 @@ import {
   challengePresenceSignal,
   decide,
   deviceTrustSignal,
+  faceMatchSignal,
   failurePresenceSignal,
   geolocationSignal,
   identitySessionSignal,
@@ -44,14 +45,146 @@ describe("decide happy path", () => {
     expect(decision.evidence.signals).toEqual(baseSignals());
   });
 
-  it("ignores person category signals for now", () => {
+  it("maps all face match outcomes to person signals", () => {
+    expect(faceMatchSignal({ verdict: "match", similarity: 0.912345 })).toEqual({
+      category: "person",
+      source: "face_match",
+      status: "verified",
+      detail: "similarity:0.912",
+    });
+    expect(faceMatchSignal({ verdict: "mismatch", similarity: 0.41 })).toEqual({
+      category: "person",
+      source: "face_match",
+      status: "failed",
+      detail: "mismatch:0.410",
+    });
+    expect(faceMatchSignal({ verdict: "spoof_suspected" })).toEqual({
+      category: "person",
+      source: "face_match",
+      status: "failed",
+      detail: "spoof_suspected",
+    });
+    expect(faceMatchSignal({ verdict: "inconclusive" })).toEqual({
+      category: "person",
+      source: "face_match",
+      status: "weak",
+      detail: "inconclusive",
+    });
+  });
+});
+
+describe("person evidence (face match)", () => {
+  it("flags a suspected spoof among otherwise-strong signals", () => {
+    const signals = [...baseSignals(), faceMatchSignal({ verdict: "spoof_suspected" })];
+    const decision = decide(cleanInput({ signals }));
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.personSpoofSuspected]);
+    expect(decision.evidence.signals).toEqual(signals);
+  });
+
+  it("flags a face mismatch and dedupes codes in spoof-first priority order", () => {
     const signals = [
       ...baseSignals(),
-      { category: "person", source: "face_match", status: "weak", detail: "0.6" },
+      faceMatchSignal({ verdict: "mismatch", similarity: 0.42 }),
+      { category: "person", source: "face_match", status: "failed", detail: "spoof_suspected" },
     ] as EvidenceSignal[];
     const decision = decide(cleanInput({ signals }));
-    expect(decision.outcome).toBe("accept");
-    expect(decision.reasonCodes).toEqual([]);
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([
+      RISK_REASON_CODES.personSpoofSuspected,
+      RISK_REASON_CODES.personFaceMismatch,
+    ]);
+  });
+
+  it("flags a plain mismatch", () => {
+    const signals = [...baseSignals(), faceMatchSignal({ verdict: "mismatch", similarity: 0.37 })];
+    const decision = decide(cleanInput({ signals }));
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.personFaceMismatch]);
+  });
+
+  it("steps up for an inconclusive check, ordered after location_mismatch", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "presence" && signal.source === "geolocation"
+        ? geolocationSignal({ verdict: "mismatch", distanceMeters: 940 })
+        : signal,
+    );
+    signals.push(faceMatchSignal({ verdict: "inconclusive" }));
+    const decision = decide(cleanInput({ signals }));
+    expect(decision.outcome).toBe("step_up");
+    expect(decision.reasonCodes).toEqual([
+      RISK_REASON_CODES.locationMismatch,
+      RISK_REASON_CODES.personCheckInconclusive,
+    ]);
+  });
+
+  it("ignores verified, missing, and unavailable person signals", () => {
+    const verified = decide(
+      cleanInput({
+        signals: [...baseSignals(), faceMatchSignal({ verdict: "match", similarity: 0.95 })],
+      }),
+    );
+    expect(verified.outcome).toBe("accept");
+    expect(verified.reasonCodes).toEqual([]);
+
+    const missing = decide(
+      cleanInput({
+        signals: [
+          ...baseSignals(),
+          { category: "person", source: "face_match", status: "missing", detail: "no_capture" },
+        ] as EvidenceSignal[],
+      }),
+    );
+    expect(missing.outcome).toBe("accept");
+    expect(missing.reasonCodes).toEqual([]);
+
+    const unavailable = decide(
+      cleanInput({
+        signals: [
+          ...baseSignals(),
+          { category: "person", source: "face_match", status: "unavailable" },
+        ] as EvidenceSignal[],
+      }),
+    );
+    expect(unavailable.outcome).toBe("accept");
+    expect(unavailable.reasonCodes).toEqual([]);
+  });
+});
+
+describe("missed spot re-check escalation", () => {
+  it("escalates an otherwise-clean accept to flag", () => {
+    const decision = decide(
+      cleanInput({ anomalies: { recentSecurityFailures: 0, missedSpotRecheck: true } }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.spotRecheckMissed]);
+  });
+
+  it("escalates a would-be step_up to flag", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "device" ? deviceTrustSignal({ state: "new" }) : signal,
+    );
+    const decision = decide(
+      cleanInput({ signals, anomalies: { recentSecurityFailures: 0, missedSpotRecheck: true } }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.spotRecheckMissed]);
+  });
+
+  it("keeps repeated_anomaly ahead of spot_recheck_missed when both apply", () => {
+    const decision = decide(
+      cleanInput({ anomalies: { recentSecurityFailures: 5, missedSpotRecheck: true } }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.repeatedAnomaly]);
+  });
+
+  it("still rejects on unverified identity even with a failed person signal", () => {
+    const signals = baseSignals().filter((signal) => signal.category !== "identity");
+    signals.push(faceMatchSignal({ verdict: "spoof_suspected" }));
+    const decision = decide(cleanInput({ signals }));
+    expect(decision.outcome).toBe("reject");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.identityUnverified]);
   });
 });
 

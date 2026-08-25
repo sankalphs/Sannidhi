@@ -82,6 +82,40 @@ export function geolocationSignal(outcome: LocationOutcome): EvidenceSignal {
   }
 }
 
+export type FaceMatchOutcome =
+  | { verdict: "match"; similarity: number }
+  | { verdict: "mismatch"; similarity: number }
+  | { verdict: "spoof_suspected" }
+  | { verdict: "inconclusive" };
+
+export function faceMatchSignal(outcome: FaceMatchOutcome): EvidenceSignal {
+  switch (outcome.verdict) {
+    case "match":
+      return {
+        category: "person",
+        source: "face_match",
+        status: "verified",
+        detail: `similarity:${outcome.similarity.toFixed(3)}`,
+      };
+    case "mismatch":
+      return {
+        category: "person",
+        source: "face_match",
+        status: "failed",
+        detail: `mismatch:${outcome.similarity.toFixed(3)}`,
+      };
+    case "spoof_suspected":
+      return {
+        category: "person",
+        source: "face_match",
+        status: "failed",
+        detail: "spoof_suspected",
+      };
+    case "inconclusive":
+      return { category: "person", source: "face_match", status: "weak", detail: "inconclusive" };
+  }
+}
+
 export function manualAttestationSignals(reason: string): EvidenceSignal[] {
   return [
     {

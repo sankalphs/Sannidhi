@@ -23,6 +23,14 @@ const STUDENT_ACTIONS_BY_CODE: Record<string, string> = {
     "Your device isn't active yet — finish activation on the Devices page.",
   [RISK_REASON_CODES.locationMismatch]:
     "Make sure you are inside the classroom venue, then retry check-in.",
+  [RISK_REASON_CODES.personSpoofSuspected]:
+    "A photo or video was detected instead of a live face — your attendance was sent to your faculty member for review.",
+  [RISK_REASON_CODES.personFaceMismatch]:
+    "Your face did not match your enrolled profile — your attendance was sent to your faculty member for review.",
+  [RISK_REASON_CODES.personCheckInconclusive]:
+    "Lighting or visibility made the face check inconclusive — try again in better light if prompted.",
+  [RISK_REASON_CODES.spotRecheckMissed]:
+    "A spot re-check request expired — contact your faculty member.",
   [RISK_REASON_CODES.repeatedAnomaly]:
     "Several recent attempts were blocked — wait a few minutes or contact your faculty member.",
 };
@@ -34,6 +42,10 @@ const FACULTY_FACTOR_LABELS: Record<string, string> = {
   [RISK_REASON_CODES.deviceUntrusted]: "device untrusted",
   [RISK_REASON_CODES.deviceMissing]: "device missing",
   [RISK_REASON_CODES.locationMismatch]: "location mismatch",
+  [RISK_REASON_CODES.personSpoofSuspected]: "Face check: suspected photo/video",
+  [RISK_REASON_CODES.personFaceMismatch]: "Face check: no match",
+  [RISK_REASON_CODES.personCheckInconclusive]: "Face check inconclusive",
+  [RISK_REASON_CODES.spotRecheckMissed]: "Spot re-check missed",
   [RISK_REASON_CODES.repeatedAnomaly]: "repeated anomalies",
   [RISK_REASON_CODES.facultyManualOverride]: "faculty manual override",
 };

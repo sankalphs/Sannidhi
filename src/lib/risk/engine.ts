@@ -14,7 +14,11 @@ export const RISK_REASON_CODES = {
   deviceUntrusted: "device_untrusted",
   deviceMissing: "device_missing",
   locationMismatch: "location_mismatch",
+  personSpoofSuspected: "person_spoof_suspected",
+  personFaceMismatch: "person_face_mismatch",
+  personCheckInconclusive: "person_check_inconclusive",
   repeatedAnomaly: "repeated_anomaly",
+  spotRecheckMissed: "spot_recheck_missed",
   facultyManualOverride: "faculty_manual_override",
 } as const;
 
@@ -48,6 +52,12 @@ export function decide(input: RiskInput): Decision {
       signal.source === MANUAL_ATTESTATION_PRESENCE_SOURCE &&
       signal.status === "verified",
   );
+  const failedPersonSignals = signals.filter(
+    (signal) => signal.category === "person" && signal.status === "failed",
+  );
+  const distrusted = signals.find(
+    (signal) => signal.category === "device" && signal.status === "failed",
+  );
 
   let outcome: Decision["outcome"];
   const reasonCodes: string[] = [];
@@ -61,45 +71,58 @@ export function decide(input: RiskInput): Decision {
   } else if (!signals.some((s) => s.category === "presence" && s.status === "verified")) {
     outcome = "reject";
     reasonCodes.push(RISK_REASON_CODES.presenceUnverified);
+  } else if (failedPersonSignals.length > 0) {
+    outcome = "flag";
+    if (failedPersonSignals.some((s) => s.detail?.startsWith("spoof_suspected"))) {
+      reasonCodes.push(RISK_REASON_CODES.personSpoofSuspected);
+    }
+    if (failedPersonSignals.some((s) => s.detail?.startsWith("mismatch"))) {
+      reasonCodes.push(RISK_REASON_CODES.personFaceMismatch);
+    }
+  } else if (distrusted) {
+    outcome = "flag";
+    reasonCodes.push(
+      RISK_REASON_CODES.deviceDistrusted,
+      `${RISK_REASON_CODES.deviceStatePrefix}${distrusted.detail ?? ""}`,
+    );
+  } else if ((input.anomalies?.recentSecurityFailures ?? 0) >= RISK_ANOMALY_FLAG_THRESHOLD) {
+    outcome = "flag";
+    reasonCodes.push(RISK_REASON_CODES.repeatedAnomaly);
+  } else if (input.anomalies?.missedSpotRecheck) {
+    outcome = "flag";
+    reasonCodes.push(RISK_REASON_CODES.spotRecheckMissed);
   } else {
-    const distrusted = signals.find((s) => s.category === "device" && s.status === "failed");
-    if (distrusted) {
-      outcome = "flag";
-      reasonCodes.push(
-        RISK_REASON_CODES.deviceDistrusted,
-        `${RISK_REASON_CODES.deviceStatePrefix}${distrusted.detail ?? ""}`,
-      );
-    } else if ((input.anomalies?.recentSecurityFailures ?? 0) >= RISK_ANOMALY_FLAG_THRESHOLD) {
-      outcome = "flag";
-      reasonCodes.push(RISK_REASON_CODES.repeatedAnomaly);
-    } else {
-      const weaknesses: string[] = [];
-      for (const signal of signals) {
-        if (signal.category === "device" && signal.status === "weak") {
-          weaknesses.push(RISK_REASON_CODES.deviceUntrusted);
-        }
+    const weaknesses: string[] = [];
+    for (const signal of signals) {
+      if (signal.category === "device" && signal.status === "weak") {
+        weaknesses.push(RISK_REASON_CODES.deviceUntrusted);
       }
-      for (const signal of signals) {
-        if (signal.category === "device" && signal.status === "missing") {
-          weaknesses.push(RISK_REASON_CODES.deviceMissing);
-        }
+    }
+    for (const signal of signals) {
+      if (signal.category === "device" && signal.status === "missing") {
+        weaknesses.push(RISK_REASON_CODES.deviceMissing);
       }
-      for (const signal of signals) {
-        if (
-          signal.category === "presence" &&
-          signal.source === "geolocation" &&
-          signal.status === "weak"
-        ) {
-          weaknesses.push(RISK_REASON_CODES.locationMismatch);
-        }
+    }
+    for (const signal of signals) {
+      if (
+        signal.category === "presence" &&
+        signal.source === "geolocation" &&
+        signal.status === "weak"
+      ) {
+        weaknesses.push(RISK_REASON_CODES.locationMismatch);
       }
+    }
+    for (const signal of signals) {
+      if (signal.category === "person" && signal.status === "weak") {
+        weaknesses.push(RISK_REASON_CODES.personCheckInconclusive);
+      }
+    }
 
-      if (weaknesses.length > 0) {
-        outcome = "step_up";
-        reasonCodes.push(...weaknesses);
-      } else {
-        outcome = "accept";
-      }
+    if (weaknesses.length > 0) {
+      outcome = "step_up";
+      reasonCodes.push(...weaknesses);
+    } else {
+      outcome = "accept";
     }
   }
 

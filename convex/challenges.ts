@@ -2,7 +2,7 @@ import { ConvexError, v } from "convex/values";
 
 import type { Decision } from "../src/lib/decision";
 import { internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { resolveActorUser } from "./lib/actor";
 

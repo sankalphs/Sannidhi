@@ -25,11 +25,13 @@ export type {
 export {
   challengePresenceSignal,
   deviceTrustSignal,
+  faceMatchSignal,
   failurePresenceSignal,
   geolocationSignal,
   identitySessionSignal,
   manualAttestationSignals,
 } from "./signals";
+export type { FaceMatchOutcome } from "./signals";
 export { RISK_POLICY_VERSION, SIGNAL_STATUSES } from "./types";
 export type {
   AnomalyContext,
