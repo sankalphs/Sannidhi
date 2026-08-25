@@ -7,8 +7,8 @@ import { internalMutation, internalQuery } from "./_generated/server";
 export const MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR = 100;
 export const SIGNUP_WINDOW_MS = 60 * 60_000;
 
-export const LOGIN_FAILURE_WINDOW_MS = 60_000;
-export const LOGIN_FAILURE_MAX_ATTEMPTS = 5;
+export const LOGIN_ATTEMPT_WINDOW_MS = 60_000;
+export const LOGIN_MAX_ATTEMPTS_PER_WINDOW = 5;
 
 export const getInstitutionByCode = internalQuery({
   args: { code: v.string() },
@@ -62,21 +62,89 @@ export const getPasswordCredential = internalQuery({
   },
 });
 
-export const countRecentPasswordLoginFailures = internalQuery({
-  args: { userId: v.id("users"), sinceMs: v.number(), now: v.number() },
+/**
+ * Atomically consumes one password-login attempt for a subject. Convex
+ * serializes mutations, so the limit check and the counter write land in a
+ * single transaction: concurrent actions cannot all slip past the cap the way
+ * a separate count-then-log pair would allow. Applies to known users and to
+ * unknown identifiers alike (keyed by a hash of the submitted identifier), so
+ * guessing non-existent accounts also burns throttling capacity.
+ */
+export const reservePasswordLoginAttempt = internalMutation({
+  args: {
+    subjectKey: v.string(),
+    userId: v.optional(v.id("users")),
+    institutionId: v.optional(v.id("institutions")),
+  },
+  handler: async (ctx, args): Promise<{ remaining: number }> => {
+    const now = Date.now();
+    const row = await ctx.db
+      .query("password_login_attempts")
+      .withIndex("by_subjectKey", (q) => q.eq("subjectKey", args.subjectKey))
+      .first();
+
+    if (row !== null && now - row.windowStartAt < LOGIN_ATTEMPT_WINDOW_MS) {
+      if (row.attempts >= LOGIN_MAX_ATTEMPTS_PER_WINDOW) {
+        if (args.institutionId !== undefined) {
+          await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+            institutionId: args.institutionId,
+            category: "identity",
+            type: "identity.password_login_rate_limited",
+            ...(args.userId !== undefined ? { subjectUserId: args.userId } : {}),
+            payload: {
+              windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+              maxAttempts: LOGIN_MAX_ATTEMPTS_PER_WINDOW,
+            },
+          });
+        }
+        throw new ConvexError("rate_limited");
+      }
+      await ctx.db.patch(row._id, { attempts: row.attempts + 1 });
+      return { remaining: LOGIN_MAX_ATTEMPTS_PER_WINDOW - row.attempts - 1 };
+    }
+
+    if (row === null) {
+      await ctx.db.insert("password_login_attempts", {
+        subjectKey: args.subjectKey,
+        ...(args.institutionId !== undefined ? { institutionId: args.institutionId } : {}),
+        attempts: 1,
+        windowStartAt: now,
+      });
+    } else {
+      await ctx.db.patch(row._id, { attempts: 1, windowStartAt: now });
+    }
+    return { remaining: LOGIN_MAX_ATTEMPTS_PER_WINDOW - 1 };
+  },
+});
+
+export const recordPasswordLoginFailure = internalMutation({
+  args: {
+    userId: v.optional(v.id("users")),
+    institutionId: v.optional(v.id("institutions")),
+    via: v.union(v.literal("email"), v.literal("usn")),
+  },
   handler: async (ctx, args) => {
-    const cutoff = args.now - args.sinceMs;
-    const rows = await ctx.db
-      .query("event_ledger")
-      .withIndex("by_subject_category_type_created", (q) =>
-        q
-          .eq("subjectUserId", args.userId)
-          .eq("category", "identity")
-          .eq("type", "identity.password_login_failed")
-          .gte("createdAt", cutoff),
-      )
-      .collect();
-    return rows.length;
+    // The reservation above already enforced the limit; this only keeps the
+    // audit trail complete for identifiable subjects.
+    if (args.institutionId === undefined) return;
+    await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+      institutionId: args.institutionId,
+      category: "identity",
+      type: "identity.password_login_failed",
+      ...(args.userId !== undefined ? { subjectUserId: args.userId } : {}),
+      payload: { via: args.via },
+    });
+  },
+});
+
+export const clearPasswordLoginAttempts = internalMutation({
+  args: { subjectKey: v.string() },
+  handler: async (ctx, args) => {
+    const row = await ctx.db
+      .query("password_login_attempts")
+      .withIndex("by_subjectKey", (q) => q.eq("subjectKey", args.subjectKey))
+      .first();
+    if (row !== null) await ctx.db.delete(row._id);
   },
 });
 

@@ -95,4 +95,23 @@ test.describe.serial("password signup and login", () => {
     ).toBeVisible();
     await expect(page).not.toHaveURL(/student/);
   });
+
+  test("rapid repeated attempts — even against unknown accounts — are throttled", async ({
+    page,
+  }) => {
+    await openPasswordLogin(page);
+
+    const form = page.getByTestId("password-login-form");
+    await form.getByLabel("USN or email").fill(`e2e-throttle-${STAMP}@sannidhi.test`);
+    await form.getByLabel("Password").fill("totally-wrong-99");
+    const submit = form.getByRole("button", { name: "Sign in with password" });
+    const alert = form.getByRole("alert");
+
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await submit.click();
+      await expect(alert).toContainText("Incorrect credentials");
+    }
+    await submit.click();
+    await expect(alert).toContainText("Too many failed attempts");
+  });
 });

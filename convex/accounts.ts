@@ -1,5 +1,7 @@
 "use node";
 
+import { createHash } from "node:crypto";
+
 import { ConvexError, v } from "convex/values";
 
 import {
@@ -15,12 +17,7 @@ import type { Role } from "../src/lib/auth/session";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { action } from "./_generated/server";
-import {
-  LOGIN_FAILURE_MAX_ATTEMPTS,
-  LOGIN_FAILURE_WINDOW_MS,
-  MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR,
-  SIGNUP_WINDOW_MS,
-} from "./accountsInternal";
+import { MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR, SIGNUP_WINDOW_MS } from "./accountsInternal";
 
 const NAME_MIN_LENGTH = 2;
 const NAME_MAX_LENGTH = 120;
@@ -38,6 +35,23 @@ async function burnScryptWork(password: string): Promise<void> {
     dummyHashCache = await hashPassword("sannidhi-timing-equalizer-9f27c1d4b8a6");
   }
   await verifyPassword(password, dummyHashCache);
+}
+
+type ThrottleSubject = {
+  kind: "email" | "usn";
+  identifier: string;
+  user: { _id: Id<"users"> } | null;
+  institutionId: Id<"institutions"> | undefined;
+};
+
+/** Known users throttle by id; unknown identifiers by a salted hash of what was submitted. */
+function loginThrottleSubjectKey(subject: ThrottleSubject): string {
+  if (subject.user !== null) return `user:${subject.user._id}`;
+  const normalized =
+    subject.kind === "email"
+      ? subject.identifier.toLowerCase()
+      : `${normalizeUsn(subject.identifier)}:${subject.institutionId ?? ""}`;
+  return `ident:${createHash("sha256").update(`${subject.kind}:${normalized}`).digest("hex")}`;
 }
 
 function assertValidSignupInput(args: {
@@ -154,11 +168,13 @@ export const loginWithPassword = action({
       institutionId: Id<"institutions">;
       status?: "invited" | "active" | "suspended";
     } | null = null;
+    let institutionId: Id<"institutions"> | undefined;
 
     if (kind === "email") {
       user = await ctx.runQuery(internal.accountsInternal.getUserByEmail, {
         email: identifier.toLowerCase(),
       });
+      if (user !== null) institutionId = user.institutionId;
     } else {
       const code = (args.institutionCode ?? "").trim().toUpperCase();
       if (code.length === 0) {
@@ -171,38 +187,29 @@ export const loginWithPassword = action({
         await burnScryptWork(password);
         throw new ConvexError("invalid_credentials");
       }
+      institutionId = institution._id;
       user = await ctx.runQuery(internal.accountsInternal.getUserByInstitutionUsn, {
         institutionId: institution._id,
         usn: normalizeUsn(identifier),
       });
     }
 
-    if (user === null) {
-      await burnScryptWork(password);
-      throw new ConvexError("invalid_credentials");
-    }
-    if (user.status === "suspended") {
+    if (user !== null && user.status === "suspended") {
       throw new ConvexError("account suspended");
     }
 
-    const now = Date.now();
-    const failures = await ctx.runQuery(
-      internal.accountsInternal.countRecentPasswordLoginFailures,
-      {
-        userId: user._id,
-        sinceMs: LOGIN_FAILURE_WINDOW_MS,
-        now,
-      },
-    );
-    if (failures >= LOGIN_FAILURE_MAX_ATTEMPTS) {
-      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
-        institutionId: user.institutionId,
-        category: "identity",
-        type: "identity.password_login_rate_limited",
-        subjectUserId: user._id,
-        payload: { windowMs: LOGIN_FAILURE_WINDOW_MS, maxAttempts: LOGIN_FAILURE_MAX_ATTEMPTS },
-      });
-      throw new ConvexError("rate_limited");
+    // Atomic reservation: every attempt — including unknown identifiers —
+    // consumes capacity in one serialized transaction before any scrypt work.
+    const subjectKey = loginThrottleSubjectKey({ kind, identifier, user, institutionId });
+    await ctx.runMutation(internal.accountsInternal.reservePasswordLoginAttempt, {
+      subjectKey,
+      ...(user !== null ? { userId: user._id } : {}),
+      ...(institutionId !== undefined ? { institutionId } : {}),
+    });
+
+    if (user === null) {
+      await burnScryptWork(password);
+      throw new ConvexError("invalid_credentials");
     }
 
     const credential = await ctx.runQuery(internal.accountsInternal.getPasswordCredential, {
@@ -210,12 +217,10 @@ export const loginWithPassword = action({
     });
     const ok = credential !== null && (await verifyPassword(password, credential.hash));
     if (!ok) {
-      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+      await ctx.runMutation(internal.accountsInternal.recordPasswordLoginFailure, {
+        userId: user._id,
         institutionId: user.institutionId,
-        category: "identity",
-        type: "identity.password_login_failed",
-        subjectUserId: user._id,
-        payload: { via: kind },
+        via: kind,
       });
       throw new ConvexError("invalid_credentials");
     }
@@ -224,6 +229,7 @@ export const loginWithPassword = action({
       userId: user._id,
       via: kind,
     });
+    await ctx.runMutation(internal.accountsInternal.clearPasswordLoginAttempts, { subjectKey });
     return { userId: user._id, role: result.role, sid: result.sid, expiresAt: result.expiresAt };
   },
 });

@@ -36,6 +36,13 @@ export default defineSchema({
     updatedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
+  password_login_attempts: defineTable({
+    subjectKey: v.string(),
+    institutionId: v.optional(v.id("institutions")),
+    attempts: v.number(),
+    windowStartAt: v.number(),
+  }).index("by_subjectKey", ["subjectKey"]),
+
   courses: defineTable({
     institutionId: v.id("institutions"),
     code: v.string(),
