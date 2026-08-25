@@ -71,7 +71,7 @@ export function AppShell({ role, nav, children }: AppShellProps) {
         </span>
       </header>
 
-      <main className="lg:pl-64">
+      <main id="main-content" tabIndex={-1} className="lg:pl-64">
         <div className="mx-auto w-full max-w-5xl px-4 py-8 sm:px-6 lg:py-10">{children}</div>
       </main>
     </div>

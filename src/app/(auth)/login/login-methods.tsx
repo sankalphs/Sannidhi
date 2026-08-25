@@ -1,7 +1,7 @@
 "use client";
 
 import { Fingerprint, KeyRound } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { PasswordLoginForm } from "@/app/(auth)/login/password-login-form";
 import { PasskeyLoginButton } from "@/app/(auth)/login/passkey-login-button";
@@ -17,6 +17,38 @@ const METHOD_TABS: Array<{ id: LoginMethod; label: string; icon: typeof Fingerpr
 
 export function LoginMethods() {
   const [method, setMethod] = useState<LoginMethod>("passkey");
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
+
+  const selectTab = (index: number) => {
+    const tab = METHOD_TABS[index];
+    if (!tab) return;
+    setMethod(tab.id);
+    tabRefs.current[index]?.focus();
+  };
+
+  const onTablistKeyDown = (event: React.KeyboardEvent) => {
+    const currentIndex = METHOD_TABS.findIndex((tab) => tab.id === method);
+    switch (event.key) {
+      case "ArrowRight":
+      case "ArrowDown":
+        event.preventDefault();
+        selectTab((currentIndex + 1) % METHOD_TABS.length);
+        break;
+      case "ArrowLeft":
+      case "ArrowUp":
+        event.preventDefault();
+        selectTab((currentIndex - 1 + METHOD_TABS.length) % METHOD_TABS.length);
+        break;
+      case "Home":
+        event.preventDefault();
+        selectTab(0);
+        break;
+      case "End":
+        event.preventDefault();
+        selectTab(METHOD_TABS.length - 1);
+        break;
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4" data-testid="login-methods">
@@ -25,17 +57,24 @@ export function LoginMethods() {
         aria-label="Sign-in method"
         className="border-border bg-card grid grid-cols-2 gap-1 rounded-lg border p-1"
       >
-        {METHOD_TABS.map((tab) => {
+        {METHOD_TABS.map((tab, index) => {
           const active = method === tab.id;
           return (
             <Button
               key={tab.id}
+              ref={(node) => {
+                tabRefs.current[index] = node;
+              }}
               type="button"
               role="tab"
+              id={`login-tab-${tab.id}`}
               aria-selected={active}
+              aria-controls={`login-panel-${tab.id}`}
+              tabIndex={active ? 0 : -1}
               variant={active ? "default" : "ghost"}
               size="sm"
               onClick={() => setMethod(tab.id)}
+              onKeyDown={onTablistKeyDown}
               className={cn("font-mono text-xs tracking-[0.08em] uppercase")}
             >
               <tab.icon className="size-3.5" />
@@ -45,16 +84,25 @@ export function LoginMethods() {
         })}
       </div>
 
-      {method === "passkey" ? (
-        <>
-          <PasskeyLoginButton />
-          <p className="text-muted-foreground text-sm">
-            Use the passkey registered to your Sannidhi account — no passwords, no shared secrets.
-          </p>
-        </>
-      ) : (
-        <PasswordLoginForm />
-      )}
+      <div
+        role="tabpanel"
+        id={`login-panel-${method}`}
+        aria-labelledby={`login-tab-${method}`}
+        tabIndex={0}
+        className="focus-visible:ring-ring/50 flex flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]"
+      >
+        {method === "passkey" ? (
+          <>
+            <PasskeyLoginButton />
+            <p className="text-muted-foreground text-sm">
+              Use the passkey registered to your Sannidhi account — no passwords, no shared
+              secrets.
+            </p>
+          </>
+        ) : (
+          <PasswordLoginForm />
+        )}
+      </div>
     </div>
   );
 }
