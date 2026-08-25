@@ -1,8 +1,30 @@
-# AGENTS.md
+# Sannidhi
+
+## Adaptive Trust-Based Attendance Ecosystem
+
+Sannidhi replaces manual classroom roll calls with an adaptive, tamper-evident attendance system. Instead of forcing every student through every verification check, the system combines multiple trust signals — identity, device trust, physical presence, and biometrics — and escalates verification only when evidence is weak or suspicious.
+
+- **Normal students** check in quickly with minimal friction.
+- **Suspicious attempts** receive stronger verification or faculty review.
+- **Every decision** is recorded with an explainable evidence trail.
+
+## Status
+
+> **🚧 In Development** — Sannidhi is currently in active development. APIs, schemas, and UI are subject to change. Do not treat current behavior as stable or production-ready.
+
+## Multi-surface
+
+Sannidhi will have 3 key app surfaces: **web**, **desktop**, and **mobile**.
+
+## A note from Sankalp
+
+I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
+
+Channel both "measure twice, cut once" and "yagni". Fight scope creep. Try to honor the dev's intent in both a minimal and realistic fashion.
 
 ## Deployed Website
 
-- **Live site:** https://sannidhi-six.vercel.app/
+- **Live site:** <https://sannidhi-six.vercel.app/>
 
 ## Workflow
 
@@ -22,3 +44,13 @@
 - **GitHub** — hosting, commits, PRs, and review comments (CodeRabbit + Copilot feedback arrives here).
 - **Entire CLI** — enabled in this repo; tracks agent sessions as checkpoints with extra context and timing.
   - Run an `entire` command when you need to know what happened earlier or how much time was spent.
+
+## Taste
+
+- Complexity belongs at the adapter boundary. Orchestration stays pure, UI stays dumb.
+- Comments describe how a thing is used, and move when the code moves. To be used mostly to describe functions, not to annotate every line of behavior.
+- If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
+
+## Additional tips
+
+- Security is important, but should not be over-indexed on, especially for dev mode/maintainer-only features.
