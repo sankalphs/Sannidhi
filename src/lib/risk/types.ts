@@ -2,13 +2,7 @@ import type { EvidenceSignal } from "@/lib/decision";
 
 export const RISK_POLICY_VERSION = "risk-engine/v1";
 
-export const SIGNAL_STATUSES = [
-  "verified",
-  "weak",
-  "missing",
-  "unavailable",
-  "failed",
-] as const;
+export const SIGNAL_STATUSES = ["verified", "weak", "missing", "unavailable", "failed"] as const;
 
 export type SignalStatus = (typeof SIGNAL_STATUSES)[number];
 
