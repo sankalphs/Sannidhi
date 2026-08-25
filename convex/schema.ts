@@ -240,6 +240,7 @@ export default defineSchema({
     .index("by_institution_seq", ["institutionId", "seq"])
     .index("by_subject", ["subjectUserId"])
     .index("by_subject_created", ["subjectUserId", "createdAt"])
+    .index("by_subject_category_type_created", ["subjectUserId", "category", "type", "createdAt"])
     .index("by_device", ["deviceId"]),
 
   class_sessions: defineTable({

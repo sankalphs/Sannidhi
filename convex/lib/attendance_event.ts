@@ -115,13 +115,21 @@ export async function countRecentSecurityEvents(
 ): Promise<number> {
   const types = args.types ?? RATE_LIMIT_EVENT_TYPES;
   const cutoff = args.now - args.sinceMs;
-  const rows: Array<Doc<"event_ledger">> = await ctx.db
-    .query("event_ledger")
-    .withIndex("by_subject_created", (q) =>
-      q.eq("subjectUserId", args.studentId).gte("createdAt", cutoff),
-    )
-    .collect();
-  return rows.filter((row) => row.category === "attendance" && types.includes(row.type)).length;
+  let count = 0;
+  for (const type of types) {
+    const rows = await ctx.db
+      .query("event_ledger")
+      .withIndex("by_subject_category_type_created", (q) =>
+        q
+          .eq("subjectUserId", args.studentId)
+          .eq("category", "attendance")
+          .eq("type", type)
+          .gte("createdAt", cutoff),
+      )
+      .collect();
+    count += rows.length;
+  }
+  return count;
 }
 
 export async function countRecentCheckinAttempts(
