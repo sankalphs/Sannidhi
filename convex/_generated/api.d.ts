@@ -9,6 +9,7 @@
  */
 
 import type * as accessRequests from "../accessRequests.js";
+import type * as attendanceRequests from "../attendanceRequests.js";
 import type * as checkin from "../checkin.js";
 import type * as classSessions from "../classSessions.js";
 import type * as crons from "../crons.js";
@@ -36,6 +37,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accessRequests: typeof accessRequests;
+  attendanceRequests: typeof attendanceRequests;
   checkin: typeof checkin;
   classSessions: typeof classSessions;
   crons: typeof crons;

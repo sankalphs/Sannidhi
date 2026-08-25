@@ -150,8 +150,19 @@ export function CheckInPanel({
             reasonCodes: result.reasonCodes,
           });
         }
-      } catch {
-        setOutcome({ kind: "failure", verdict: "malformed", reasonCodes: [] });
+      } catch (cause) {
+        // Thrown errors are service-level failures (bad session, validator
+        // mismatch), not token verdicts — never report them as "unreadable".
+        const data =
+          typeof cause === "object" && cause !== null && "data" in cause
+            ? (cause as { data?: unknown }).data
+            : undefined;
+        if (data === "unauthorized") {
+          setOutcome({ kind: "session_expired" });
+        } else {
+          console.error("[check-in] redeemChallenge failed", cause);
+          setOutcome({ kind: "service_error" });
+        }
       } finally {
         setSubmitting(false);
         setCode("");

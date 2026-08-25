@@ -104,9 +104,7 @@ export function SessionControl({
             <h1 className="truncate text-2xl font-semibold tracking-tight">
               {session.courseCode} {session.courseTitle}
             </h1>
-            <Badge variant={session.kind === "guest" ? "outline" : "secondary"}>
-              {session.kind === "guest" ? "Guest" : "Scheduled"}
-            </Badge>
+            {session.kind === "guest" ? <Badge variant="outline">Guest</Badge> : null}
             <StatusBadge status={session.status} />
           </div>
           <p className="text-muted-foreground mt-1 text-sm">

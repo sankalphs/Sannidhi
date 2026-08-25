@@ -15,7 +15,7 @@ test.describe("enrollment completion gate", () => {
     await expect(page.getByText("Attendance features stay locked")).toHaveCount(0);
 
     await page.goto("/student/requests");
-    await expect(page.getByRole("heading", { name: "Requests" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Requests", exact: true })).toBeVisible();
     await expect(page.getByText("Enrollment incomplete")).toHaveCount(0);
   });
 

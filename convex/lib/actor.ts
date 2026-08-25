@@ -7,6 +7,8 @@ import {
   getActorSecret,
   type ActorTokenClaims,
 } from "../../src/lib/auth/actor-token";
+import { SESSION_ABSOLUTE_MAX_MS } from "../../src/lib/auth/token-hash";
+import { hashSessionSid } from "../../src/lib/auth/token-hash";
 import { ROLES, type Role } from "../../src/lib/auth/session";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -56,6 +58,45 @@ export async function resolveActorUser(
   } catch {
     return null;
   }
+}
+
+/**
+ * Resolve the actor and, when the token carries a server-side session id,
+ * reject tokens whose session has been revoked or expired. Tokens without a
+ * sid (demo/dev logins) have no server-side session record to check.
+ */
+export async function requireActorUserWithActiveSession(
+  ctx: MutationCtx | QueryCtx,
+  token: string,
+): Promise<Doc<"users">> {
+  const claims = await verifyActorToken(token);
+  if (claims.sid !== undefined) {
+    const tokenHash = await hashSessionSid(claims.sid);
+    let row: Doc<"sessions"> | null = null;
+    try {
+      row = await ctx.db
+        .query("sessions")
+        .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+        .unique();
+    } catch {
+      row = null;
+    }
+    const now = Date.now();
+    const sessionActive =
+      row !== null &&
+      row.revokedAt === undefined &&
+      row.expiresAt > now &&
+      row.createdAt + SESSION_ABSOLUTE_MAX_MS > now;
+    if (!sessionActive) throw new ConvexError("unauthorized");
+  }
+  let user: Doc<"users"> | null = null;
+  try {
+    user = await ctx.db.get(claims.userId as Id<"users">);
+  } catch {
+    user = null;
+  }
+  if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  return user;
 }
 
 export async function requireAdminUser(

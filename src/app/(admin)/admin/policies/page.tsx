@@ -10,7 +10,7 @@ export default function AdminPoliciesPage() {
       <EmptyState
         icon={Landmark}
         title="Policies"
-        description="Institution policy configuration arrives in Phase 5."
+        description="Institution policy configuration arrives in a later phase."
       />
     </div>
   );

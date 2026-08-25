@@ -4,12 +4,15 @@ import {
   ArrowUpCircle,
   CheckCircle2,
   Flag,
+  LogIn,
   RotateCcw,
   ScanLine,
+  ServerCrash,
   ShieldAlert,
   Timer,
   XCircle,
 } from "lucide-react";
+import Link from "next/link";
 
 import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { Badge } from "@/components/ui/badge";
@@ -35,7 +38,9 @@ export type CheckInOutcome =
       decision: DecisionLite;
     }
   | { kind: "failure"; verdict: FailureVerdict; reasonCodes: string[] }
-  | { kind: "rate_limited"; retryAfterSeconds: number };
+  | { kind: "rate_limited"; retryAfterSeconds: number }
+  | { kind: "session_expired" }
+  | { kind: "service_error" };
 
 const FAILURE_ICON: Record<FailureVerdict, typeof ScanLine> = {
   expired: RotateCcw,
@@ -208,6 +213,50 @@ export function OutcomeScreen({
         </p>
         <Button variant="outline" data-testid="checkin-again" onClick={onRetry}>
           Back to scanner
+        </Button>
+      </div>
+    );
+  }
+  if (outcome.kind === "session_expired") {
+    return (
+      <div
+        aria-live="polite"
+        className="flex flex-col items-center gap-4 rounded-xl border p-8 text-center"
+        data-testid="checkin-outcome"
+        role="status"
+      >
+        <div className="bg-destructive/15 text-destructive flex size-14 items-center justify-center rounded-full">
+          <LogIn className="size-8" />
+        </div>
+        <h2 className="text-xl font-semibold">Session signed out</h2>
+        <p className="text-muted-foreground max-w-md text-sm">
+          Your sign-in session has expired, so the check-in could not be verified. Sign in again and
+          re-scan the code.
+        </p>
+        <Button asChild data-testid="session-expired-login">
+          <Link href="/login">Sign in again</Link>
+        </Button>
+      </div>
+    );
+  }
+  if (outcome.kind === "service_error") {
+    return (
+      <div
+        aria-live="polite"
+        className="flex flex-col items-center gap-4 rounded-xl border p-8 text-center"
+        data-testid="checkin-outcome"
+        role="status"
+      >
+        <div className="bg-destructive/15 text-destructive flex size-14 items-center justify-center rounded-full">
+          <ServerCrash className="size-8" />
+        </div>
+        <h2 className="text-xl font-semibold">Check-in could not be processed</h2>
+        <p className="text-muted-foreground max-w-md text-sm">
+          Something went wrong while verifying this code — it was not recorded. Wait a moment and
+          try again; if it keeps failing, show your faculty member.
+        </p>
+        <Button data-testid="try-again" onClick={onRetry}>
+          Try again
         </Button>
       </div>
     );
