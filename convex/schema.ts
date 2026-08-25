@@ -308,5 +308,6 @@ export default defineSchema({
     reviewedByUserId: v.optional(v.id("users")),
   })
     .index("by_student_requested", ["studentId", "requestedAt"])
+    .index("by_student_status_requested", ["studentId", "status", "requestedAt"])
     .index("by_institution_status", ["institutionId", "status"]),
 });

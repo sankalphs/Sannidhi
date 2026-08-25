@@ -3,7 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { resolveActorUser } from "./lib/actor";
+import { requireActorUserWithActiveSession } from "./lib/actor";
 
 const MAX_REASON_LENGTH = 1000;
 const MIN_REASON_LENGTH = 10;
@@ -20,10 +20,9 @@ async function requireStudent(
   ctx: MutationCtx | QueryCtx,
   actorToken: string,
 ): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken).catch(() => null);
+  const user = await requireActorUserWithActiveSession(ctx, actorToken).catch(() => null);
   if (user === null) throw new ConvexError("unauthorized");
   if (user.role !== "student") throw new ConvexError("unauthorized");
-  if (user.status === "suspended") throw new ConvexError("account suspended");
   return user;
 }
 
@@ -47,11 +46,11 @@ export const submitMyRequest = mutation({
 
     const pending = await ctx.db
       .query("attendance_requests")
-      .withIndex("by_student_requested", (q) => q.eq("studentId", caller._id))
-      .order("desc")
+      .withIndex("by_student_status_requested", (q) =>
+        q.eq("studentId", caller._id).eq("status", "submitted"),
+      )
       .take(MAX_PENDING_REQUESTS + 1);
-    const pendingCount = pending.filter((request) => request.status === "submitted").length;
-    if (pendingCount >= MAX_PENDING_REQUESTS) {
+    if (pending.length >= MAX_PENDING_REQUESTS) {
       throw new ConvexError(
         `You already have ${MAX_PENDING_REQUESTS} open requests. Wait until they are reviewed.`,
       );

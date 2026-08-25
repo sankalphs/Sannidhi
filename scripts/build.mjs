@@ -8,10 +8,12 @@ function run(command, args) {
   process.exit(result.status ?? 1);
 }
 
-// Keep the Convex deployment in lockstep with the frontend: when a deploy key
-// is present (Vercel production/preview), push functions and build in one
-// atomic `convex deploy --cmd` so the app and its backend can never drift.
-// Locally there is no deploy key — just build.
+// Deploy the Convex backend together with the frontend when a deploy key is
+// present (Vercel production/preview). NOTE: `convex deploy --cmd` runs
+// `next build` BEFORE Convex pushes functions/schema, and Convex does not roll
+// back automatically if the Vercel publication fails afterwards — so backend
+// changes must stay backward-compatible with the previous frontend during
+// rollout. Locally there is no deploy key — just build.
 if (process.env.CONVEX_DEPLOY_KEY) {
   run("convex", ["deploy", "--cmd", "next build --turbopack"]);
 } else {

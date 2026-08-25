@@ -4,7 +4,7 @@ import { Fingerprint } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { startAuthentication } from "@simplewebauthn/browser";
+import { startAuthentication, WebAuthnAbortService } from "@simplewebauthn/browser";
 
 import { Button } from "@/components/ui/button";
 
@@ -12,7 +12,11 @@ const WEBAUTHN_TIMEOUT_MS = 60_000;
 
 function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), WEBAUTHN_TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      // Cancel the native ceremony so the browser prompt does not outlive the UI.
+      WebAuthnAbortService.cancelCeremony();
+      reject(new Error(message));
+    }, WEBAUTHN_TIMEOUT_MS);
     promise.then(
       (value) => {
         clearTimeout(timer);
