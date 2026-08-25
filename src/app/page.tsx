@@ -118,7 +118,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       <SiteNav />
 
-      <main className="flex-1">
+      <main id="main-content" tabIndex={-1} className="flex-1">
         {/* Hero */}
         <section className="bg-grid border-border/70 border-b">
           <div className="mx-auto grid w-full max-w-6xl gap-12 px-4 py-16 sm:px-6 sm:py-20 lg:grid-cols-[1.05fr_0.95fr] lg:items-center lg:gap-16 lg:py-24">
@@ -225,7 +225,7 @@ export default function Home() {
                 <Link
                   key={panel.eyebrow}
                   href={panel.href}
-                  className="group hover:bg-accent bg-card focus-visible:bg-accent relative flex flex-col gap-4 p-6 transition-colors focus-visible:outline-none sm:p-8"
+                  className="group hover:bg-accent active:bg-accent/80 bg-card focus-visible:bg-accent relative flex flex-col gap-4 p-6 transition-colors focus-visible:outline-none sm:p-8"
                 >
                   <span
                     className="text-muted-foreground/60 absolute top-6 right-6 font-mono text-[11px] sm:top-8 sm:right-8"

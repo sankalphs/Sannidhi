@@ -11,6 +11,14 @@ async function openPasswordLogin(page: Page) {
   await expect(page.getByTestId("password-login-form")).toBeVisible();
 }
 
+/** First auth POST in a run pays dev-server route compilation; allow for it. */
+async function expectStudentDashboard(page: Page) {
+  await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"), {
+    timeout: 20_000,
+  });
+  await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
+}
+
 test.describe.serial("password signup and login", () => {
   test("a student can self-register with institution code, USN, email and password", async ({
     page,
@@ -28,8 +36,7 @@ test.describe.serial("password signup and login", () => {
     await form.getByLabel("Confirm password").fill(PASSWORD);
     await form.getByRole("button", { name: "Create account" }).click();
 
-    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
-    await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
+    await expectStudentDashboard(page);
 
     // Password-only account still shows required enrollment steps (device pending).
     await expect(page.getByText("Enrollment checklist")).toBeVisible();
@@ -65,8 +72,7 @@ test.describe.serial("password signup and login", () => {
     await form.getByLabel("Password").fill(PASSWORD);
     await form.getByRole("button", { name: "Sign in with password" }).click();
 
-    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
-    await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
+    await expectStudentDashboard(page);
   });
 
   test("the same account can log in with USN + institution code", async ({ page }) => {
@@ -78,8 +84,7 @@ test.describe.serial("password signup and login", () => {
     await form.getByLabel("Password").fill(PASSWORD);
     await form.getByRole("button", { name: "Sign in with password" }).click();
 
-    await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
-    await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
+    await expectStudentDashboard(page);
   });
 
   test("a wrong password is rejected without revealing which part failed", async ({ page }) => {
