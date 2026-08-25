@@ -26,13 +26,14 @@ export function SiteNav() {
             <a
               key={link.href}
               href={link.href}
-              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex min-h-10 items-center rounded-md px-3 py-2.5 text-sm font-medium transition-colors"
+              className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex min-h-11 items-center rounded-md px-3 py-2.5 text-sm font-medium transition-colors"
             >
               {link.label}
             </a>
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          {/* Sign in hides <sm — the three header controls overflow 390px; it lives in the menu. */}
           <Button variant="ghost" asChild className="hidden sm:inline-flex">
             <Link href="/login">Sign in</Link>
           </Button>
@@ -45,7 +46,7 @@ export function SiteNav() {
             aria-controls="site-nav-menu"
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             onClick={() => setMenuOpen((open) => !open)}
-            className="hover:bg-accent focus-visible:border-ring focus-visible:ring-ring/50 -mr-2 flex size-10 items-center justify-center rounded-md transition-colors outline-none focus-visible:ring-[3px] md:hidden"
+            className="hover:bg-accent focus-visible:border-ring focus-visible:ring-ring/50 -mr-2 flex size-11 items-center justify-center rounded-md transition-colors outline-none focus-visible:ring-[3px] md:hidden"
           >
             {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
           </button>

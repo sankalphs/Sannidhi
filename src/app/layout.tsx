@@ -21,22 +21,23 @@ const youngSerif = Young_Serif({
   subsets: ["latin"],
 });
 
+const TITLE = "Sannidhi — Adaptive Attendance";
+const DESCRIPTION =
+  "Adaptive trust-based attendance for institutions: passkey check-ins, rotating session challenges, and a tamper-evident record of every decision.";
+
 export const metadata: Metadata = {
-  title: "Sannidhi — Adaptive Attendance",
-  description:
-    "Adaptive trust-based attendance for institutions: passkey check-ins, rotating session challenges, and a tamper-evident record of every decision.",
+  title: TITLE,
+  description: DESCRIPTION,
   openGraph: {
-    title: "Sannidhi — Adaptive Attendance",
-    description:
-      "Adaptive trust-based attendance for institutions: passkey check-ins, rotating session challenges, and a tamper-evident record of every decision.",
+    title: TITLE,
+    description: DESCRIPTION,
     type: "website",
     siteName: "Sannidhi",
   },
   twitter: {
     card: "summary",
-    title: "Sannidhi — Adaptive Attendance",
-    description:
-      "Adaptive trust-based attendance for institutions: passkey check-ins, rotating session challenges, and a tamper-evident record of every decision.",
+    title: TITLE,
+    description: DESCRIPTION,
   },
 };
 

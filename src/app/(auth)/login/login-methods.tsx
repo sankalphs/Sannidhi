@@ -1,7 +1,7 @@
 "use client";
 
 import { Fingerprint, KeyRound } from "lucide-react";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { PasswordLoginForm } from "@/app/(auth)/login/password-login-form";
 import { PasskeyLoginButton } from "@/app/(auth)/login/passkey-login-button";
@@ -14,6 +14,35 @@ const METHOD_TABS: Array<{ id: LoginMethod; label: string; icon: typeof Fingerpr
   { id: "passkey", label: "Passkey", icon: Fingerprint },
   { id: "password", label: "USN / Email", icon: KeyRound },
 ];
+
+/**
+ * Both panels stay mounted so each tab's aria-controls resolves and in-progress
+ * input survives switching; the hidden panel is skipped by tab and screen readers.
+ * No tabIndex: panels contain focusable content, so they stay out of the tab order.
+ */
+function TabPanel({
+  method,
+  active,
+  children,
+}: {
+  method: LoginMethod;
+  active: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      role="tabpanel"
+      id={`login-panel-${method}`}
+      aria-labelledby={`login-tab-${method}`}
+      className={cn(
+        "focus-visible:ring-ring/50 flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]",
+        active ? "flex" : "hidden",
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
 export function LoginMethods() {
   const [method, setMethod] = useState<LoginMethod>("passkey");
@@ -84,35 +113,15 @@ export function LoginMethods() {
         })}
       </div>
 
-      {/* Both panels stay mounted so each tab's aria-controls resolves and in-progress
-          input survives switching; the hidden panel is skipped by tab and screen readers. */}
-      <div
-        role="tabpanel"
-        id="login-panel-passkey"
-        aria-labelledby="login-tab-passkey"
-        tabIndex={0}
-        className={cn(
-          "focus-visible:ring-ring/50 flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]",
-          method === "passkey" ? "flex" : "hidden",
-        )}
-      >
+      <TabPanel method="passkey" active={method === "passkey"}>
         <PasskeyLoginButton />
         <p className="text-muted-foreground text-sm">
           Use the passkey registered to your Sannidhi account — no passwords, no shared secrets.
         </p>
-      </div>
-      <div
-        role="tabpanel"
-        id="login-panel-password"
-        aria-labelledby="login-tab-password"
-        tabIndex={0}
-        className={cn(
-          "focus-visible:ring-ring/50 flex-col gap-4 rounded-md outline-none focus-visible:ring-[3px]",
-          method === "password" ? "flex" : "hidden",
-        )}
-      >
+      </TabPanel>
+      <TabPanel method="password" active={method === "password"}>
         <PasswordLoginForm />
-      </div>
+      </TabPanel>
     </div>
   );
 }
