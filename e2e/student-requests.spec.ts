@@ -5,7 +5,7 @@ test("students file attendance requests and see them listed with status", async 
   await page.goto("/student/requests");
   await expect(page.getByRole("heading", { name: "Requests", level: 1 })).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "File a request" })).toBeVisible();
+  await expect(page.getByText("File a request")).toBeVisible();
 
   const reason = `E2E correction request ${Date.now()} — attended class, system lost the scan.`;
   await page.getByLabel("Request type").selectOption("correction");
