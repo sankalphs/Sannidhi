@@ -150,8 +150,14 @@ export function CheckInPanel({
             reasonCodes: result.reasonCodes,
           });
         }
-      } catch {
-        setOutcome({ kind: "failure", verdict: "malformed", reasonCodes: [] });
+      } catch (cause) {
+        // Thrown errors are service-level failures (bad session, validator
+        // mismatch), not token verdicts — never report them as "unreadable".
+        const data =
+          typeof cause === "object" && cause !== null && "data" in cause
+            ? (cause as { data?: unknown }).data
+            : undefined;
+        setOutcome(data === "unauthorized" ? { kind: "session_expired" } : { kind: "service_error" });
       } finally {
         setSubmitting(false);
         setCode("");

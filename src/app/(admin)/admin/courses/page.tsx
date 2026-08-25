@@ -14,7 +14,7 @@ export default function AdminCoursesPage() {
       <EmptyState
         icon={BookOpen}
         title="Courses & sections"
-        description="Academic data management arrives in Phase 1."
+        description="Course and section management is on the roadmap. Seeded courses already power timetables, class sessions, and the event ledger."
       />
     </div>
   );

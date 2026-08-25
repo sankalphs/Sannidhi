@@ -8,6 +8,28 @@ import { startAuthentication } from "@simplewebauthn/browser";
 
 import { Button } from "@/components/ui/button";
 
+const WEBAUTHN_TIMEOUT_MS = 60_000;
+
+function withTimeout<T>(promise: Promise<T>, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), WEBAUTHN_TIMEOUT_MS);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (cause: unknown) => {
+        clearTimeout(timer);
+        reject(cause);
+      },
+    );
+  });
+}
+
+function passkeysUnsupported(): boolean {
+  return typeof window === "undefined" || !window.PublicKeyCredential;
+}
+
 export function PasskeyLoginButton() {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -17,6 +39,11 @@ export function PasskeyLoginButton() {
     setPending(true);
     setError(null);
     try {
+      if (passkeysUnsupported()) {
+        throw new Error(
+          "This browser does not support passkeys. Use demo access below or switch browsers.",
+        );
+      }
       const optionsResponse = await fetch("/api/auth/webauthn/authenticate/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -30,7 +57,10 @@ export function PasskeyLoginButton() {
       }
       const options = await optionsResponse.json();
 
-      const response = await startAuthentication({ optionsJSON: options });
+      const response = await withTimeout(
+        startAuthentication({ optionsJSON: options }),
+        "Passkey sign-in timed out. Try again, or use the demo access below.",
+      );
 
       const verifyResponse = await fetch("/api/auth/webauthn/authenticate/verify", {
         method: "POST",

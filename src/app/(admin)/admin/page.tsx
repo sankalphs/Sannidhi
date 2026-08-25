@@ -39,12 +39,13 @@ const UPCOMING = [
   {
     icon: BookOpen,
     title: "Courses & sections",
-    description: "Course catalog and section rosters arrive in Phase 1.",
+    description:
+      "Course and section management is on the roadmap — the seeded catalog already powers timetables and sessions.",
   },
   {
     icon: Landmark,
     title: "Policies",
-    description: "Attendance thresholds and step-up rules arrive in Phase 5.",
+    description: "Attendance thresholds and step-up rules arrive in a later phase.",
   },
 ];
 

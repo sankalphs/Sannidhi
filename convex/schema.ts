@@ -296,4 +296,17 @@ export default defineSchema({
     .index("by_status_submitted", ["status", "submittedAt"])
     .index("by_email", ["email"])
     .index("by_ipHash_submitted", ["ipHash", "submittedAt"]),
+
+  attendance_requests: defineTable({
+    institutionId: v.id("institutions"),
+    studentId: v.id("users"),
+    type: v.union(v.literal("correction"), v.literal("exemption"), v.literal("on_duty")),
+    reason: v.string(),
+    status: v.union(v.literal("submitted"), v.literal("reviewed")),
+    requestedAt: v.number(),
+    reviewedAt: v.optional(v.number()),
+    reviewedByUserId: v.optional(v.id("users")),
+  })
+    .index("by_student_requested", ["studentId", "requestedAt"])
+    .index("by_institution_status", ["institutionId", "status"]),
 });
