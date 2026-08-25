@@ -1,10 +1,10 @@
 import { spawnSync } from "node:child_process";
 
 function run(command, args) {
-  const result = spawnSync(command, args, {
-    stdio: "inherit",
-    shell: process.platform === "win32",
-  });
+  const result = spawnSync(command, args, { stdio: "inherit", shell: true });
+  if (result.error !== undefined) {
+    console.error("[build] failed to spawn:", result.error);
+  }
   process.exit(result.status ?? 1);
 }
 
@@ -13,7 +13,7 @@ function run(command, args) {
 // atomic `convex deploy --cmd` so the app and its backend can never drift.
 // Locally there is no deploy key — just build.
 if (process.env.CONVEX_DEPLOY_KEY) {
-  run("npx", ["convex", "deploy", "--cmd", "next build --turbopack"]);
+  run("convex", ["deploy", "--cmd", "next build --turbopack"]);
 } else {
-  run("npx", ["next", "build", "--turbopack"]);
+  run("next", ["build", "--turbopack"]);
 }

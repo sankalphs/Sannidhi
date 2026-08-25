@@ -157,7 +157,9 @@ export function CheckInPanel({
           typeof cause === "object" && cause !== null && "data" in cause
             ? (cause as { data?: unknown }).data
             : undefined;
-        setOutcome(data === "unauthorized" ? { kind: "session_expired" } : { kind: "service_error" });
+        setOutcome(
+          data === "unauthorized" ? { kind: "session_expired" } : { kind: "service_error" },
+        );
       } finally {
         setSubmitting(false);
         setCode("");
