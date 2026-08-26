@@ -16,4 +16,10 @@ crons.interval(
   internal.challenges.expireStaleChallenges,
 );
 
+crons.daily(
+  "prune-expired-audit-events",
+  { hourUTC: 3, minuteUTC: 30 },
+  internal.maintenance.pruneExpiredAuditEvents,
+);
+
 export default crons;

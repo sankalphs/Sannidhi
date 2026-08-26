@@ -143,10 +143,10 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{TYPE_LABELS[request.type] ?? request.type}</span>
-                    {request.status === "reviewed" ? (
-                      <Badge>reviewed</Badge>
-                    ) : (
+                    {request.status === "submitted" ? (
                       <Badge variant="secondary">submitted</Badge>
+                    ) : (
+                      <Badge>{request.status}</Badge>
                     )}
                   </div>
                   <p className="text-muted-foreground text-sm">{request.reason}</p>

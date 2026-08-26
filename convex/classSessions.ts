@@ -83,14 +83,32 @@ async function requireOwnedSession(
   ctx: MutationCtx,
   actorToken: string,
   sessionId: Id<"class_sessions">,
-): Promise<Doc<"class_sessions">> {
+): Promise<{ session: Doc<"class_sessions">; faculty: Doc<"users"> }> {
   const caller = await requireActorUser(ctx, actorToken);
   const session = await ctx.db.get(sessionId);
   if (session === null) throw new ConvexError("session not found");
   if (caller.role !== "faculty" || session.facultyId !== caller._id) {
     throw new ConvexError("unauthorized");
   }
-  return session;
+  return { session, faculty: caller };
+}
+
+/** Institution-wide audit trail entry for a session lifecycle transition. */
+async function appendSessionLedgerEvent(
+  ctx: MutationCtx,
+  args: {
+    session: Doc<"class_sessions">;
+    type: "session.paused" | "session.restarted" | "session.closed" | "session.auto_closed";
+    actorUserId?: Id<"users">;
+  },
+): Promise<void> {
+  await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+    institutionId: args.session.institutionId,
+    category: "attendance",
+    type: args.type,
+    ...(args.actorUserId !== undefined ? { actorUserId: args.actorUserId } : {}),
+    payload: { sessionId: args.session._id, sectionId: args.session.sectionId },
+  });
 }
 
 function projectBoardState(state: Doc<"attendance_events">["state"]): BoardRowState {
@@ -246,9 +264,14 @@ export const startGuest = mutation({
 export const pause = mutation({
   args: { actorToken: v.string(), sessionId: v.id("class_sessions") },
   handler: async (ctx, args) => {
-    const session = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
+    const { session, faculty } = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
     if (session.status !== "active") throw new ConvexError("session_not_active");
     await ctx.db.patch(session._id, { status: "paused", pausedAt: Date.now() });
+    await appendSessionLedgerEvent(ctx, {
+      session,
+      type: "session.paused",
+      actorUserId: faculty._id,
+    });
     return { status: "paused" as const };
   },
 });
@@ -256,11 +279,16 @@ export const pause = mutation({
 export const close = mutation({
   args: { actorToken: v.string(), sessionId: v.id("class_sessions") },
   handler: async (ctx, args) => {
-    const session = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
+    const { session, faculty } = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
     if (session.status !== "active" && session.status !== "paused") {
       throw new ConvexError("session_already_closed");
     }
     await ctx.db.patch(session._id, { status: "closed", closedAt: Date.now() });
+    await appendSessionLedgerEvent(ctx, {
+      session,
+      type: "session.closed",
+      actorUserId: faculty._id,
+    });
     return { status: "closed" as const };
   },
 });
@@ -272,7 +300,7 @@ export const restart = mutation({
     windowMinutes: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const session = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
+    const { session, faculty } = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
     if (session.status !== "paused" && session.status !== "closed") {
       throw new ConvexError("session_not_restartable");
     }
@@ -284,6 +312,11 @@ export const restart = mutation({
       pausedAt: undefined,
       closedAt: undefined,
     });
+    await appendSessionLedgerEvent(ctx, {
+      session,
+      type: "session.restarted",
+      actorUserId: faculty._id,
+    });
     return { status: "active" as const, windowEndsAt };
   },
 });
@@ -291,7 +324,7 @@ export const restart = mutation({
 export const publishChallenge = mutation({
   args: { actorToken: v.string(), sessionId: v.id("class_sessions") },
   handler: async (ctx, args) => {
-    const session = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
+    const { session } = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
     const now = Date.now();
     if (session.status !== "active") throw new ConvexError("session_not_active");
     if (now >= session.windowEndsAt) throw new ConvexError("session_window_closed");
@@ -424,7 +457,7 @@ export const verifyManually = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await requireActorUser(ctx, args.actorToken);
-    const session = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
+    const { session } = await requireOwnedSession(ctx, args.actorToken, args.sessionId);
 
     const trimmed = args.reason.trim();
     if (trimmed.length < 10) throw new ConvexError("reason_too_short");
@@ -475,7 +508,6 @@ export const verifyManually = mutation({
       sessionId: session._id,
       state: "verified",
       decision,
-      capturedAt: now,
       recordedByUserId: caller._id,
       note: trimmed,
     });

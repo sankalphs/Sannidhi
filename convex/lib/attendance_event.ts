@@ -1,5 +1,15 @@
+import { ConvexError } from "convex/values";
+
 import type { Decision } from "../../src/lib/decision";
 import type { DeviceState } from "../../src/lib/devices/lifecycle";
+import {
+  CORRECTIONABLE_STATES,
+  attendanceChainHashInput,
+  isStartableState,
+  isValidCorrection,
+  type AttendanceEventState,
+  type AttendanceOrigin,
+} from "../../src/lib/attendance/lifecycle";
 import { computeEventHash } from "../../src/lib/ledger/hash";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
@@ -25,7 +35,11 @@ const ANOMALY_LOOKBACK_MS = 10 * 60_000;
  * Appends to the attendance_events chain — the per-student decision record.
  * Distinct from the event_ledger chain (institution-wide audit trail): both
  * are hash-chained and append-only, but each verifies independently through
- * its own seq/prevEventHash sequence.
+ * its own per-institution seq/prevEventHash sequence.
+ *
+ * Server-time authority: this seam stamps capturedAt itself; callers never
+ * pass a device clock. Corrections must reference an existing event whose
+ * state is correctionable and that has not been corrected before.
  */
 export async function appendAttendanceEvent(
   ctx: MutationCtx,
@@ -34,47 +48,78 @@ export async function appendAttendanceEvent(
     studentId: Id<"users">;
     sectionId: Id<"sections">;
     sessionId?: Id<"class_sessions">;
-    state: "verified" | "step_up" | "flagged" | "rejected";
-    decision: Decision;
-    capturedAt: number;
+    state: AttendanceEventState;
+    origin?: AttendanceOrigin;
+    correctsEventId?: Id<"attendance_events">;
+    decision?: Decision;
     recordedByUserId?: Id<"users">;
     note?: string;
   },
 ): Promise<Id<"attendance_events">> {
-  const last = await ctx.db.query("attendance_events").withIndex("by_seq").order("desc").first();
+  if (!isStartableState(args.state)) {
+    throw new ConvexError("corrections_only_overwrite_existing_events");
+  }
+  if (!isValidCorrection(args.state, args.correctsEventId)) {
+    throw new ConvexError(
+      args.state === "corrected"
+        ? "correction_requires_corrects_event_id"
+        : "non_correction_cannot_reference_event",
+    );
+  }
+
+  if (args.correctsEventId !== undefined) {
+    const corrected = await ctx.db.get(args.correctsEventId);
+    if (corrected === null) throw new ConvexError("corrected_event_not_found");
+    if (!(CORRECTIONABLE_STATES as readonly string[]).includes(corrected.state)) {
+      throw new ConvexError("corrected_event_not_correctionable");
+    }
+    const priorCorrection = await ctx.db
+      .query("attendance_events")
+      .withIndex("by_corrects_event", (q) => q.eq("correctsEventId", args.correctsEventId))
+      .first();
+    if (priorCorrection !== null) throw new ConvexError("event_already_corrected");
+  }
+
+  const last = await ctx.db
+    .query("attendance_events")
+    .withIndex("by_institution_seq", (q) => q.eq("institutionId", args.institutionId))
+    .order("desc")
+    .first();
   const seq = last !== null ? last.seq + 1 : 0;
   const prevEventHash = last?.eventHash;
 
-  const eventHash = await computeEventHash({
-    institutionId: args.institutionId,
-    category: "attendance",
-    type: "attendance.session_checkin",
-    subjectUserId: args.studentId,
-    payload: {
+  const origin = args.origin ?? "online";
+  const capturedAt = Date.now();
+
+  const eventHash = await computeEventHash(
+    attendanceChainHashInput({
+      institutionId: args.institutionId,
       studentId: args.studentId,
-      ...(args.sessionId !== undefined ? { sessionId: args.sessionId } : {}),
       sectionId: args.sectionId,
+      ...(args.sessionId !== undefined ? { sessionId: args.sessionId } : {}),
       state: args.state,
-      origin: "online",
-      policyVersion: args.decision.policyVersion,
-    },
-    seq,
-    prevEventHash,
-  });
+      origin,
+      ...(args.decision !== undefined ? { policyVersion: args.decision.policyVersion } : {}),
+      ...(args.correctsEventId !== undefined ? { correctsEventId: args.correctsEventId } : {}),
+      seq,
+      prevEventHash,
+    }),
+  );
 
   return ctx.db.insert("attendance_events", {
     institutionId: args.institutionId,
     studentId: args.studentId,
     sectionId: args.sectionId,
     state: args.state,
-    origin: "online",
-    policyVersion: args.decision.policyVersion,
+    origin,
+    policyVersion: args.decision?.policyVersion,
     seq,
     prevEventHash,
     eventHash,
     decision: args.decision,
-    capturedAt: args.capturedAt,
+    capturedAt,
     ...(args.sessionId !== undefined ? { sessionId: args.sessionId } : {}),
+    ...(args.correctsEventId !== undefined ? { correctsEventId: args.correctsEventId } : {}),
     ...(args.recordedByUserId !== undefined ? { recordedByUserId: args.recordedByUserId } : {}),
     ...(args.note !== undefined ? { note: args.note } : {}),
   });

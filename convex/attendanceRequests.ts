@@ -86,7 +86,7 @@ export const listMyRequests = query({
       id: v.id("attendance_requests"),
       type: requestTypeValidator,
       reason: v.string(),
-      status: v.union(v.literal("submitted"), v.literal("reviewed")),
+      status: v.union(v.literal("submitted"), v.literal("approved"), v.literal("dismissed")),
       requestedAt: v.number(),
       reviewedAt: v.optional(v.number()),
     }),
