@@ -1,0 +1,93 @@
+You are working in D:\Coding\Sannidhi (Next.js 15 + Tailwind v4 + Convex, Windows, pwsh). Make ONLY the edits described below. Do NOT run typecheck, lint, build, or tests — the parent agent verifies centrally afterward. Do NOT touch any files other than the ones listed. Write code in the existing style.
+
+## Edit 1: next.config.ts
+Currently:
+```ts
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {/* config options here */};
+
+export default nextConfig;
+```
+Replace with security headers applied to every route:
+```ts
+import type { NextConfig } from "next";
+
+const securityHeaders = [
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(self), geolocation=(self), microphone=()" },
+];
+
+const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
+};
+
+export default nextConfig;
+```
+
+## Edit 2: NEW FILE src/components/shell/demo-banner.tsx
+Create exactly this server component (warns when a deployment publicly opts into demo mode with full-role seeded personas):
+```tsx
+import { TriangleAlert } from "lucide-react";
+
+/**
+ * Rendered only when the deployment explicitly opts into public demo mode
+ * (ENABLE_DEMO_LOGIN=1): visitors get seeded personas carrying full role
+ * authority, so every surface announces it.
+ */
+export function DemoBanner() {
+  if (process.env.ENABLE_DEMO_LOGIN !== "1") return null;
+
+  return (
+    <div
+      role="note"
+      data-testid="demo-banner"
+      className="bg-chalk text-chalk-foreground px-4 py-2 text-center font-mono text-xs font-medium tracking-[0.08em] uppercase"
+    >
+      <TriangleAlert className="mr-1.5 inline size-3.5" aria-hidden="true" />
+      Demo mode — seeded accounts, not a real institution
+    </div>
+  );
+}
+```
+
+## Edit 3: src/app/layout.tsx
+- Add import: `import { DemoBanner } from "@/components/shell/demo-banner";` — place it so imports stay alphabetically sorted among the `@/components/...` imports (current: `@/components/shell/convex-provider`).
+- Inside `<body>`, render `<DemoBanner />` immediately AFTER the skip-link `<a>` element and BEFORE `<ConvexClientProvider>`.
+
+## Edit 4: convex/challenges.ts
+Delete the unused validator const `challengeView` (the `const challengeView = v.object({...});` block, roughly lines 73-83). Keep the `export type ChallengeView = {...}` type right below it — it IS used. If `v` from "convex/values" is still used elsewhere in the file (it is, in function args), keep the import.
+
+## Edit 5: convex/checkin.ts
+Make the failure-event mapping type-safe against the canonical event-type list:
+- Add `RATE_LIMIT_EVENT_TYPES` to the existing import from `./lib/attendance_event`.
+- Below the existing `type FailureVerdict` line, add:
+```tsx
+type SecurityEventType = (typeof RATE_LIMIT_EVENT_TYPES)[number];
+```
+- Change `const FAILURE_EVENT_TYPES: Record<FailureVerdict, string> = {` to `const FAILURE_EVENT_TYPES: Record<FailureVerdict, SecurityEventType> = {`. The four values (challenge_expired_use, malformed_challenge, challenge_replayed, wrong_session_challenge) all already exist in RATE_LIMIT_EVENT_TYPES, so this compiles and now the compiler guarantees every failure event type is counted by the rate limiter.
+
+## Edit 6: convex/lib/attendance_event.ts
+Add this doc comment directly above `export async function appendAttendanceEvent(` (the file already uses doc comments in this style):
+```
+/**
+ * Appends to the attendance_events chain — the per-student decision record.
+ * Distinct from the event_ledger chain (institution-wide audit trail): both
+ * are hash-chained and append-only, but each verifies independently through
+ * its own seq/prevEventHash sequence.
+ */
+```
+
+## Edit 7: README.md
+In the "## Local development" section, directly after the code block that shows adding `SESSION_SECRET` to `.env.local` (and before the "Run the app:" line), insert this paragraph:
+
+```md
+Rotating `SESSION_SECRET` signs out every user and invalidates any unscanned QR
+challenge tokens — do it deliberately, never casually.
+```
+
+Report back: list of files changed with a one-line summary each, and anything you could not complete.
