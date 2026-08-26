@@ -37,6 +37,8 @@ type StepUpOutcome = {
 
 type CameraState = "off" | "active" | "unavailable";
 
+type CameraUnavailableReason = "scanner_unsupported" | "camera_unavailable";
+
 type GeoFix = {
   latitude: number;
   longitude: number;
@@ -87,6 +89,7 @@ export function CheckInPanel({
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cameraState, setCameraState] = useState<CameraState>("off");
+  const [unavailableReason, setUnavailableReason] = useState<CameraUnavailableReason | null>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
   const [geo, setGeo] = useState<GeoState | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -203,6 +206,7 @@ export function CheckInPanel({
 
     const DetectorCtor = window.BarcodeDetector;
     if (!DetectorCtor || !navigator.mediaDevices) {
+      setUnavailableReason("scanner_unsupported");
       setCameraState("unavailable");
       return;
     }
@@ -258,7 +262,10 @@ export function CheckInPanel({
         }, 300);
       })
       .catch(() => {
-        if (!cancelled) setCameraState("unavailable");
+        if (!cancelled) {
+          setUnavailableReason("camera_unavailable");
+          setCameraState("unavailable");
+        }
       });
 
     return () => {
@@ -323,7 +330,9 @@ export function CheckInPanel({
         <CardContent className="flex flex-col gap-4">
           {cameraState === "unavailable" ? (
             <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
-              Camera is unavailable on this device — paste the check-in code instead.
+              {unavailableReason === "scanner_unsupported"
+                ? "QR scanning isn't supported in this browser — paste the check-in code below instead."
+                : "Camera is unavailable on this device — paste the check-in code below instead."}
             </p>
           ) : (
             <div className="bg-muted relative aspect-video overflow-hidden rounded-lg border">

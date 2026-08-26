@@ -21,6 +21,12 @@ export const CHECKIN_RATE_LIMIT_WINDOW_MS = 60_000;
 export const CHECKIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
 const ANOMALY_LOOKBACK_MS = 10 * 60_000;
 
+/**
+ * Appends to the attendance_events chain — the per-student decision record.
+ * Distinct from the event_ledger chain (institution-wide audit trail): both
+ * are hash-chained and append-only, but each verifies independently through
+ * its own seq/prevEventHash sequence.
+ */
 export async function appendAttendanceEvent(
   ctx: MutationCtx,
   args: {

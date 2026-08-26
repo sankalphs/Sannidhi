@@ -228,7 +228,7 @@ export default function Home() {
                   className="group hover:bg-accent active:bg-accent/80 bg-card focus-visible:bg-accent relative flex flex-col gap-4 p-6 transition-colors focus-visible:outline-none sm:p-8"
                 >
                   <span
-                    className="text-muted-foreground/60 absolute top-6 right-6 font-mono text-[11px] sm:top-8 sm:right-8"
+                    className="text-muted-foreground absolute top-6 right-6 font-mono text-[11px] sm:top-8 sm:right-8"
                     aria-hidden="true"
                   >
                     {String(index + 1).padStart(2, "0")}

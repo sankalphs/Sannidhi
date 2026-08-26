@@ -29,7 +29,7 @@
   --chalk-foreground: oklch(0.25 0.04 120);
   --verdict-accept: oklch(0.5 0.11 160);
   --verdict-stepup: oklch(0.48 0.09 250);
-  --verdict-flag: oklch(0.62 0.13 75);
+  --verdict-flag: oklch(0.53 0.13 75);
   --verdict-reject: oklch(0.55 0.2 27);
   --chart-1: oklch(0.55 0.12 160);
   --chart-2: oklch(0.8 0.14 92);

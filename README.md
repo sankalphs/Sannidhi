@@ -95,6 +95,9 @@ Add a session signing secret to `.env.local` (at least 16 characters locally):
 SESSION_SECRET=<random string of at least 16 bytes>
 ```
 
+Rotating `SESSION_SECRET` signs out every user and invalidates any unscanned QR
+challenge tokens — do it deliberately, never casually.
+
 Run the app:
 
 ```sh

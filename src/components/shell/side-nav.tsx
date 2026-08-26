@@ -36,9 +36,10 @@ type SideNavProps = {
   nav: NavItem[];
   className?: string;
   variant?: "board" | "paper";
+  onNavigate?: () => void;
 };
 
-export function SideNav({ nav, className, variant = "board" }: SideNavProps) {
+export function SideNav({ nav, className, variant = "board", onNavigate }: SideNavProps) {
   const pathname = usePathname();
   return (
     <nav className={cn("flex flex-col gap-1", className)}>
@@ -52,6 +53,7 @@ export function SideNav({ nav, className, variant = "board" }: SideNavProps) {
           <Link
             key={item.href}
             href={item.href}
+            onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
               "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",

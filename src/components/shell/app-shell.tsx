@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { Seal, Wordmark } from "@/components/marketing/wordmark";
+import { MobileNav } from "@/components/shell/mobile-nav";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { SideNav } from "@/components/shell/side-nav";
 import type { NavItem } from "@/lib/auth/nav";
@@ -29,7 +30,7 @@ export function AppShell({ role, nav, children }: AppShellProps) {
           </Link>
         </div>
         <div className="border-primary-foreground/10 mx-5 border-t pt-4">
-          <p className="text-primary-foreground/50 px-3 pb-2 font-mono text-[10px] font-medium tracking-[0.16em] uppercase">
+          <p className="text-primary-foreground/65 px-3 pb-2 font-mono text-[10px] font-medium tracking-[0.16em] uppercase">
             {roleLabel(role)} panel
           </p>
           <SideNav nav={nav} variant="board" className="px-1 pb-4" />
@@ -44,27 +45,7 @@ export function AppShell({ role, nav, children }: AppShellProps) {
 
       {/* Mobile header */}
       <header className="bg-background/95 supports-[backdrop-filter]:bg-background/75 sticky top-0 z-40 flex h-14 items-center gap-3 border-b px-4 backdrop-blur lg:hidden">
-        <details className="group relative">
-          <summary
-            aria-label="Open navigation menu"
-            className="hover:bg-accent -ml-2 flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden"
-          >
-            <span className="flex flex-col gap-1" aria-hidden="true">
-              <span className="bg-foreground h-0.5 w-4 rounded-full" />
-              <span className="bg-foreground h-0.5 w-4 rounded-full" />
-              <span className="bg-foreground h-0.5 w-4 rounded-full" />
-            </span>
-          </summary>
-          <div className="bg-background absolute top-11 left-0 z-50 min-w-56 rounded-lg border p-2 shadow-lg">
-            <p className="text-muted-foreground px-3 pb-2 font-mono text-[10px] tracking-[0.16em] uppercase">
-              {roleLabel(role)} panel
-            </p>
-            <SideNav nav={nav} variant="paper" />
-            <div className="border-border mt-2 border-t pt-2">
-              <SignOutButton />
-            </div>
-          </div>
-        </details>
+        <MobileNav roleLabel={roleLabel(role)} nav={nav} />
         <Wordmark />
         <span className="text-muted-foreground ml-auto font-mono text-[11px] tracking-[0.1em] uppercase">
           {roleLabel(role)}

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 test("skip link is the first Tab stop and jumps to main content", async ({ page }) => {
   await page.goto("/");
@@ -51,4 +52,16 @@ test("login tabs move selection with keyboard arrows and Home", async ({ page })
   await expect(passkeyTab).toHaveAttribute("aria-selected", "true");
   await expect(passkeyTab).toBeFocused();
   await expect(page.getByTestId("password-login-form")).toBeHidden();
+});
+
+test("marketing and auth surfaces pass an axe serious/critical scan", async ({ page }) => {
+  for (const path of ["/", "/login", "/request-access", "/signup"]) {
+    await page.goto(path);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    const serious = results.violations.filter(
+      (violation) => violation.impact === "critical" || violation.impact === "serious",
+    );
+    const summary = serious.map((violation) => `${violation.id}(${violation.impact})`).join(", ");
+    expect(serious, `${path} axe violations: ${summary}`).toEqual([]);
+  }
 });
