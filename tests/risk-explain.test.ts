@@ -187,6 +187,19 @@ describe("student tier", () => {
       ]);
       codesStayHidden(decision);
     });
+
+    it("sends students to faculty after an escalated verification", () => {
+      const decision = decide(
+        input(strongSignals(), { recentSecurityFailures: 0, reviewRequested: true }),
+      );
+      expect(decision.outcome).toBe("flag");
+      const explanation = explainDecision(decision, "student");
+      expect(explanation.headline).toContain("faculty review");
+      expect(explanation.actions).toEqual([
+        "Your verification request was sent to your faculty member for review — follow up with them.",
+      ]);
+      codesStayHidden(decision);
+    });
   });
 });
 
@@ -250,6 +263,16 @@ describe("faculty tier", () => {
         { recentSecurityFailures: 0, missedSpotRecheck: true },
       ),
     );
+    const escalatedDecision = decide(
+      input(
+        [
+          identitySessionSignal(),
+          challengePresenceSignal("session_1"),
+          deviceTrustSignal({ state: "active" }),
+        ],
+        { recentSecurityFailures: 0, reviewRequested: true },
+      ),
+    );
 
     expect(explainDecision(spoofDecision, "faculty").message).toContain(
       "Face check: suspected photo/video",
@@ -259,6 +282,9 @@ describe("faculty tier", () => {
       "Face check inconclusive",
     );
     expect(explainDecision(spotDecision, "faculty").message).toContain("Spot re-check missed");
+    expect(explainDecision(escalatedDecision, "faculty").message).toContain(
+      "Step-up escalated to review",
+    );
   });
 });
 

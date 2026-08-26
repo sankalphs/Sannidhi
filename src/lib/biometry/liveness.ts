@@ -7,6 +7,22 @@ export type LivenessAssessment = {
   frameCount: number;
 };
 
+/**
+ * Verdict for client-supplied score aggregates, mirroring assessLiveness's
+ * threshold order: capture quality gates before motion.
+ */
+export function verdictFromScores(
+  motionScore: number,
+  brightnessScore: number,
+  frameCount: number,
+): LivenessAssessment["verdict"] {
+  if (frameCount < LIVENESS_MIN_FRAMES || brightnessScore < LIVENESS_BRIGHTNESS_MIN) {
+    return "insufficient";
+  }
+  if (motionScore < LIVENESS_MOTION_FLOOR) return "static";
+  return "live";
+}
+
 export function assessLiveness(
   frames: { vector: number[]; meanLuminance: number }[],
 ): LivenessAssessment {
@@ -25,11 +41,10 @@ export function assessLiveness(
   }
   const motionScore = frameCount > 1 ? pairDeltaSum / (frameCount - 1) : 0;
 
-  if (frameCount < LIVENESS_MIN_FRAMES || brightnessScore < LIVENESS_BRIGHTNESS_MIN) {
-    return { verdict: "insufficient", motionScore, brightnessScore, frameCount };
-  }
-  if (motionScore < LIVENESS_MOTION_FLOOR) {
-    return { verdict: "static", motionScore, brightnessScore, frameCount };
-  }
-  return { verdict: "live", motionScore, brightnessScore, frameCount };
+  return {
+    verdict: verdictFromScores(motionScore, brightnessScore, frameCount),
+    motionScore,
+    brightnessScore,
+    frameCount,
+  };
 }

@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   LIVENESS_BRIGHTNESS_MIN,
+  LIVENESS_MIN_FRAMES,
   LIVENESS_MOTION_FLOOR,
   assessLiveness,
+  verdictFromScores,
 } from "../src/lib/biometry";
 
 const DIMS = 24;
@@ -63,5 +65,24 @@ describe("assessLiveness", () => {
     expect(assessment.verdict).toBe("insufficient");
     expect(assessment.motionScore).toBe(0);
     expect(assessment.frameCount).toBe(0);
+  });
+});
+
+describe("verdictFromScores", () => {
+  it("returns insufficient below the frame minimum even with strong motion", () => {
+    expect(verdictFromScores(0.05, 0.5, LIVENESS_MIN_FRAMES - 1)).toBe("insufficient");
+  });
+
+  it("checks brightness before motion so a dark static scene is still insufficient", () => {
+    expect(verdictFromScores(0, LIVENESS_BRIGHTNESS_MIN - 0.001, 10)).toBe("insufficient");
+  });
+
+  it("returns static below the motion floor and live from the floor up", () => {
+    expect(verdictFromScores(LIVENESS_MOTION_FLOOR - 0.0001, 0.5, 10)).toBe("static");
+    expect(verdictFromScores(LIVENESS_MOTION_FLOOR, 0.5, 10)).toBe("live");
+  });
+
+  it("treats exact frame and brightness thresholds as passing", () => {
+    expect(verdictFromScores(0.05, LIVENESS_BRIGHTNESS_MIN, LIVENESS_MIN_FRAMES)).toBe("live");
   });
 });

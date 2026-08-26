@@ -68,6 +68,7 @@ export async function appendAttendanceEvent(
     eventHash,
     decision: args.decision,
     capturedAt: args.capturedAt,
+    ...(args.sessionId !== undefined ? { sessionId: args.sessionId } : {}),
     ...(args.recordedByUserId !== undefined ? { recordedByUserId: args.recordedByUserId } : {}),
     ...(args.note !== undefined ? { note: args.note } : {}),
   });
@@ -157,13 +158,15 @@ export async function countRecentChallengeAnomalies(
 }
 
 /**
- * Latest attendance event per student for one section since a timestamp
- * (usually session start). Shared by the faculty board and spot-recheck
- * eligibility so both agree on what "latest" means.
+ * Latest attendance event per student for one session since a timestamp
+ * (usually that same session's start). Shared by the faculty board and
+ * spot-recheck eligibility so both agree on what "latest" means. Scoped to the
+ * session, not just the section: late-resolving challenges from an older
+ * session otherwise masquerade as this session's latest events.
  */
 export async function latestEventsByStudentSince(
   ctx: MutationCtx | QueryCtx,
-  args: { sectionId: Id<"sections">; sinceMs: number },
+  args: { sectionId: Id<"sections">; sessionId: Id<"class_sessions">; sinceMs: number },
 ): Promise<Map<Id<"users">, Doc<"attendance_events">>> {
   const events = await ctx.db
     .query("attendance_events")
@@ -174,6 +177,7 @@ export async function latestEventsByStudentSince(
 
   const latestByStudent = new Map<Id<"users">, Doc<"attendance_events">>();
   for (const event of events) {
+    if (event.sessionId !== args.sessionId) continue;
     const current = latestByStudent.get(event.studentId);
     if (current === undefined || event.capturedAt >= current.capturedAt) {
       latestByStudent.set(event.studentId, event);

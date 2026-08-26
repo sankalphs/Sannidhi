@@ -1,4 +1,3 @@
-// Must stay in sync with convex/challenges.ts FACE_EMBEDDING_VERSION.
 export const FACE_EMBEDDING_VERSION = "faceembed/v1";
 
 export const EMBEDDING_GRID = 24;

@@ -1,13 +1,11 @@
 import { ConvexError, v } from "convex/values";
 
-import type { Decision, EvidenceSignal } from "../src/lib/decision";
+import type { EvidenceSignal } from "../src/lib/decision";
 import {
-  LIVENESS_BRIGHTNESS_MIN,
-  LIVENESS_MIN_FRAMES,
-  LIVENESS_MOTION_FLOOR,
+  FACE_EMBEDDING_VERSION,
   classifyFaceAttempt,
+  verdictFromScores,
   type FaceClassification,
-  type LivenessAssessment,
 } from "../src/lib/biometry";
 import {
   challengePresenceSignal,
@@ -63,9 +61,6 @@ export const SPOT_RECHECK_TTL_MS = parseTtlMs(
 export const MAX_CHALLENGE_ATTEMPTS = 3;
 const SWEEP_BATCH_SIZE = 50;
 
-// Must stay in sync with src/lib/biometry/constants.ts FACE_EMBEDDING_VERSION.
-export const FACE_EMBEDDING_VERSION = "faceembed/v1";
-
 export async function requireActorUser(
   ctx: MutationCtx | QueryCtx,
   actorToken: string,
@@ -105,19 +100,6 @@ const COMPLETION_LEDGER_TYPES: Record<ChallengeKind, string> = {
   checkin_stepup: "attendance.stepup_completed",
   spot_recheck: "attendance.spot_recheck_result",
 };
-
-/** Mirrors assessLiveness thresholds for client-supplied score aggregates. */
-function livenessFromScores(scores: {
-  frameCount: number;
-  motionScore: number;
-  brightnessScore: number;
-}): LivenessAssessment {
-  if (scores.frameCount < LIVENESS_MIN_FRAMES || scores.brightnessScore < LIVENESS_BRIGHTNESS_MIN) {
-    return { ...scores, verdict: "insufficient" };
-  }
-  if (scores.motionScore < LIVENESS_MOTION_FLOOR) return { ...scores, verdict: "static" };
-  return { ...scores, verdict: "live" };
-}
 
 function personOutcome(classification: FaceClassification): FaceMatchOutcome {
   switch (classification.verdict) {
@@ -160,17 +142,6 @@ async function loadActiveTemplate(
   }
   return active.faceEmbedding;
 }
-
-/** The decision persisted alongside the event that originated a challenge. */
-async function originDecision(
-  ctx: MutationCtx,
-  originEventId: Id<"attendance_events"> | undefined,
-): Promise<Decision | null> {
-  if (originEventId === undefined) return null;
-  const event = await ctx.db.get(originEventId);
-  return event?.decision ?? null;
-}
-
 /**
  * Durable expired transition. spot_recheck misses flag the student immediately
  * (the whole point of the re-check); expired step-ups only flip status so the
@@ -225,7 +196,11 @@ async function eligibleSpotRecheckStudents(
   now: number,
 ): Promise<Array<Id<"users">>> {
   const [latestByStudent, pending] = await Promise.all([
-    latestEventsByStudentSince(ctx, { sectionId: session.sectionId, sinceMs: session.startedAt }),
+    latestEventsByStudentSince(ctx, {
+      sectionId: session.sectionId,
+      sessionId: session._id,
+      sinceMs: session.startedAt,
+    }),
     ctx.db
       .query("verification_challenges")
       .withIndex("by_session_status", (q) => q.eq("sessionId", session._id).eq("status", "pending"))
@@ -325,26 +300,34 @@ export const completeWithFace = mutation({
         ? classifyFaceAttempt({
             template,
             embedding: args.embedding,
-            liveness: livenessFromScores(args.liveness),
+            liveness: {
+              frameCount: args.liveness.frameCount,
+              motionScore: args.liveness.motionScore,
+              brightnessScore: args.liveness.brightnessScore,
+              verdict: verdictFromScores(
+                args.liveness.motionScore,
+                args.liveness.brightnessScore,
+                args.liveness.frameCount,
+              ),
+            },
           })
         : { verdict: "inconclusive" as const, similarity: null };
 
     if (classification.verdict === "inconclusive") {
       const attempts = challenge.attempts + 1;
       const exhausted = attempts >= MAX_CHALLENGE_ATTEMPTS;
-      let decision: Decision | null = null;
       if (exhausted) {
         await ctx.db.patch(challenge._id, { attempts, status: "failed", resolvedAt: now });
-        decision =
-          (await originDecision(ctx, challenge.originEventId)) ??
-          decide({
-            signals: [
-              ...(await sessionSignals(ctx, caller._id, challenge.sessionId)),
-              faceMatchSignal(personOutcome(classification)),
-            ],
-            anomalies: { recentSecurityFailures: 0 },
-            now,
-          });
+        // A fresh decision (never the origin step_up's) so the flagged event
+        // carries evidence of the failed attempts' category.
+        const decision = decide({
+          signals: [
+            ...(await sessionSignals(ctx, caller._id, challenge.sessionId)),
+            faceMatchSignal({ verdict: "inconclusive" }),
+          ],
+          anomalies: { recentSecurityFailures: 0, reviewRequested: true },
+          now,
+        });
         const session = await ctx.db.get(challenge.sessionId);
         if (session !== null) {
           await appendAttendanceEvent(ctx, {
@@ -465,13 +448,11 @@ export const escalateToReview = mutation({
 
     await ctx.db.patch(challenge._id, { status: "escalated", resolvedAt: now });
 
-    const decision =
-      (await originDecision(ctx, challenge.originEventId)) ??
-      decide({
-        signals: await sessionSignals(ctx, caller._id, challenge.sessionId),
-        anomalies: { recentSecurityFailures: 0 },
-        now,
-      });
+    const decision = decide({
+      signals: await sessionSignals(ctx, caller._id, challenge.sessionId),
+      anomalies: { recentSecurityFailures: 0, reviewRequested: true },
+      now,
+    });
 
     await appendAttendanceEvent(ctx, {
       institutionId: session.institutionId,

@@ -7,7 +7,7 @@ import { buildEnrollmentGateInput } from "../src/lib/enrollment/mapping";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { FACE_EMBEDDING_VERSION } from "./challenges";
+import { FACE_EMBEDDING_VERSION } from "../src/lib/biometry";
 import { verifyActorToken } from "./lib/actor";
 
 export const BIOMETRIC_CONSENT_VERSION = "biometric-consent-1";

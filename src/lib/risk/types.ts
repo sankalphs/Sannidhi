@@ -9,6 +9,7 @@ export type SignalStatus = (typeof SIGNAL_STATUSES)[number];
 export type AnomalyContext = {
   recentSecurityFailures: number;
   missedSpotRecheck?: boolean;
+  reviewRequested?: boolean;
 };
 
 export type RiskInput = {

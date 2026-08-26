@@ -40,6 +40,9 @@ export function FaceCapture({
   className?: string;
 }) {
   const [status, setStatus] = useState<CaptureStatus>("off");
+  // True while getUserMedia is in flight; blocks re-entry so a double click
+  // cannot leak the first stream.
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -62,10 +65,13 @@ export function FaceCapture({
   }, [stopStream]);
 
   const startCamera = useCallback(async () => {
+    if (starting || streamRef.current !== null) return;
     setError(null);
+    setStarting(true);
     if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
       setError("Camera is unavailable on this device.");
       onUnavailable?.("unavailable");
+      setStarting(false);
       return;
     }
     try {
@@ -92,8 +98,10 @@ export function FaceCapture({
           : "Camera is unavailable on this device.",
       );
       onUnavailable?.(denied ? "denied" : "unavailable");
+    } finally {
+      setStarting(false);
     }
-  }, [onUnavailable]);
+  }, [onUnavailable, starting]);
 
   const capture = useCallback(async () => {
     const video = videoRef.current;
@@ -188,7 +196,7 @@ export function FaceCapture({
         <Button
           type="button"
           data-testid={status === "off" ? "face-start" : "face-capture"}
-          disabled={busy}
+          disabled={busy || starting}
           onClick={() => {
             if (status === "off") void startCamera();
             else void capture();

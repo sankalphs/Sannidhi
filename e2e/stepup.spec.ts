@@ -284,9 +284,10 @@ test("spot re-check: targeted and random requests reach the student", async () =
     .catch(() => false);
   if (hasStaleBanner) {
     await captureFace(studentPage);
-    await expect
-      .poll(async () => !(await banner.isVisible().catch(() => false)), { timeout: 90_000 })
-      .toBe(true);
+    // Settled challenges freeze the banner until explicitly dismissed.
+    await expect(studentPage.getByTestId("stepup-result")).toBeVisible({ timeout: 90_000 });
+    await studentPage.getByTestId("stepup-done").click();
+    await expect(banner).toHaveCount(0);
   }
 
   const recheckButton = facultyPage.getByTestId(`spot-recheck-${rowId}`);
