@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0Y7V2AGJQ1Y7MESYC5CJ768",
+  "strategy": "manual-commit",
+  "branch": "fix/audit-findings",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md",
+    "bun.lock",
+    "convex/challenges.ts",
+    "convex/checkin.ts",
+    "convex/lib/attendance_event.ts",
+    "e2e/a11y.spec.ts",
+    "next.config.ts",
+    "package.json",
+    "src/app/(faculty)/faculty/sessions/[sessionId]/live-board.tsx",
+    "src/app/(faculty)/faculty/sessions/[sessionId]/qr-panel.tsx",
+    "src/app/(student)/student/check-in/check-in-panel.tsx",
+    "src/app/layout.tsx",
+    "src/components/shell/app-shell.tsx",
+    "src/components/shell/side-nav.tsx"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 19420,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 72896,
+    "output_tokens": 571,
+    "api_call_count": 5
+  }
+}
