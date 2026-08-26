@@ -1,0 +1,36 @@
+Implementation task in D:\Coding\Sannidhi (branch feat/phase-5-audit-resilience, already checked out — work on top of current HEAD). Stack: Next.js App Router + Convex, bun runtime, TypeScript strict. Follow existing file conventions exactly. DO NOT commit. DO NOT edit convex/schema.ts (all phase-5 schema fields already exist) and do not touch convex/offlineSync.ts or src/lib/offline/ (another agent owns those right now).
+
+CONTEXT: Phase 5 correction workflow per docs/report.md §12: student dispute → routed to recording faculty → decision → NEW attendance event referencing the original; history is never rewritten. Spec table: original event preserved; audit record retains actor, time, reason, previous state, new state.
+
+FOUNDATION ALREADY LANDED (read these first):
+- `src/lib/attendance/lifecycle.ts`: ATTENDANCE_STATES, CORRECTIONABLE_STATES = ["verified","flagged","rejected"], AttendanceEventState.
+- `convex/lib/attendance_event.ts`: `appendAttendanceEvent(ctx, args)` seam — args {institutionId, studentId, sectionId, sessionId?, state: AttendanceEventState, origin?, correctsEventId?, decision?: Decision, recordedByUserId?, note?}; it stamps server time itself; passing state "corrected" REQUIRES correctsEventId pointing at an existing uncorrected event whose state ∈ CORRECTIONABLE_STATES (it validates this for you).
+- `convex/schema.ts` `attendance_requests` now has: institutionId, studentId, type ("correction"|"exemption"|"on_duty"), reason, status ("submitted"|"approved"|"dismissed" — old "reviewed" value removed), requestedAt, reviewedAt?, reviewedByUserId?, sessionId? (v.id class_sessions), eventId? (v.id attendance_events), decision? ("approved"|"dismissed"). Indexes: by_student_requested, by_student_status_requested, by_institution_status.
+- `convex/attendanceRequests.ts` currently has submitMyRequest + listMyRequests (student-scoped). The admin requests page exists at `src/app/(admin)/admin/requests/`.
+- `Decision` type lives in `src/lib/decision.ts` (read it — corrected events need a full Decision object).
+- Faculty session flow: `convex/classSessions.ts` — sessions carry facultyId; `verifyManually` there is the closest pattern for an attributable override writing both event_ledger entry + appendAttendanceEvent row.
+- Student UI: `src/app/(student)/student/requests/page.tsx` + requests-manager.tsx; history page `src/app/(student)/student/history/`. Faculty surfaces under `src/app/(faculty)/faculty/`; check `src/lib/auth/nav.ts` for how role nav items are declared.
+
+BUILD:
+
+1. STUDENT DISPUTE (`convex/attendanceRequests.ts`, extend submitMyRequest):
+   - For type="correction": require `eventId: v.id("attendance_events")`. Validate: the event belongs to the caller (event.studentId === caller._id), its state ∈ CORRECTIONABLE_STATES, it has no existing correction yet (query by_corrects_event), and no other open correction request targets the same eventId. Stamp the request with eventId AND sessionId (event.sessionId — if undefined reject with clear ConvexError; all current writers set sessionId).
+   - exemption/on_duty stay as-is (no linkage required).
+2. ROUTING + REVIEW QUERIES:
+   - New query for the recording faculty: submitted correction requests routed to them. Route = request.sessionId → session.facultyId === caller._id (join via class_sessions; also return session/course/student display info). Admin sees everything (extend the existing admin requests query/pattern instead if one exists — check how admin/requests/page.tsx gets data today and extend that path rather than duplicating).
+   - Include the disputed event's current state/outcome summary so the reviewer sees previous state without leaving the queue.
+3. REVIEW DECISION mutation (faculty who teaches the session; admin fallback allowed):
+   - approve → within ONE transaction: mark request approved (+reviewedByUserId, reviewedAt, decision:"approved", optional review note appended to a new optional `reviewNote?` field — check schema; if absent, fold note into existing note/reason storage instead of schema edits), then call `appendAttendanceEvent` with state:"corrected", correctsEventId=request.eventId, decision built as outcome "accept" (read src/lib/risk/engine.ts's outcomeToAttendanceState mapping to confirm "accept"→"verified" projection semantics), policyVersion from the ORIGINAL event's decision.policyVersion (preserve policy context per §12), reasonCodes like ["faculty_correction"], recordedByUserId=reviewer, note = student reason + reviewer note, origin "online".
+   - dismiss → mark dismissed (+reviewedByUserId/reviewedAt/decision:"dismissed"); no attendance change.
+   - Both emit event_ledger entries via internal.ledger.appendLedgerEvent: type "attendance_request_reviewed" with payload {requestId, decision, eventId, previousState}.
+   - Idempotence guard: approving an already-approved/dismissed request throws; approving when the event was already corrected throws clean error.
+4. STUDENT QUERY: extend listMyRequests to include the linked event/session labels (course code, session date, disputed event state, and post-review outcome) so the requests UI can show what happened.
+5. UI (match existing component style — read neighboring pages first):
+   - Student requests page: correction-type submissions gain an event picker — new small query listing the student's recent CORRECTIONABLE events (their history rows: label = course + capturedAt + state) to attach to a dispute. Show request status badges approved/dismissed (badge handling was just updated for the new statuses) and post-decision outcome.
+   - Faculty: add a review surface — minimal honest placement: a "Review queue" section on the faculty dashboard (`src/app/(faculty)/faculty/page.tsx`) listing routed disputes with reason, disputed event context, approve/dismiss controls (server actions/mutations like existing review-button pattern under admin/requests/review-button.tsx — mirror it).
+   - Admin requests page: ensure the new statuses/linkage render correctly.
+6. TESTS: unit-test what's pure. If the routing/approval logic requires DB, keep logic thin and rely on e2e later; but extract any pure helpers (e.g. building the corrected Decision from an original event) into a testable module `src/lib/attendance/correction.ts` with vitest tests in tests/correction.test.ts (@vitest-environment node).
+
+VERIFY before reporting: `bun run typecheck` green; eslint clean on touched files; `bunx vitest run tests/correction.test.ts` green; run FULL `bunx vitest run` to prove nothing regressed. No build/e2e.
+
+REPORT BACK: files changed w/ 1-line summaries, exact names/signatures of new exports (mutations/queries/lib fns), where the faculty review UI landed, deviations + reasons, verification outputs.
