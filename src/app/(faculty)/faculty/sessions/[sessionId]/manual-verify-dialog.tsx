@@ -39,13 +39,17 @@ export function ManualVerifyDialog({
   actorToken,
   sessionId,
   student,
+  mode = "verify",
   onClose,
 }: {
   actorToken: string;
   sessionId: Id<"class_sessions">;
   student: { id: Id<"users">; name: string };
+  /** "override" when the row already carries a verdict the faculty is replacing. */
+  mode?: "verify" | "override";
   onClose: () => void;
 }) {
+  const heading = mode === "override" ? "Override verdict" : "Verify manually";
   const verifyManually = useMutation(api.classSessions.verifyManually);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
@@ -89,7 +93,11 @@ export function ManualVerifyDialog({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`Verify ${student.name} manually`}
+      aria-label={
+        mode === "override"
+          ? `Override ${student.name}'s verdict`
+          : `Verify ${student.name} manually`
+      }
       onClose={requestClose}
       onCancel={handleCancel}
       onClick={(event) => {
@@ -107,7 +115,7 @@ export function ManualVerifyDialog({
         <X />
       </Button>
       <div className="flex flex-col gap-1">
-        <h2 className="text-base font-semibold">Verify manually</h2>
+        <h2 className="text-base font-semibold">{heading}</h2>
         <p className="text-muted-foreground text-sm">
           Record faculty-attested attendance for <span className="font-medium">{student.name}</span>{" "}
           with a mandatory auditable reason.

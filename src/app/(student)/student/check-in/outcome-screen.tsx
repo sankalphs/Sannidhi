@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  ArrowUpCircle,
   CheckCircle2,
   Flag,
   LogIn,
@@ -49,23 +48,26 @@ const FAILURE_ICON: Record<FailureVerdict, typeof ScanLine> = {
   malformed: ScanLine,
 };
 
-const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
+/**
+ * "ok" redemptions only ever settle to these outcomes — step-up decisions come
+ * back as kind "step_up" and render through StepUpChallenge instead.
+ */
+type SuccessOutcome = Exclude<DecisionOutcome, "step_up">;
+
+const OUTCOME_VERDICT: Record<SuccessOutcome, Verdict> = {
   accept: "accept",
-  step_up: "step-up",
   flag: "flag",
   reject: "reject",
 };
 
-const SUCCESS_ICON: Record<DecisionOutcome, typeof ScanLine> = {
+const SUCCESS_ICON: Record<SuccessOutcome, typeof ScanLine> = {
   accept: CheckCircle2,
-  step_up: ArrowUpCircle,
   flag: Flag,
   reject: XCircle,
 };
 
-const SUCCESS_ICON_STYLES: Record<DecisionOutcome, string> = {
+const SUCCESS_ICON_STYLES: Record<SuccessOutcome, string> = {
   accept: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
-  step_up: "bg-verdict-stepup/15 text-verdict-stepup",
   flag: "bg-verdict-flag/15 text-verdict-flag",
   reject: "bg-destructive/15 text-destructive",
 };
@@ -137,7 +139,7 @@ function SuccessScreen({
   onRetry: () => void;
 }) {
   const explanation = explainDecision(outcome.decision, "student");
-  const decisionOutcome = outcome.decision.outcome;
+  const decisionOutcome = outcome.decision.outcome as SuccessOutcome;
   const Icon = SUCCESS_ICON[decisionOutcome];
 
   return (

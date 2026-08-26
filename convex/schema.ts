@@ -238,7 +238,32 @@ export default defineSchema({
     faceTemplateRef: v.optional(v.string()),
     faceEnrolledAt: v.optional(v.number()),
     withdrawnAt: v.optional(v.number()),
+    faceEmbedding: v.optional(v.array(v.number())),
+    embeddingVersion: v.optional(v.string()),
   }).index("by_user", ["userId"]),
+
+  verification_challenges: defineTable({
+    institutionId: v.id("institutions"),
+    sessionId: v.id("class_sessions"),
+    studentId: v.id("users"),
+    kind: v.union(v.literal("checkin_stepup"), v.literal("spot_recheck")),
+    originEventId: v.optional(v.id("attendance_events")),
+    requestedByUserId: v.optional(v.id("users")),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("passed"),
+      v.literal("failed"),
+      v.literal("expired"),
+      v.literal("escalated"),
+    ),
+    attempts: v.number(),
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+  })
+    .index("by_student_status", ["studentId", "status"])
+    .index("by_session_status", ["sessionId", "status"])
+    .index("by_status_expires", ["status", "expiresAt"]),
 
   event_ledger: defineTable({
     institutionId: v.id("institutions"),

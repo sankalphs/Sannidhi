@@ -3,9 +3,9 @@
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
-import { useQuery } from "convex/react";
-import { ShieldCheck, Users } from "lucide-react";
-import { useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { ShieldCheck, Timer, Users } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { VerdictStamp } from "@/components/marketing/verdict-stamp";
@@ -18,8 +18,26 @@ import { ManualVerifyDialog } from "./manual-verify-dialog";
 export type BoardSnapshot = FunctionReturnType<typeof api.classSessions.getBoard>;
 type BoardRow = BoardSnapshot["rows"][number];
 type RowState = BoardRow["state"];
+type ChallengeInfo = NonNullable<BoardRow["challenge"]>;
+type SpotRecheckFailure = Extract<
+  FunctionReturnType<typeof api.challenges.requestSpotRecheck>,
+  { kind: "error" }
+>;
 
-const STATE_ORDER: readonly RowState[] = ["verified", "flagged", "pending", "rejected"];
+const STATE_ORDER: readonly RowState[] = [
+  "verified",
+  "challenged",
+  "flagged",
+  "pending",
+  "rejected",
+];
+
+const SPOT_ERROR_COPY: Record<SpotRecheckFailure["reason"], string> = {
+  unauthorized: "You are not authorized to request re-checks for this session.",
+  session_not_active: "The session is not active, so re-checks cannot be requested.",
+  no_eligible_students: "No verified students are available to re-check.",
+  student_not_eligible: "This student has no verifiable attendance to re-check.",
+};
 
 function formatClock(timestamp: number): string {
   const date = new Date(timestamp);
@@ -29,11 +47,54 @@ function formatClock(timestamp: number): string {
   return `${hh}:${mm}:${ss}`;
 }
 
+function formatMmSs(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
 function StateBadge({ state }: { state: RowState }) {
   if (state === "verified") return <VerdictStamp verdict="accept" label="Verified" />;
+  if (state === "challenged") return <VerdictStamp verdict="step-up" />;
   if (state === "flagged") return <VerdictStamp verdict="flag" label="Flagged" />;
   if (state === "pending") return <Badge variant="secondary">Pending</Badge>;
   return <VerdictStamp verdict="reject" label="Rejected" />;
+}
+
+/**
+ * Ticks client-side only; renders a placeholder until mounted so server and
+ * client markup agree on first paint.
+ */
+function ChallengeCountdown({
+  studentId,
+  challenge,
+}: {
+  studentId: Id<"users">;
+  challenge: ChallengeInfo;
+}) {
+  const [nowTs, setNowTs] = useState<number | null>(null);
+
+  useEffect(() => {
+    setNowTs(Date.now());
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const secondsLeft =
+    nowTs === null ? null : Math.max(0, Math.ceil((challenge.expiresAt - nowTs) / 1000));
+
+  return (
+    <span
+      data-testid={`challenge-countdown-${studentId}`}
+      className="border-verdict-stepup/40 bg-verdict-stepup/10 text-verdict-stepup inline-flex items-center gap-1 rounded-md border px-2 py-0.5 font-mono text-[11px] font-medium tabular-nums"
+    >
+      <Timer className="size-3" />
+      {secondsLeft === null ? "--:--" : formatMmSs(secondsLeft)}
+      <span className="font-sans font-normal tracking-normal normal-case">
+        {challenge.kind === "checkin_stepup" ? "verification" : "re-check"}
+      </span>
+    </span>
+  );
 }
 
 export function LiveBoard({
@@ -46,7 +107,10 @@ export function LiveBoard({
   initialSnapshot: BoardSnapshot;
 }) {
   const board = useQuery(api.classSessions.getBoard, { actorToken, sessionId }) ?? initialSnapshot;
+  const requestSpotRecheck = useMutation(api.challenges.requestSpotRecheck);
   const [verifyTarget, setVerifyTarget] = useState<BoardRow | null>(null);
+  const [recheckBusy, setRecheckBusy] = useState(false);
+  const [spotError, setSpotError] = useState<string | null>(null);
 
   const rows = [...board.rows].sort(
     (a, b) =>
@@ -56,6 +120,24 @@ export function LiveBoard({
 
   const countByState = (state: RowState) =>
     rows.reduce((total, row) => (row.state === state ? total + 1 : total), 0);
+
+  async function handleSpotRecheck(studentId?: Id<"users">) {
+    if (recheckBusy) return;
+    setRecheckBusy(true);
+    setSpotError(null);
+    try {
+      const result = await requestSpotRecheck(
+        studentId === undefined ? { actorToken, sessionId } : { actorToken, sessionId, studentId },
+      );
+      if (result.kind === "error") {
+        setSpotError(SPOT_ERROR_COPY[result.reason]);
+      }
+    } catch {
+      setSpotError("Could not request a re-check. Please try again.");
+    } finally {
+      setRecheckBusy(false);
+    }
+  }
 
   return (
     <>
@@ -71,7 +153,7 @@ export function LiveBoard({
           </CardDescription>
           <p className="text-muted-foreground text-sm">
             Manual verification records faculty-attested attendance with a mandatory auditable
-            reason.
+            reason. Re-checks ask a verified student to confirm their face on the spot.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -81,6 +163,12 @@ export function LiveBoard({
               className="border-verdict-accept/35 bg-verdict-accept/10 text-verdict-accept"
             >
               Verified {countByState("verified")}
+            </Badge>
+            <Badge
+              data-testid="board-count-challenged"
+              className="border-verdict-stepup/35 bg-verdict-stepup/10 text-verdict-stepup"
+            >
+              Challenged {countByState("challenged")}
             </Badge>
             <Badge
               data-testid="board-count-flagged"
@@ -97,7 +185,22 @@ export function LiveBoard({
             >
               Rejected {countByState("rejected")}
             </Badge>
+            <Button
+              variant="outline"
+              size="xs"
+              className="ml-auto"
+              data-testid="spot-recheck-random"
+              disabled={recheckBusy || countByState("verified") === 0}
+              onClick={() => void handleSpotRecheck()}
+            >
+              Random recheck
+            </Button>
           </div>
+          {spotError !== null ? (
+            <p className="text-destructive text-sm" data-testid="spot-error" role="alert">
+              {spotError}
+            </p>
+          ) : null}
           {rows.length === 0 ? (
             <EmptyState
               icon={Users}
@@ -118,7 +221,7 @@ export function LiveBoard({
                     <th scope="col" className="pr-4 pb-2">
                       Checked in
                     </th>
-                    <th scope="col" className="pb-2">
+                    <th scope="col" className="pr-4 pb-2">
                       Reasons
                     </th>
                     <th scope="col" className="pb-2">
@@ -138,7 +241,15 @@ export function LiveBoard({
                         <div className="text-muted-foreground text-xs">{row.email}</div>
                       </td>
                       <td className="py-2.5 pr-4">
-                        <StateBadge state={row.state} />
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <StateBadge state={row.state} />
+                          {row.state === "challenged" && row.challenge !== null ? (
+                            <ChallengeCountdown
+                              studentId={row.studentId}
+                              challenge={row.challenge}
+                            />
+                          ) : null}
+                        </div>
                       </td>
                       <td
                         className="text-muted-foreground py-2.5 pr-4 tabular-nums"
@@ -163,7 +274,26 @@ export function LiveBoard({
                         )}
                       </td>
                       <td className="py-2.5">
-                        {row.state !== "verified" ? (
+                        {row.state === "verified" ? (
+                          row.challenge?.kind === "spot_recheck" ? (
+                            <span
+                              data-testid={`spot-pending-${row.studentId}`}
+                              className="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"
+                            >
+                              Spot re-check requested
+                            </span>
+                          ) : (
+                            <Button
+                              variant="outline"
+                              size="xs"
+                              data-testid={`spot-recheck-${row.studentId}`}
+                              disabled={recheckBusy}
+                              onClick={() => void handleSpotRecheck(row.studentId)}
+                            >
+                              Recheck
+                            </Button>
+                          )
+                        ) : (
                           <Button
                             variant="outline"
                             size="xs"
@@ -171,10 +301,8 @@ export function LiveBoard({
                             onClick={() => setVerifyTarget(row)}
                           >
                             <ShieldCheck />
-                            Verify manually
+                            {row.state === "pending" ? "Verify" : "Override"}
                           </Button>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
                         )}
                       </td>
                     </tr>
@@ -190,6 +318,7 @@ export function LiveBoard({
           actorToken={actorToken}
           sessionId={sessionId}
           student={{ id: verifyTarget.studentId, name: verifyTarget.studentName }}
+          mode={verifyTarget.state === "pending" ? "verify" : "override"}
           onClose={() => setVerifyTarget(null)}
         />
       ) : null}

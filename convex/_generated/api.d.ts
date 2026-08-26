@@ -12,6 +12,7 @@ import type * as accessRequests from "../accessRequests.js";
 import type * as accounts from "../accounts.js";
 import type * as accountsInternal from "../accountsInternal.js";
 import type * as attendanceRequests from "../attendanceRequests.js";
+import type * as challenges from "../challenges.js";
 import type * as checkin from "../checkin.js";
 import type * as classSessions from "../classSessions.js";
 import type * as crons from "../crons.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   accounts: typeof accounts;
   accountsInternal: typeof accountsInternal;
   attendanceRequests: typeof attendanceRequests;
+  challenges: typeof challenges;
   checkin: typeof checkin;
   classSessions: typeof classSessions;
   crons: typeof crons;

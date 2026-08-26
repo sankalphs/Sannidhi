@@ -18,6 +18,7 @@ import {
 import { Input } from "@/components/ui/input";
 
 import { OutcomeScreen, type CheckInOutcome } from "./outcome-screen";
+import { StepUpChallenge, type StepUpChallengeRef } from "./step-up-challenge";
 
 export type ActiveClassSession = {
   sessionId: string;
@@ -26,6 +27,12 @@ export type ActiveClassSession = {
   sectionName: string;
   venueName: string;
   windowEndsAt: number;
+};
+
+type StepUpOutcome = {
+  challenge: StepUpChallengeRef;
+  courseCode: string;
+  venueName: string;
 };
 
 type CameraState = "off" | "active" | "unavailable";
@@ -76,6 +83,7 @@ export function CheckInPanel({
 }) {
   const redeemChallenge = useMutation(api.checkin.redeemChallenge);
   const [outcome, setOutcome] = useState<CheckInOutcome | null>(null);
+  const [stepUp, setStepUp] = useState<StepUpOutcome | null>(null);
   const [code, setCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [cameraState, setCameraState] = useState<CameraState>("off");
@@ -141,6 +149,15 @@ export function CheckInPanel({
               decidedAt: result.decidedAt,
             },
           });
+        } else if (result.kind === "step_up") {
+          setStepUp({
+            challenge: {
+              _id: result.challenge._id,
+              expiresAt: result.challenge.expiresAt,
+            },
+            courseCode: result.courseCode,
+            venueName: result.venueName,
+          });
         } else if (result.kind === "rate_limited") {
           setOutcome({ kind: "rate_limited", retryAfterSeconds: result.retryAfterSeconds });
         } else {
@@ -178,7 +195,7 @@ export function CheckInPanel({
   }, [pendingToken, submit]);
 
   useEffect(() => {
-    if (outcome !== null) return;
+    if (outcome !== null || stepUp !== null) return;
     let cancelled = false;
     let stream: MediaStream | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -248,12 +265,24 @@ export function CheckInPanel({
       cancelled = true;
       stopEverything();
     };
-  }, [outcome]);
+  }, [outcome, stepUp]);
 
   const secondsLeft = useSecondsUntil(active?.windowEndsAt ?? Number.MAX_SAFE_INTEGER);
 
   if (outcome !== null) {
     return <OutcomeScreen outcome={outcome} onRetry={() => setOutcome(null)} />;
+  }
+
+  if (stepUp !== null) {
+    return (
+      <StepUpChallenge
+        actorToken={actorToken}
+        challenge={stepUp.challenge}
+        courseCode={stepUp.courseCode}
+        venueName={stepUp.venueName}
+        onDismiss={() => setStepUp(null)}
+      />
+    );
   }
 
   return (

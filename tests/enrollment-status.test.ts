@@ -1,6 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: () => {} }) }));
 
 import type { DeviceState } from "@/lib/devices/lifecycle";
+import type { BiometricRecordView } from "@/app/(student)/student/devices/biometrics-card";
+import { deriveBiometricUiState } from "@/app/(student)/student/devices/biometrics-card";
 import { buildEnrollmentGateInput } from "@/lib/enrollment/mapping";
 import { ENROLLMENT_STEPS, missingStepCopy } from "@/lib/enrollment/ui";
 
@@ -158,5 +162,36 @@ describe("buildEnrollmentGateInput", () => {
         biometric: null,
       }).biometricConsentRecorded,
     ).toBe(false);
+  });
+});
+
+describe("deriveBiometricUiState", () => {
+  const record = (overrides: Partial<BiometricRecordView>): BiometricRecordView => ({
+    consentVersion: "biometric-consent-1",
+    consentedAt: 10,
+    faceTemplateRef: null,
+    faceEnrolledAt: null,
+    withdrawnAt: null,
+    ...overrides,
+  });
+
+  it("treats a missing or withdrawn record as no consent", () => {
+    expect(deriveBiometricUiState(null)).toBe("no-consent");
+    expect(deriveBiometricUiState(record({ consentedAt: null }))).toBe("no-consent");
+    // Withdrawal returns the student to the pre-consent surface so re-enrolling works.
+    expect(deriveBiometricUiState(record({ withdrawnAt: 20 }))).toBe("no-consent");
+  });
+
+  it("distinguishes consent-only records from enrolled face templates", () => {
+    expect(deriveBiometricUiState(record({}))).toBe("consented");
+    expect(
+      deriveBiometricUiState(
+        record({
+          faceTemplateRef: "face-template/ref-abc",
+          faceEnrolledAt: 30,
+          embeddingVersion: "faceembed/v1",
+        }),
+      ),
+    ).toBe("face-enrolled");
   });
 });

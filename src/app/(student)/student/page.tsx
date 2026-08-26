@@ -9,8 +9,26 @@ import { loadEnrollmentGate } from "@/lib/enrollment/load";
 import type { EnrollmentGateResult } from "@/lib/enrollment/gate";
 import { isPasskeyRecommended } from "@/lib/enrollment/gate";
 import { ENROLLMENT_STEPS, missingStepCopy } from "@/lib/enrollment/ui";
+import { mintActorToken } from "@/lib/auth/actor-token";
+import { getActiveSession } from "@/lib/auth/server";
+
+import { PendingChallengeBanner } from "./check-in/step-up-challenge";
 
 export const dynamic = "force-dynamic";
+
+async function loadActorToken(): Promise<string | null> {
+  try {
+    const session = await getActiveSession();
+    if (session === null) return null;
+    return await mintActorToken({
+      userId: session.userId,
+      role: session.role,
+      ...(session.sid !== undefined ? { sid: session.sid } : {}),
+    });
+  } catch {
+    return null;
+  }
+}
 
 function EnrollmentChecklist({
   completedSteps,
@@ -80,7 +98,7 @@ function PasskeyRecommendation() {
 }
 
 export default async function StudentPage() {
-  const gate = await loadEnrollmentGate();
+  const [gate, actorToken] = await Promise.all([loadEnrollmentGate(), loadActorToken()]);
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -88,6 +106,7 @@ export default async function StudentPage() {
         title="Student dashboard"
         description="Your attendance at a glance."
       />
+      {actorToken !== null ? <PendingChallengeBanner actorToken={actorToken} /> : null}
       {gate.locked ? <EnrollmentChecklist completedSteps={gate.completedSteps} /> : null}
       {isPasskeyRecommended(gate) ? <PasskeyRecommendation /> : null}
       <div className="grid gap-4 md:grid-cols-2">

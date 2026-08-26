@@ -8,10 +8,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { AttendanceRecordState, AttendanceSummary } from "@/lib/attendance/projection";
 import { cn } from "@/lib/utils";
 
+/**
+ * Calendar rows carry the projected attendance state plus the raw "step_up"
+ * state, which surfaces as "Challenged" until a follow-up event settles it.
+ */
+export type HistoryRecordState = AttendanceRecordState | "step_up";
+
 export type HistoryViewRecord = {
   dateKey: string;
   courseCode: string;
-  state: AttendanceRecordState;
+  state: HistoryRecordState;
 };
 
 export type SubjectAttendance = {
@@ -39,20 +45,22 @@ const MONTH_NAMES = [
   "December",
 ];
 
-const STATE_CHIP_CLASSES: Record<AttendanceRecordState, string> = {
+const STATE_CHIP_CLASSES: Record<HistoryRecordState, string> = {
   verified: "border-emerald-500/40 bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
   flagged: "border-amber-500/40 bg-amber-500/15 text-amber-700 dark:text-amber-400",
   pending: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-400",
   rejected: "border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-400",
   corrected: "border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  step_up: "border-verdict-stepup/40 bg-verdict-stepup/15 text-verdict-stepup",
 };
 
-const STATE_LEGEND_LABELS: Record<AttendanceRecordState, string> = {
+const STATE_LEGEND_LABELS: Record<HistoryRecordState, string> = {
   verified: "Verified",
   flagged: "Flagged",
   pending: "Pending",
   rejected: "Rejected",
   corrected: "Corrected",
+  step_up: "Challenged",
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -194,7 +202,7 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
         })}
       </div>
       <div className="flex flex-wrap gap-x-4 gap-y-1">
-        {(Object.keys(STATE_CHIP_CLASSES) as AttendanceRecordState[]).map((state) => (
+        {(Object.keys(STATE_CHIP_CLASSES) as HistoryRecordState[]).map((state) => (
           <span key={state} className="flex items-center gap-1.5 text-xs">
             <span className={cn("size-2.5 rounded-full border", STATE_CHIP_CLASSES[state])} />
             <span className="text-muted-foreground">{STATE_LEGEND_LABELS[state]}</span>
