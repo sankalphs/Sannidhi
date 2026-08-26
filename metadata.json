@@ -3,7 +3,7 @@
   "checkpoint_id": "01M0YCN3B7CTQG7XBNVC2XJKS4",
   "strategy": "manual-commit",
   "branch": "feat/phase-5-audit-resilience",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "convex/attendanceRequests.ts",
     "convex/challenges.ts",
@@ -33,6 +33,13 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
