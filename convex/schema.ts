@@ -303,7 +303,7 @@ export default defineSchema({
     pausedAt: v.optional(v.number()),
     closedAt: v.optional(v.number()),
     restartOfSessionId: v.optional(v.id("class_sessions")),
-    offlineKeyHash: v.optional(v.string()),
+    offlineKey: v.optional(v.string()),
   })
     .index("by_faculty_status", ["facultyId", "status"])
     .index("by_section_started", ["sectionId", "startedAt"])

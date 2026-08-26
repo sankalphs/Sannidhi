@@ -21,6 +21,7 @@ export const RISK_REASON_CODES = {
   spotRecheckMissed: "spot_recheck_missed",
   stepupEscalatedReview: "stepup_escalated_review",
   facultyManualOverride: "faculty_manual_override",
+  offlineCapture: "offline_capture",
 } as const;
 
 export type AttendanceState = "verified" | "step_up" | "flagged" | "rejected";

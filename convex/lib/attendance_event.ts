@@ -40,6 +40,8 @@ const ANOMALY_LOOKBACK_MS = 10 * 60_000;
  * Server-time authority: this seam stamps capturedAt itself; callers never
  * pass a device clock. Corrections must reference an existing event whose
  * state is correctionable and that has not been corrected before.
+ * syncNonceHash is stamped only by offline sync (origin "offline-faculty")
+ * as the replay-dedupe key checked against by_nonce_hash.
  */
 export async function appendAttendanceEvent(
   ctx: MutationCtx,
@@ -54,6 +56,7 @@ export async function appendAttendanceEvent(
     decision?: Decision;
     recordedByUserId?: Id<"users">;
     note?: string;
+    syncNonceHash?: string;
   },
 ): Promise<Id<"attendance_events">> {
   if (!isStartableState(args.state)) {
@@ -122,6 +125,7 @@ export async function appendAttendanceEvent(
     ...(args.correctsEventId !== undefined ? { correctsEventId: args.correctsEventId } : {}),
     ...(args.recordedByUserId !== undefined ? { recordedByUserId: args.recordedByUserId } : {}),
     ...(args.note !== undefined ? { note: args.note } : {}),
+    ...(args.syncNonceHash !== undefined ? { syncNonceHash: args.syncNonceHash } : {}),
   });
 }
 
