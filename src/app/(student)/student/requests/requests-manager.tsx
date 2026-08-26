@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "../../../../../convex/_generated/api";
+import type { Id } from "../../../../../convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import { ClipboardList, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -25,6 +26,16 @@ function formatDate(ms: number): string {
   });
 }
 
+function formatDay(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-IN", { dateStyle: "medium" });
+}
+
+function RequestStatusBadge({ status }: { status: "submitted" | "approved" | "dismissed" }) {
+  if (status === "submitted") return <Badge variant="secondary">submitted</Badge>;
+  if (status === "approved") return <Badge>approved</Badge>;
+  return <Badge variant="outline">dismissed</Badge>;
+}
+
 function describeError(cause: unknown): string {
   if (typeof cause === "object" && cause !== null && "data" in cause) {
     const data = (cause as { data?: unknown }).data;
@@ -38,9 +49,13 @@ function describeError(cause: unknown): string {
 
 export function RequestsManager({ actorToken }: { actorToken: string }) {
   const requests = useQuery(api.attendanceRequests.listMyRequests, { actorToken });
+  const correctionableEvents = useQuery(api.attendanceRequests.listMyCorrectionableEvents, {
+    actorToken,
+  });
   const submitRequest = useMutation(api.attendanceRequests.submitMyRequest);
 
   const [type, setType] = useState<"correction" | "exemption" | "on_duty">("correction");
+  const [eventId, setEventId] = useState<string>("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,10 +63,18 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
 
   async function submit() {
     if (submitting) return;
+    if (type === "correction" && eventId === "") return;
     setSubmitting(true);
     setError(null);
     try {
-      await submitRequest({ actorToken, type, reason });
+      await submitRequest({
+        actorToken,
+        type,
+        reason,
+        ...(type === "correction" && eventId !== ""
+          ? { eventId: eventId as Id<"attendance_events"> }
+          : {}),
+      });
       setReason("");
       setJustFiled(true);
       setTimeout(() => setJustFiled(false), 4000);
@@ -92,6 +115,36 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
               <option value="on_duty">On-duty</option>
             </select>
           </div>
+          {type === "correction" ? (
+            <div className="border-input bg-background ring-offset-background focus-visible:ring-ring flex max-w-md items-center gap-2 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none">
+              <label className="text-muted-foreground shrink-0 text-sm" htmlFor="request-event">
+                Record
+              </label>
+              <select
+                id="request-event"
+                aria-label="Attendance record to dispute"
+                value={eventId}
+                onChange={(event) => setEventId(event.target.value)}
+                className="bg-background w-full text-sm focus-visible:outline-none"
+                data-testid="correction-event-picker"
+              >
+                <option value="">Select the record…</option>
+                {(correctionableEvents ?? []).map((event) => (
+                  <option key={event.eventId} value={event.eventId}>
+                    {`${event.courseCode} · ${formatDay(event.capturedAt)} · ${event.state}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
+          {type === "correction" &&
+          correctionableEvents !== undefined &&
+          correctionableEvents.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No correctable records right now — only verified, flagged or rejected check-ins can be
+              disputed.
+            </p>
+          ) : null}
           <textarea
             aria-label="Reason"
             placeholder={`Why do you need this? (min ${MIN_REASON_LENGTH} characters)`}
@@ -103,7 +156,11 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
           <div className="flex items-center gap-3">
             <Button
               onClick={() => void submit()}
-              disabled={submitting || reason.trim().length < MIN_REASON_LENGTH}
+              disabled={
+                submitting ||
+                reason.trim().length < MIN_REASON_LENGTH ||
+                (type === "correction" && eventId === "")
+              }
             >
               {submitting ? <Loader2 className="animate-spin" /> : null}
               Submit request
@@ -143,13 +200,19 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
                 <div className="flex min-w-0 flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{TYPE_LABELS[request.type] ?? request.type}</span>
-                    {request.status === "submitted" ? (
-                      <Badge variant="secondary">submitted</Badge>
-                    ) : (
-                      <Badge>{request.status}</Badge>
-                    )}
+                    <RequestStatusBadge status={request.status} />
                   </div>
                   <p className="text-muted-foreground text-sm">{request.reason}</p>
+                  {request.eventId !== undefined ? (
+                    <p className="text-muted-foreground text-xs" data-testid="disputed-record-line">
+                      Disputed: {request.courseCode ?? "course"}
+                      {request.sessionStartedAt !== undefined
+                        ? ` · ${formatDay(request.sessionStartedAt)}`
+                        : ""}
+                      {request.disputedState !== undefined ? ` · was ${request.disputedState}` : ""}
+                      {request.correctionEventId !== undefined ? " → corrected to verified" : ""}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-muted-foreground shrink-0 text-xs sm:text-right">
                   <p>
