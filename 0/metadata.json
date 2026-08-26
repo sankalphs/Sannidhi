@@ -1,0 +1,67 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0YCN3B7CTQG7XBNVC2XJKS4",
+  "session_id": "ses_fc3571f22ffeb9qh17U21O4F4g",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T06:38:29.3066617Z",
+  "branch": "feat/phase-5-audit-resilience",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "convex/attendanceRequests.ts",
+    "convex/challenges.ts",
+    "convex/checkin.ts",
+    "convex/classSessions.ts",
+    "convex/crons.ts",
+    "convex/ledger.ts",
+    "convex/lib/attendance_event.ts",
+    "convex/maintenance.ts",
+    "convex/schema.ts",
+    "src/app/(audit)/audit/events/ledger-events-view.tsx",
+    "src/app/(student)/student/requests/requests-manager.tsx",
+    "src/lib/attendance/lifecycle.ts",
+    "tests/attendance-lifecycle.test.ts"
+  ],
+  "agent": "OpenCode",
+  "model": "x-preview-f-free",
+  "turn_id": "f3b018b3a461",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 114816,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 5134144,
+    "output_tokens": 19893,
+    "api_call_count": 62
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T06:38:29.0649094Z",
+    "agent_lines": 828,
+    "agent_removed": 128,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 828,
+    "total_lines_changed": 956,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 828,
+      "agent_lines_removed": 128
+    }
+  ]
+}
