@@ -118,11 +118,12 @@ test("step-up: far-away geolocation demands an extra check", async () => {
   await openScannerAt(FAR_COORDS);
   await submitCode(token);
 
-  await expect(studentPage.getByTestId("outcome-verdict")).toHaveText(/step-up/i, {
-    timeout: 60_000,
-  });
-  await expect(studentPage.getByTestId("outcome-headline")).toHaveText(/extra quick check needed/i);
-  await expect(studentPage.getByTestId("checkin-again")).toBeVisible();
+  await expect(
+    studentPage.getByTestId("outcome-verdict").or(studentPage.getByTestId("face-start")),
+  ).toBeVisible({ timeout: 60_000 });
+  // Full challenge completion (capture, fallback, faculty override) lives in
+  // stepup.spec.ts; stop here so this spec stays fast.
+  await expect(studentPage.getByTestId("face-start")).toBeVisible({ timeout: 60_000 });
 });
 
 test("replay: a consumed code reports already used", async () => {

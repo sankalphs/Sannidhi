@@ -1,16 +1,16 @@
 import { ConvexError, v } from "convex/values";
 
 import type { ActorTokenClaims } from "../src/lib/auth/actor-token";
+import { createFaceTemplateRef, validateFaceEmbedding } from "../src/lib/enrollment/face-template";
 import { evaluateEnrollmentGate, type EnrollmentGateResult } from "../src/lib/enrollment/gate";
 import { buildEnrollmentGateInput } from "../src/lib/enrollment/mapping";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { FACE_EMBEDDING_VERSION } from "./challenges";
 import { verifyActorToken } from "./lib/actor";
 
 export const BIOMETRIC_CONSENT_VERSION = "biometric-consent-1";
-
-const FACE_TEMPLATE_REF_PREFIX = "face-template/ref-";
 
 type BiometricRecordDoc = Doc<"biometric_records">;
 
@@ -83,6 +83,7 @@ function toBiometricRecordView(record: BiometricRecordDoc) {
     faceTemplateRef: record.faceTemplateRef ?? null,
     faceEnrolledAt: record.faceEnrolledAt ?? null,
     withdrawnAt: record.withdrawnAt ?? null,
+    embeddingVersion: record.embeddingVersion ?? null,
   };
 }
 
@@ -207,35 +208,48 @@ export const recordBiometricConsent = mutation({
   },
 });
 
-export const enrollFaceStub = mutation({
-  args: { actorToken: v.string() },
+export const enrollFaceTemplate = mutation({
+  args: { actorToken: v.string(), embedding: v.array(v.number()) },
   handler: async (ctx, args) => {
     const claims = await requireActor(args.actorToken);
-    const user = await getUserOrThrow(ctx, claims.userId);
-    assertStudent(user);
+    const user = await resolveKnownUser(ctx, claims.userId);
+    if (user === null || user.role !== "student") {
+      throw new ConvexError("unauthorized");
+    }
 
     const record = await findActiveBiometricRecord(ctx, user._id);
     if (record === null) {
-      throw new ConvexError("biometric consent must be recorded before face enrollment");
+      throw new ConvexError("no_active_biometric_consent");
     }
 
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    const faceTemplateRef =
-      FACE_TEMPLATE_REF_PREFIX + Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+    const invalidReason = validateFaceEmbedding(args.embedding);
+    if (invalidReason !== null) throw new ConvexError(invalidReason);
 
-    const now = Date.now();
-    await ctx.db.patch(record._id, { faceTemplateRef, faceEnrolledAt: now });
+    const faceTemplateRef = createFaceTemplateRef();
+    const faceEnrolledAt = Date.now();
+    // The raw embedding is stored on the record for later matching; the ledger
+    // only ever sees its dimensions and version.
+    await ctx.db.patch(record._id, {
+      faceEmbedding: args.embedding,
+      embeddingVersion: FACE_EMBEDDING_VERSION,
+      faceTemplateRef,
+      faceEnrolledAt,
+    });
 
     await appendIdentityEvent(ctx, {
       institutionId: user.institutionId,
       type: "identity.face_template_enrolled",
       actorUserId: user._id,
       subjectUserId: user._id,
-      payload: { recordId: record._id, faceTemplateRef },
+      payload: {
+        recordId: record._id,
+        faceTemplateRef,
+        embeddingVersion: FACE_EMBEDDING_VERSION,
+        dims: args.embedding.length,
+      },
     });
 
-    return { faceTemplateRef, faceEnrolledAt: now };
+    return { faceTemplateRef, faceEnrolledAt };
   },
 });
 
@@ -252,7 +266,13 @@ export const withdrawBiometricConsent = mutation({
     }
 
     const now = Date.now();
-    await ctx.db.patch(record._id, { withdrawnAt: now });
+    // Passing undefined removes the optional fields, so the raw face template
+    // never outlives the consent it was enrolled under.
+    await ctx.db.patch(record._id, {
+      withdrawnAt: now,
+      faceEmbedding: undefined,
+      embeddingVersion: undefined,
+    });
 
     await appendIdentityEvent(ctx, {
       institutionId: user.institutionId,

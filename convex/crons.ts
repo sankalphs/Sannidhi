@@ -10,4 +10,10 @@ crons.interval(
   internal.maintenance.expireStaleChallenges,
 );
 
+crons.interval(
+  "expire-stale-verification-challenges",
+  { minutes: 1 },
+  internal.challenges.expireStaleChallenges,
+);
+
 export default crons;

@@ -155,3 +155,58 @@ export async function countRecentChallengeAnomalies(
     now: args.now,
   });
 }
+
+/**
+ * Latest attendance event per student for one section since a timestamp
+ * (usually session start). Shared by the faculty board and spot-recheck
+ * eligibility so both agree on what "latest" means.
+ */
+export async function latestEventsByStudentSince(
+  ctx: MutationCtx | QueryCtx,
+  args: { sectionId: Id<"sections">; sinceMs: number },
+): Promise<Map<Id<"users">, Doc<"attendance_events">>> {
+  const events = await ctx.db
+    .query("attendance_events")
+    .withIndex("by_section_captured", (q) =>
+      q.eq("sectionId", args.sectionId).gte("capturedAt", args.sinceMs),
+    )
+    .collect();
+
+  const latestByStudent = new Map<Id<"users">, Doc<"attendance_events">>();
+  for (const event of events) {
+    const current = latestByStudent.get(event.studentId);
+    if (current === undefined || event.capturedAt >= current.capturedAt) {
+      latestByStudent.set(event.studentId, event);
+    }
+  }
+  return latestByStudent;
+}
+
+/** TTL env vars fall back to their default unless they parse to a positive ms value. */
+export function parseTtlMs(raw: string | undefined, fallbackMs: number): number {
+  if (raw === undefined) return fallbackMs;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
+}
+
+/**
+ * Index into the eligible-students list for a random spot re-check.
+ * `seedMs` is the mutation's wall-clock time: faculty-triggered randomness
+ * lives in the timing of the tap, while mutations stay deterministic.
+ */
+export function spotRecheckPickIndex(eligibleCount: number, seedMs: number): number {
+  if (!Number.isInteger(eligibleCount) || eligibleCount <= 0) return 0;
+  return seedMs % eligibleCount;
+}
+
+export type ChallengeLifecycleState = "active" | "expired_pending" | "resolved";
+
+/** Whether a challenge is actionable, needs its lazy expired transition, or is settled. */
+export function challengeLifecycle(
+  challenge: { status: Doc<"verification_challenges">["status"]; expiresAt: number },
+  now: number,
+): ChallengeLifecycleState {
+  if (challenge.status !== "pending") return "resolved";
+  if (now >= challenge.expiresAt) return "expired_pending";
+  return "active";
+}

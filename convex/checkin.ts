@@ -21,6 +21,7 @@ import {
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { MAX_CHALLENGE_ATTEMPTS, STEPUP_CHALLENGE_TTL_MS } from "./challenges";
 import {
   appendAttendanceEvent,
   bestDeviceForStudent,
@@ -97,12 +98,24 @@ type RedeemFailure =
   | { kind: "failed"; verdict: FailureVerdict; reasonCodes: string[] }
   | { kind: "rate_limited"; retryAfterSeconds: number };
 
+type StepUpChallengeRef = {
+  _id: Id<"verification_challenges">;
+  expiresAt: number;
+  maxAttempts: number;
+};
+
 type RedeemResult =
   | ({
       kind: "ok";
       attendanceEventId: Id<"attendance_events">;
       state: ReturnType<typeof outcomeToAttendanceState>;
       checkedInAt: number;
+      courseCode: string;
+      venueName: string;
+    } & Decision)
+  | ({
+      kind: "step_up";
+      challenge: StepUpChallengeRef;
       courseCode: string;
       venueName: string;
     } & Decision)
@@ -328,6 +341,36 @@ export const redeemChallenge = mutation({
     });
 
     const course = await ctx.db.get(session.courseId);
+
+    if (decision.outcome === "step_up") {
+      const expiresAt = now + STEPUP_CHALLENGE_TTL_MS;
+      const challengeId = await ctx.db.insert("verification_challenges", {
+        institutionId: session.institutionId,
+        sessionId: session._id,
+        studentId: caller._id,
+        kind: "checkin_stepup",
+        originEventId: attendanceEventId,
+        status: "pending",
+        attempts: 0,
+        createdAt: now,
+        expiresAt,
+      });
+      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+        institutionId: session.institutionId,
+        category: "attendance",
+        type: "attendance.stepup_requested",
+        actorUserId: caller._id,
+        subjectUserId: caller._id,
+        payload: { challengeId, reasonCodes: decision.reasonCodes, decision },
+      });
+      return {
+        kind: "step_up",
+        challenge: { _id: challengeId, expiresAt, maxAttempts: MAX_CHALLENGE_ATTEMPTS },
+        courseCode: course?.code ?? "",
+        venueName: venue?.name ?? "",
+        ...decision,
+      };
+    }
 
     return {
       kind: "ok" as const,

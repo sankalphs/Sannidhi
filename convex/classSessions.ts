@@ -8,20 +8,25 @@ import {
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { appendAttendanceEvent, bestDeviceForStudent } from "./lib/attendance_event";
+import {
+  appendAttendanceEvent,
+  bestDeviceForStudent,
+  latestEventsByStudentSince,
+} from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
 
 const DEFAULT_WINDOW_MINUTES = 45;
 
 const RECENT_SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
-type BoardRowState = "pending" | "verified" | "flagged" | "rejected";
+type BoardRowState = "pending" | "challenged" | "verified" | "flagged" | "rejected";
 
 const BOARD_STATE_RANK: Record<BoardRowState, number> = {
   verified: 0,
-  flagged: 1,
-  pending: 2,
-  rejected: 3,
+  challenged: 1,
+  flagged: 2,
+  pending: 3,
+  rejected: 4,
 };
 
 export type ScheduleRow = {
@@ -92,6 +97,7 @@ function projectBoardState(state: Doc<"attendance_events">["state"]): BoardRowSt
   if (state === "session_verified" || state === "verified" || state === "corrected") {
     return "verified";
   }
+  if (state === "step_up") return "challenged";
   if (state === "flagged") return "flagged";
   if (state === "rejected") return "rejected";
   return "pending";
@@ -321,6 +327,7 @@ export const getBoard = query({
     const caller = await requireActorUser(ctx, args.actorToken);
     const session = await ctx.db.get(args.sessionId);
     if (session === null) throw new ConvexError("session not found");
+    const now = Date.now();
 
     const privileged =
       (caller.role === "admin" || caller.role === "auditor") &&
@@ -338,19 +345,25 @@ export const getBoard = query({
       .withIndex("by_section", (q) => q.eq("sectionId", session.sectionId))
       .collect();
 
-    const sessionEvents = await ctx.db
-      .query("attendance_events")
-      .withIndex("by_section_captured", (q) =>
-        q.eq("sectionId", session.sectionId).gte("capturedAt", session.startedAt),
-      )
-      .collect();
+    const latestByStudent = await latestEventsByStudentSince(ctx, {
+      sectionId: session.sectionId,
+      sinceMs: session.startedAt,
+    });
 
-    const latestByStudent = new Map<Id<"users">, Doc<"attendance_events">>();
-    for (const event of sessionEvents) {
-      const current = latestByStudent.get(event.studentId);
-      if (current === undefined || event.capturedAt >= current.capturedAt) {
-        latestByStudent.set(event.studentId, event);
-      }
+    const pendingChallenges = await ctx.db
+      .query("verification_challenges")
+      .withIndex("by_session_status", (q) => q.eq("sessionId", session._id).eq("status", "pending"))
+      .collect();
+    const challengeByStudent = new Map<
+      Id<"users">,
+      { kind: "checkin_stepup" | "spot_recheck"; expiresAt: number }
+    >();
+    for (const challenge of pendingChallenges) {
+      if (challenge.expiresAt <= now) continue;
+      challengeByStudent.set(challenge.studentId, {
+        kind: challenge.kind,
+        expiresAt: challenge.expiresAt,
+      });
     }
 
     const rows: Array<{
@@ -360,6 +373,7 @@ export const getBoard = query({
       state: BoardRowState;
       reasonCodes: string[];
       checkedInAt: number | null;
+      challenge: { kind: "checkin_stepup" | "spot_recheck"; expiresAt: number } | null;
     }> = [];
 
     for (const enrollment of enrollments) {
@@ -373,6 +387,7 @@ export const getBoard = query({
         state: latest !== undefined ? projectBoardState(latest.state) : "pending",
         reasonCodes: latest?.decision?.reasonCodes ?? [],
         checkedInAt: latest !== undefined ? latest.capturedAt : null,
+        challenge: challengeByStudent.get(enrollment.studentId) ?? null,
       });
     }
 

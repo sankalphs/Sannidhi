@@ -52,6 +52,9 @@ export function FaceCapture({
   }, []);
 
   useEffect(() => {
+    // Reset on mount: StrictMode's dev remount reuses the ref after cleanup
+    // set it, which would otherwise poison every later capture.
+    unmountedRef.current = false;
     return () => {
       unmountedRef.current = true;
       stopStream();
