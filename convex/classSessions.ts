@@ -437,15 +437,17 @@ export const verifyManually = mutation({
 
     const now = Date.now();
 
-    const existingVerified = await ctx.db
-      .query("attendance_events")
-      .withIndex("by_student_section", (q) =>
-        q.eq("studentId", args.studentId).eq("sectionId", session.sectionId),
-      )
-      .filter((q) => q.gte(q.field("capturedAt"), session.startedAt))
-      .first();
-    if (existingVerified !== null && existingVerified.state === "verified") {
-      return { ok: true as const, decision: existingVerified.decision ?? null };
+    // Idempotent only when the student's LATEST event is already verified; an
+    // older verified event must not swallow overrides of newer flagged/rejected
+    // states.
+    const latestEvent = (
+      await latestEventsByStudentSince(ctx, {
+        sectionId: session.sectionId,
+        sinceMs: session.startedAt,
+      })
+    ).get(args.studentId);
+    if (latestEvent !== undefined && latestEvent.state === "verified") {
+      return { ok: true as const, decision: latestEvent.decision ?? null };
     }
 
     const device = await bestDeviceForStudent(ctx, args.studentId);
