@@ -31,6 +31,8 @@ const STUDENT_ACTIONS_BY_CODE: Record<string, string> = {
     "Lighting or visibility made the face check inconclusive — try again in better light if prompted.",
   [RISK_REASON_CODES.spotRecheckMissed]:
     "A spot re-check request expired — contact your faculty member.",
+  [RISK_REASON_CODES.stepupEscalatedReview]:
+    "Your verification request was sent to your faculty member for review — follow up with them.",
   [RISK_REASON_CODES.repeatedAnomaly]:
     "Several recent attempts were blocked — wait a few minutes or contact your faculty member.",
 };
@@ -46,6 +48,7 @@ const FACULTY_FACTOR_LABELS: Record<string, string> = {
   [RISK_REASON_CODES.personFaceMismatch]: "Face check: no match",
   [RISK_REASON_CODES.personCheckInconclusive]: "Face check inconclusive",
   [RISK_REASON_CODES.spotRecheckMissed]: "Spot re-check missed",
+  [RISK_REASON_CODES.stepupEscalatedReview]: "Step-up escalated to review",
   [RISK_REASON_CODES.repeatedAnomaly]: "repeated anomalies",
   [RISK_REASON_CODES.facultyManualOverride]: "faculty manual override",
 };

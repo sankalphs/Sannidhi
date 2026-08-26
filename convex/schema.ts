@@ -89,6 +89,7 @@ export default defineSchema({
     institutionId: v.id("institutions"),
     studentId: v.id("users"),
     sectionId: v.id("sections"),
+    sessionId: v.optional(v.id("class_sessions")),
     state: v.union(
       v.literal("initiated"),
       v.literal("authenticated"),

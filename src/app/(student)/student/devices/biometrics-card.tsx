@@ -66,7 +66,13 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
     setError(null);
     setBusy(true);
     try {
-      const data = await postAction({ action: "enroll-face", embedding });
+      // The consent disclosure above is shown before capture starts, so the
+      // explicit acknowledgement travels with the enrollment request.
+      const data = await postAction({
+        action: "enroll-face",
+        embedding,
+        consentAcknowledged: true,
+      });
       if (data.record !== null && data.record !== undefined) {
         setRecord(data.record as BiometricRecordView);
       }
@@ -153,8 +159,8 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
           · template <span className="font-mono">{record.embeddingVersion ?? "unknown"}</span>
         </p>
       ) : null}
-      {state === "no-consent" ? (
-        capturing ? (
+      {(state === "no-consent" || state === "consented") &&
+        (capturing ? (
           <FaceCapture
             title="Enroll your face"
             description="A few frames are scanned on this device; nothing is uploaded until you finish."
@@ -174,11 +180,23 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
                 setCapturing(true);
               }}
             >
-              Give consent &amp; enroll face
+              {state === "consented" ? "Enroll face" : "Give consent & enroll face"}
             </Button>
+            {state === "consented" ? (
+              <Button
+                variant="outline"
+                size="sm"
+                data-testid="biometric-withdraw"
+                disabled={busy}
+                onClick={() => void handleWithdraw()}
+              >
+                {busy ? <Loader2 className="animate-spin" /> : null}
+                Withdraw consent
+              </Button>
+            ) : null}
           </div>
-        )
-      ) : (
+        ))}
+      {state === "face-enrolled" ? (
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
@@ -191,7 +209,7 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
             Withdraw consent
           </Button>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

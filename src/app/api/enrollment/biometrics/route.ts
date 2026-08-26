@@ -24,8 +24,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "action must be enroll-face or withdraw" }, { status: 400 });
   }
 
-  if (action === "enroll-face" && validateFaceEmbedding(body.embedding) !== null) {
-    return NextResponse.json({ error: "invalid_embedding" }, { status: 400 });
+  if (action === "enroll-face") {
+    if (body.consentAcknowledged !== true) {
+      return NextResponse.json({ error: "consent_not_acknowledged" }, { status: 400 });
+    }
+    if (validateFaceEmbedding(body.embedding) !== null) {
+      return NextResponse.json({ error: "invalid_embedding" }, { status: 400 });
+    }
   }
 
   try {
@@ -39,8 +44,8 @@ export async function POST(request: Request) {
       const result = await client.mutation(api.enrollment.withdrawBiometricConsent, { actorToken });
       return NextResponse.json(result);
     }
-    // One-click enrollment stays legal because consent is recorded here first
-    // whenever no active one exists; an active record is reused as-is.
+    // Consent is only ever auto-recorded for requests that carried an explicit
+    // consentAcknowledged flag; an active record is reused as-is.
     const current = await client.query(api.enrollment.getMyBiometricRecord, { actorToken });
     if (current === null || current.withdrawnAt !== null) {
       await client.mutation(api.enrollment.recordBiometricConsent, { actorToken });

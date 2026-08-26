@@ -19,6 +19,7 @@ export const RISK_REASON_CODES = {
   personCheckInconclusive: "person_check_inconclusive",
   repeatedAnomaly: "repeated_anomaly",
   spotRecheckMissed: "spot_recheck_missed",
+  stepupEscalatedReview: "stepup_escalated_review",
   facultyManualOverride: "faculty_manual_override",
 } as const;
 
@@ -91,6 +92,9 @@ export function decide(input: RiskInput): Decision {
   } else if (input.anomalies?.missedSpotRecheck) {
     outcome = "flag";
     reasonCodes.push(RISK_REASON_CODES.spotRecheckMissed);
+  } else if (input.anomalies?.reviewRequested) {
+    outcome = "flag";
+    reasonCodes.push(RISK_REASON_CODES.stepupEscalatedReview);
   } else {
     const weaknesses: string[] = [];
     for (const signal of signals) {

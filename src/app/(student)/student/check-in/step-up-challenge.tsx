@@ -6,7 +6,7 @@ import { useMutation, useQuery } from "convex/react";
 import { CheckCircle2, Flag, Info, Loader2, ScanLine, Timer } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { FaceCapture } from "@/components/biometry/face-capture";
 import { VerdictStamp } from "@/components/marketing/verdict-stamp";
@@ -27,6 +27,8 @@ type TerminalPanel =
   | { kind: "review"; decision: Decision | null; escalated?: boolean }
   | { kind: "not_enrolled" }
   | { kind: "expired" };
+
+type DismissButton = { label: string; testId?: string; onClick: () => void };
 
 function formatCountdown(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
@@ -121,10 +123,10 @@ function FallbackRequest({
 
 function ResolvedPanel({
   children,
-  onDismiss,
+  dismiss,
 }: {
   children: React.ReactNode;
-  onDismiss?: () => void;
+  dismiss?: DismissButton;
 }) {
   return (
     <div
@@ -134,16 +136,16 @@ function ResolvedPanel({
       role="status"
     >
       {children}
-      {onDismiss ? (
-        <Button variant="outline" onClick={onDismiss}>
-          Back
+      {dismiss ? (
+        <Button variant="outline" onClick={dismiss.onClick} data-testid={dismiss.testId}>
+          {dismiss.label}
         </Button>
       ) : null}
     </div>
   );
 }
 
-function ExpiredPanel({ onDismiss }: { onDismiss?: () => void }) {
+function ExpiredPanel({ dismiss }: { dismiss?: DismissButton }) {
   return (
     <div
       aria-live="polite"
@@ -159,9 +161,9 @@ function ExpiredPanel({ onDismiss }: { onDismiss?: () => void }) {
         The verification window closed before it could be completed. Your faculty member can see the
         attempt in their records.
       </p>
-      {onDismiss ? (
-        <Button variant="outline" onClick={onDismiss}>
-          Back
+      {dismiss ? (
+        <Button variant="outline" onClick={dismiss.onClick} data-testid={dismiss.testId}>
+          {dismiss.label}
         </Button>
       ) : null}
     </div>
@@ -170,15 +172,15 @@ function ExpiredPanel({ onDismiss }: { onDismiss?: () => void }) {
 
 function ReviewPanel({
   panel,
-  onDismiss,
+  dismiss,
 }: {
   panel: Extract<TerminalPanel, { kind: "review" }>;
-  onDismiss?: () => void;
+  dismiss?: DismissButton;
 }) {
   const headline = "Sent to faculty review";
   if (panel.escalated) {
     return (
-      <ResolvedPanel onDismiss={onDismiss}>
+      <ResolvedPanel dismiss={dismiss}>
         <div className="bg-verdict-flag/15 text-verdict-flag flex size-14 items-center justify-center rounded-full">
           <Flag className="size-8" />
         </div>
@@ -191,7 +193,7 @@ function ReviewPanel({
 
   const explanation = panel.decision !== null ? explainDecision(panel.decision, "student") : null;
   return (
-    <ResolvedPanel onDismiss={onDismiss}>
+    <ResolvedPanel dismiss={dismiss}>
       <div className="bg-verdict-flag/15 text-verdict-flag flex size-14 items-center justify-center rounded-full">
         <Flag className="size-8" />
       </div>
@@ -224,13 +226,13 @@ function ReviewPanel({
 
 type ResolvedTerminal = Exclude<TerminalPanel, { kind: "not_enrolled" }>;
 
-function TerminalView({ panel, onDismiss }: { panel: ResolvedTerminal; onDismiss?: () => void }) {
-  if (panel.kind === "expired") return <ExpiredPanel onDismiss={onDismiss} />;
-  if (panel.kind === "review") return <ReviewPanel panel={panel} onDismiss={onDismiss} />;
+function TerminalView({ panel, dismiss }: { panel: ResolvedTerminal; dismiss?: DismissButton }) {
+  if (panel.kind === "expired") return <ExpiredPanel dismiss={dismiss} />;
+  if (panel.kind === "review") return <ReviewPanel panel={panel} dismiss={dismiss} />;
 
   const explanation = explainDecision(panel.decision, "student");
   return (
-    <ResolvedPanel onDismiss={onDismiss}>
+    <ResolvedPanel dismiss={dismiss}>
       <div className="flex size-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
         <CheckCircle2 className="size-8" />
       </div>
@@ -247,6 +249,7 @@ function NotEnrolledView({
   busy,
   expired,
   error,
+  dismiss,
   onConfirmEscalation,
 }: {
   courseCode?: string;
@@ -254,6 +257,8 @@ function NotEnrolledView({
   busy: boolean;
   expired: boolean;
   error: string | null;
+  /** Only the settled-freeze flow (onDone) offers dismissal here; legacy callers see no change. */
+  dismiss?: DismissButton;
   onConfirmEscalation: () => void;
 }) {
   const context = [courseCode, venueName].filter(
@@ -280,6 +285,11 @@ function NotEnrolledView({
         <Button asChild>
           <Link href="/student/devices">Enroll in Devices</Link>
         </Button>
+        {dismiss ? (
+          <Button variant="outline" onClick={dismiss.onClick} data-testid={dismiss.testId}>
+            {dismiss.label}
+          </Button>
+        ) : null}
       </div>
       <FallbackRequest busy={busy} disabled={expired} onConfirm={onConfirmEscalation} />
       {error !== null ? (
@@ -298,6 +308,8 @@ export function StepUpChallenge({
   venueName,
   onResolved,
   onDismiss,
+  onSettled,
+  onDone,
 }: {
   actorToken: string;
   challenge: StepUpChallengeRef;
@@ -305,6 +317,10 @@ export function StepUpChallenge({
   venueName?: string;
   onResolved?: () => void;
   onDismiss?: () => void;
+  /** Fired once when any settled outcome is reached so wrappers can freeze the panel. */
+  onSettled?: () => void;
+  /** When provided, settled panels dismiss via a "Done" button instead of the legacy Back. */
+  onDone?: () => void;
 }) {
   const router = useRouter();
   const completeWithFace = useMutation(api.challenges.completeWithFace);
@@ -335,6 +351,20 @@ export function StepUpChallenge({
     }
   }, [attemptsLeft]);
 
+  const settledNotifiedRef = useRef(false);
+  const notifySettled = useCallback(() => {
+    if (settledNotifiedRef.current) return;
+    settledNotifiedRef.current = true;
+    onSettled?.();
+  }, [onSettled]);
+
+  // Terminal state set outside the mutation handlers (attempts exhausted above,
+  // or the countdown hitting zero) must still freeze the wrapper before the live
+  // pending-challenge query flips to null and would unmount this panel.
+  useEffect(() => {
+    if (terminal !== null || expired) notifySettled();
+  }, [terminal, expired, notifySettled]);
+
   function settle() {
     router.refresh();
     onResolved?.();
@@ -361,14 +391,17 @@ export function StepUpChallenge({
             ? { kind: "verified", decision: response.decision }
             : { kind: "review", decision: response.decision },
         );
+        notifySettled();
         settle();
       } else if (response.kind === "attempt_rejected") {
         setAttemptsLeft(response.attemptsLeft);
         setCaptureKey((key) => key + 1);
       } else if (response.kind === "not_enrolled") {
         setTerminal({ kind: "not_enrolled" });
+        notifySettled();
       } else {
         setTerminal({ kind: "expired" });
+        notifySettled();
       }
     } catch (cause) {
       setError(describeError(cause));
@@ -393,6 +426,7 @@ export function StepUpChallenge({
       } else {
         setTerminal({ kind: "review", decision: response.decision, escalated: true });
       }
+      notifySettled();
       settle();
     } catch (cause) {
       setError(describeError(cause));
@@ -401,8 +435,13 @@ export function StepUpChallenge({
     }
   }
 
+  const doneDismiss: DismissButton | undefined =
+    onDone !== undefined ? { label: "Done", testId: "stepup-done", onClick: onDone } : undefined;
+  const legacyDismiss: DismissButton | undefined =
+    onDismiss !== undefined ? { label: "Back", onClick: onDismiss } : undefined;
+
   if (expired && terminal === null) {
-    return <ExpiredPanel onDismiss={onDismiss} />;
+    return <ExpiredPanel dismiss={doneDismiss ?? legacyDismiss} />;
   }
 
   if (terminal !== null) {
@@ -414,11 +453,12 @@ export function StepUpChallenge({
           busy={busy}
           expired={expired}
           error={error}
+          dismiss={onDone !== undefined ? doneDismiss : undefined}
           onConfirmEscalation={() => void handleEscalate()}
         />
       );
     }
-    return <TerminalView panel={terminal} onDismiss={onDismiss} />;
+    return <TerminalView panel={terminal} dismiss={doneDismiss ?? legacyDismiss} />;
   }
 
   return (
@@ -470,24 +510,55 @@ export function StepUpChallenge({
 }
 
 /** Server pages mint the actor token; this island polls for a live challenge. */
+
+/** A live challenge plus the display metadata the pending query attaches to it. */
+type FrozenChallenge = StepUpChallengeRef & {
+  courseCode?: string;
+  venueName?: string;
+};
+
 export function PendingChallengeBanner({ actorToken }: { actorToken: string }) {
   const pending = useQuery(api.challenges.getMyPending, { actorToken });
-  if (pending === undefined || pending === null) return null;
-  const { challenge } = pending;
+  // When a challenge settles server-side, getMyPending flips to null and would
+  // unmount the result panel before anyone can read it. Freeze the last known
+  // challenge ref on settle and keep rendering until the student hits Done.
+  const [frozen, setFrozen] = useState<FrozenChallenge | null>(null);
+  const latestChallengeRef = useRef<FrozenChallenge | null>(null);
+  if (pending !== undefined && pending !== null) {
+    latestChallengeRef.current = pending.challenge;
+  }
+  const challenge = frozen ?? latestChallengeRef.current;
+
+  const freezeLatest = useCallback(() => {
+    setFrozen((current) => current ?? latestChallengeRef.current);
+  }, []);
+
+  const unfreeze = useCallback(() => {
+    setFrozen(null);
+  }, []);
+
+  // Loading (undefined) or resolved-without-settle-signal (null): hide the banner.
+  if (frozen === null && (pending === undefined || pending === null)) return null;
+  if (challenge === null) return null;
+
+  const settled = frozen !== null;
 
   return (
-    <section className="border-primary/60 bg-primary/5 flex flex-col gap-4 rounded-xl border p-5">
+    <section
+      data-testid="pending-challenge"
+      className="border-primary/60 bg-primary/5 flex flex-col gap-4 rounded-xl border p-5"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-lg font-semibold">
           <ScanLine className="size-5" />
-          Live verification requested
+          {settled ? "Verification update" : "Live verification requested"}
         </h2>
-        <div data-testid="pending-challenge" className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
           <Badge variant="secondary">
             {[challenge.courseCode, challenge.venueName].filter(Boolean).join(" · ") ||
               "Verification"}
           </Badge>
-          <CountdownChip expiresAt={challenge.expiresAt} />
+          {!settled ? <CountdownChip expiresAt={challenge.expiresAt} /> : null}
         </div>
       </div>
       <StepUpChallenge
@@ -495,6 +566,8 @@ export function PendingChallengeBanner({ actorToken }: { actorToken: string }) {
         challenge={challenge}
         courseCode={challenge.courseCode}
         venueName={challenge.venueName}
+        onSettled={freezeLatest}
+        onDone={unfreeze}
       />
     </section>
   );

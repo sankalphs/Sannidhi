@@ -3,7 +3,9 @@ import { EMBEDDING_DIMS, EMBEDDING_GRID } from "./constants";
 export type RawFrame = { data: Uint8ClampedArray | number[]; width: number; height: number };
 
 function grayscaleGrid(frame: RawFrame): number[] {
-  if (Math.min(frame.width, frame.height) < 8) throw new Error("frame_too_small");
+  // Below the grid side, box cells degenerate to zero pixels and silently
+  // produce all-zero embeddings — reject instead of validating garbage.
+  if (Math.min(frame.width, frame.height) < EMBEDDING_GRID) throw new Error("frame_too_small");
 
   const side = Math.min(frame.width, frame.height);
   const offsetX = Math.floor((frame.width - side) / 2);

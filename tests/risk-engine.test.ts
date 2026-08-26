@@ -188,6 +188,38 @@ describe("missed spot re-check escalation", () => {
   });
 });
 
+describe("review-requested escalation", () => {
+  it("escalates an otherwise-clean accept to flag", () => {
+    const decision = decide(
+      cleanInput({ anomalies: { recentSecurityFailures: 0, reviewRequested: true } }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.stepupEscalatedReview]);
+  });
+
+  it("escalates a would-be step_up to flag", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "device" ? deviceTrustSignal(null) : signal,
+    );
+    const decision = decide(
+      cleanInput({ signals, anomalies: { recentSecurityFailures: 0, reviewRequested: true } }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.stepupEscalatedReview]);
+  });
+
+  // Rule order after missedSpotRecheck pins this precedence: repeated_anomaly wins.
+  it("keeps repeated_anomaly ahead of stepup_escalated_review when both apply", () => {
+    const decision = decide(
+      cleanInput({
+        anomalies: { recentSecurityFailures: RISK_ANOMALY_FLAG_THRESHOLD, reviewRequested: true },
+      }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.repeatedAnomaly]);
+  });
+});
+
 describe("hard rejection rules", () => {
   it("rejects when no identity signal is verified", () => {
     const signals = baseSignals().filter((signal) => signal.category !== "identity");

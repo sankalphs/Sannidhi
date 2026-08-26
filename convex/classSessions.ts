@@ -347,6 +347,7 @@ export const getBoard = query({
 
     const latestByStudent = await latestEventsByStudentSince(ctx, {
       sectionId: session.sectionId,
+      sessionId: session._id,
       sinceMs: session.startedAt,
     });
 
@@ -443,6 +444,7 @@ export const verifyManually = mutation({
     const latestEvent = (
       await latestEventsByStudentSince(ctx, {
         sectionId: session.sectionId,
+        sessionId: session._id,
         sinceMs: session.startedAt,
       })
     ).get(args.studentId);

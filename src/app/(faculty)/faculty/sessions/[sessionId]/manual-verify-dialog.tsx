@@ -50,6 +50,7 @@ export function ManualVerifyDialog({
   onClose: () => void;
 }) {
   const heading = mode === "override" ? "Override verdict" : "Verify manually";
+  const submitLabel = mode === "override" ? "Override verdict" : "Verify";
   const verifyManually = useMutation(api.classSessions.verifyManually);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
@@ -152,7 +153,7 @@ export function ManualVerifyDialog({
             disabled={pending || reason.trim().length < MIN_REASON_LENGTH}
           >
             <ShieldCheck />
-            Verify
+            {submitLabel}
           </Button>
         </div>
       </form>

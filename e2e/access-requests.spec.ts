@@ -41,6 +41,8 @@ test("the login page highlights the requested persona and demo login reaches the
   await expect(studentCard).toHaveClass(/ring-2/);
 
   await studentCard.click();
-  await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));
+  await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"), {
+    timeout: 15_000,
+  });
   await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
 });

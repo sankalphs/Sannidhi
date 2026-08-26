@@ -35,10 +35,18 @@ function gradientFrame(): RawFrame {
 }
 
 describe("normalizeToEmbedding", () => {
-  it("throws frame_too_small when either dimension is under 8", () => {
+  it("throws frame_too_small when either dimension is under the grid size", () => {
     expect(() => normalizeToEmbedding(makeFrame(7, 7, () => 128))).toThrow("frame_too_small");
     expect(() => normalizeToEmbedding(makeFrame(4, 40, () => 128))).toThrow("frame_too_small");
     expect(() => normalizeToEmbedding(makeFrame(40, 4, () => 128))).toThrow("frame_too_small");
+  });
+
+  it("throws frame_too_small for degenerate sub-grid frames like 16x16", () => {
+    // Sides of 8..23 pass a naive >=8 guard but yield all-zero grid cells.
+    expect(() =>
+      normalizeToEmbedding(makeFrame(EMBEDDING_GRID - 8, EMBEDDING_GRID - 8, () => 128)),
+    ).toThrow("frame_too_small");
+    expect(() => normalizeToEmbedding(makeFrame(16, 16, () => 128))).toThrow("frame_too_small");
   });
 
   it("box-averages divisible cells in row-major order", () => {
