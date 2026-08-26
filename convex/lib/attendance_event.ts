@@ -59,7 +59,7 @@ export async function appendAttendanceEvent(
     syncNonceHash?: string;
   },
 ): Promise<Id<"attendance_events">> {
-  if (!isStartableState(args.state)) {
+  if (args.state !== "corrected" && !isStartableState(args.state)) {
     throw new ConvexError("corrections_only_overwrite_existing_events");
   }
   if (!isValidCorrection(args.state, args.correctsEventId)) {

@@ -7,8 +7,8 @@ test("students file attendance requests and see them listed with status", async 
 
   await expect(page.getByText("File a request")).toBeVisible();
 
-  const reason = `E2E correction request ${Date.now()} — attended class, system lost the scan.`;
-  await page.getByLabel("Request type").selectOption("correction");
+  const reason = `E2E exemption request ${Date.now()} — represented the institute at a fest.`;
+  await page.getByLabel("Request type").selectOption("exemption");
   await page.getByLabel("Reason").fill(reason);
 
   const submit = page.getByRole("button", { name: "Submit request" });
@@ -19,7 +19,7 @@ test("students file attendance requests and see them listed with status", async 
 
   const row = page.locator("[data-testid='attendance-request-row']", { hasText: reason });
   await expect(row).toBeVisible();
-  await expect(row.getByText("Attendance correction")).toBeVisible();
+  await expect(row.getByText("Exemption", { exact: true })).toBeVisible();
   await expect(row.getByText("submitted", { exact: true })).toBeVisible();
 
   await page.reload();
