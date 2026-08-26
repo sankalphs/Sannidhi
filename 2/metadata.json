@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0YESF6SFRCSQ29CTF90YGFT",
+  "session_id": "ses_fc3955574ffeeaqcGIfOdR7gvJ",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T07:16:09.7772468Z",
+  "branch": "feat/phase-5-audit-resilience",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [],
+  "agent": "OpenCode",
+  "model": "ox-alpha-free",
+  "turn_id": "1c8c135dfe26",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 19420,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 72896,
+    "output_tokens": 571,
+    "api_call_count": 5
+  },
+  "session_metrics": {
+    "turn_count": 1
+  }
+}

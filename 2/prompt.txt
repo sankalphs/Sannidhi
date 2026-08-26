@@ -1,0 +1,28 @@
+You are working in D:\Coding\Sannidhi (Next.js 15, Playwright e2e in ./e2e, Windows, pwsh, bun package manager). Task: add an automated axe-core accessibility scan to the e2e suite.
+
+## Step 1
+Run: `bun add -d @axe-core/playwright`
+
+## Step 2
+Edit e2e/a11y.spec.ts — add this import at the top (after the existing `@playwright/test` import):
+```ts
+import AxeBuilder from "@axe-core/playwright";
+```
+and append this test at the end of the file:
+```ts
+test("marketing and auth surfaces pass an axe serious/critical scan", async ({ page }) => {
+  for (const path of ["/", "/login", "/request-access", "/signup"]) {
+    await page.goto(path);
+    const results = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa"]).analyze();
+    const serious = results.violations.filter(
+      (violation) => violation.impact === "critical" || violation.impact === "serious",
+    );
+    const summary = serious.map((violation) => `${violation.id}(${violation.impact})`).join(", ");
+    expect(serious, `${path} axe violations: ${summary}`).toEqual([]);
+  }
+});
+```
+
+Do NOT modify the existing three tests in that file. Do NOT run the e2e suite (it requires a Convex backend that is not running). Do NOT touch any other files.
+
+Report back: the exact version of @axe-core/playwright that got installed (read it from package.json), confirmation of the spec edit, and any anomalies.

@@ -3,7 +3,7 @@
   "checkpoint_id": "01M0YESF6SFRCSQ29CTF90YGFT",
   "strategy": "manual-commit",
   "branch": "feat/phase-5-audit-resilience",
-  "checkpoints_count": 2,
+  "checkpoints_count": 3,
   "files_touched": [
     "convex/attendanceRequests.ts",
     "src/app/(faculty)/faculty/page.tsx",
@@ -26,13 +26,20 @@
       "compact_transcript": "/1/transcript.jsonl",
       "content_hash": "/1/content_hash.txt",
       "prompt": "/1/prompt.txt"
+    },
+    {
+      "metadata": "/2/metadata.json",
+      "transcript": "/2/full.jsonl",
+      "compact_transcript": "/2/transcript.jsonl",
+      "content_hash": "/2/content_hash.txt",
+      "prompt": "/2/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 208038,
+    "input_tokens": 227458,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 6409280,
-    "output_tokens": 22122,
-    "api_call_count": 92
+    "cache_read_tokens": 6482176,
+    "output_tokens": 22693,
+    "api_call_count": 97
   }
 }
