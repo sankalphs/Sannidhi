@@ -1,0 +1,83 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0Z8WRKWZQDFHZXT8GXCTG77",
+  "session_id": "ses_fc3632a70ffei7GRDNrw8hg0Ax",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T14:52:11.354946Z",
+  "branch": "feat/phase-5-audit-resilience",
+  "checkpoints_count": 7,
+  "save_step_count": 2,
+  "files_touched": [
+    "e2e/corrections.spec.ts",
+    "e2e/student-requests.spec.ts"
+  ],
+  "agent": "OpenCode",
+  "model": "x-preview-f-free",
+  "turn_id": "941f1cd64d4e",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 1508913,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 6227511,
+    "output_tokens": 16131,
+    "api_call_count": 89
+  },
+  "session_metrics": {
+    "turn_count": 7
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T14:52:11.1905956Z",
+    "agent_lines": 88,
+    "agent_removed": 3,
+    "human_added": 2,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 90,
+    "total_lines_changed": 94,
+    "agent_percentage": 96.80851063829788,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 1252,
+      "user_lines_removed": 20,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "convex/attendanceRequests.ts": 396,
+        "convex/lib/attendance_event.ts": 4,
+        "convex/offlineSync.ts": 242,
+        "convex/schema.ts": 1,
+        "src/app/(faculty)/faculty/page.tsx": 18,
+        "src/app/(faculty)/faculty/review-queue.tsx": 146,
+        "src/app/(student)/student/requests/requests-manager.tsx": 70,
+        "src/lib/attendance/correction.ts": 45,
+        "src/lib/offline/bundle.ts": 112,
+        "src/lib/risk/engine.ts": 1,
+        "tests/correction.test.ts": 88,
+        "tests/offline-bundle.test.ts": 129
+      },
+      "user_removed_per_file": {
+        "convex/attendanceRequests.ts": 11,
+        "convex/schema.ts": 1,
+        "src/app/(faculty)/faculty/page.tsx": 1,
+        "src/app/(student)/student/requests/requests-manager.tsx": 7
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 88,
+      "agent_lines_removed": 3
+    }
+  ]
+}
