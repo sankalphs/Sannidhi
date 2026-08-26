@@ -1,1 +1,1 @@
-Conduct a full audit of this application including uiux and other thimbg like code and woking and all and use playwrite mcp
+Fix all this issue by raising a pr and use subagents when needed and at last see if everything is working my using playwrite mcp
