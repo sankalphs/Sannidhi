@@ -3,7 +3,7 @@
   "checkpoint_id": "01M0Y7V2AGJQ1Y7MESYC5CJ768",
   "strategy": "manual-commit",
   "branch": "fix/audit-findings",
-  "checkpoints_count": 3,
+  "checkpoints_count": 5,
   "files_touched": [
     "README.md",
     "bun.lock",
@@ -16,7 +16,9 @@
     "src/app/(faculty)/faculty/sessions/[sessionId]/live-board.tsx",
     "src/app/(faculty)/faculty/sessions/[sessionId]/qr-panel.tsx",
     "src/app/(student)/student/check-in/check-in-panel.tsx",
+    "src/app/globals.css",
     "src/app/layout.tsx",
+    "src/app/page.tsx",
     "src/components/marketing/live-session-demo.tsx",
     "src/components/shell/app-shell.tsx",
     "src/components/shell/demo-banner.tsx",
@@ -44,13 +46,20 @@
       "compact_transcript": "/2/transcript.jsonl",
       "content_hash": "/2/content_hash.txt",
       "prompt": "/2/prompt.txt"
+    },
+    {
+      "metadata": "/3/metadata.json",
+      "transcript": "/3/full.jsonl",
+      "compact_transcript": "/3/transcript.jsonl",
+      "content_hash": "/3/content_hash.txt",
+      "prompt": "/3/prompt.txt"
     }
   ],
   "token_usage": {
-    "input_tokens": 85617,
+    "input_tokens": 345029,
     "cache_creation_tokens": 0,
-    "cache_read_tokens": 458752,
-    "output_tokens": 5096,
-    "api_call_count": 20
+    "cache_read_tokens": 7623235,
+    "output_tokens": 22190,
+    "api_call_count": 100
   }
 }
