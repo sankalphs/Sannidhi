@@ -1,0 +1,104 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0Y7V2AGJQ1Y7MESYC5CJ768",
+  "session_id": "ses_fc3958db8ffepADbv47TLwK0pc",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T05:14:30.9747941Z",
+  "branch": "fix/audit-findings",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "README.md",
+    "bun.lock",
+    "convex/challenges.ts",
+    "convex/checkin.ts",
+    "convex/lib/attendance_event.ts",
+    "e2e/a11y.spec.ts",
+    "next.config.ts",
+    "package.json",
+    "src/app/(faculty)/faculty/sessions/[sessionId]/live-board.tsx",
+    "src/app/(faculty)/faculty/sessions/[sessionId]/qr-panel.tsx",
+    "src/app/(student)/student/check-in/check-in-panel.tsx",
+    "src/app/layout.tsx",
+    "src/components/marketing/live-session-demo.tsx",
+    "src/components/shell/app-shell.tsx",
+    "src/components/shell/mobile-nav.tsx",
+    "src/components/shell/side-nav.tsx"
+  ],
+  "agent": "OpenCode",
+  "model": "ox-alpha-free",
+  "turn_id": "a4409f912f3e",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 37365,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 263808,
+    "output_tokens": 3126,
+    "api_call_count": 9
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T05:14:30.8768935Z",
+    "agent_lines": 0,
+    "agent_removed": 0,
+    "human_added": 0,
+    "human_modified": 2760,
+    "human_removed": 2719,
+    "total_committed": 0,
+    "total_lines_changed": 5481,
+    "agent_percentage": 0,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 2826,
+      "user_lines_removed": 2730,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        "README.md": 130,
+        "bun.lock": 3,
+        "convex/challenges.ts": 553,
+        "convex/checkin.ts": 388,
+        "convex/lib/attendance_event.ts": 222,
+        "e2e/a11y.spec.ts": 67,
+        "next.config.ts": 12,
+        "package.json": 1,
+        "src/app/(faculty)/faculty/sessions/[sessionId]/live-board.tsx": 327,
+        "src/app/(faculty)/faculty/sessions/[sessionId]/qr-panel.tsx": 205,
+        "src/app/(student)/student/check-in/check-in-panel.tsx": 377,
+        "src/app/layout.tsx": 69,
+        "src/components/marketing/live-session-demo.tsx": 268,
+        "src/components/shell/app-shell.tsx": 60,
+        "src/components/shell/demo-banner.tsx": 21,
+        "src/components/shell/mobile-nav.tsx": 47,
+        "src/components/shell/side-nav.tsx": 76
+      },
+      "user_removed_per_file": {
+        "README.md": 127,
+        "convex/challenges.ts": 565,
+        "convex/checkin.ts": 385,
+        "convex/lib/attendance_event.ts": 216,
+        "e2e/a11y.spec.ts": 54,
+        "next.config.ts": 1,
+        "src/app/(faculty)/faculty/sessions/[sessionId]/live-board.tsx": 327,
+        "src/app/(faculty)/faculty/sessions/[sessionId]/qr-panel.tsx": 203,
+        "src/app/(student)/student/check-in/check-in-panel.tsx": 367,
+        "src/app/layout.tsx": 68,
+        "src/components/marketing/live-session-demo.tsx": 264,
+        "src/components/shell/app-shell.tsx": 79,
+        "src/components/shell/side-nav.tsx": 74
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2826,
+      "agent_lines_removed": 2730
+    }
+  ]
+}
