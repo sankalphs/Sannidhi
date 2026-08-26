@@ -1,0 +1,44 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0YETZK0M2RNQ23DZP1A43X9",
+  "session_id": "ses_fc3333dc8ffeDUajJofUr7shFS",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-26T07:16:38.7023437Z",
+  "branch": "feat/phase-5-audit-resilience",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "convex/lib/attendance_event.ts",
+    "convex/offlineSync.ts",
+    "convex/schema.ts",
+    "src/lib/offline/bundle.ts",
+    "src/lib/risk/engine.ts",
+    "tests/offline-bundle.test.ts"
+  ],
+  "agent": "OpenCode",
+  "model": "x-preview-f-free",
+  "turn_id": "9adbd84707cc",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 96829,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1795648,
+    "output_tokens": 8233,
+    "api_call_count": 31
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-26T07:16:38.5726739Z",
+    "agent_lines": 489,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 489,
+    "total_lines_changed": 490,
+    "agent_percentage": 100,
+    "metric_version": 2
+  }
+}

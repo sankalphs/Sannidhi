@@ -1,0 +1,37 @@
+Implementation task in D:\Coding\Sannidhi (branch feat/phase-5-audit-resilience, already checked out — work on top of current HEAD). Stack: Next.js + Convex, bun runtime, TypeScript strict. Follow existing file conventions exactly. DO NOT commit. DO NOT edit convex/schema.ts except the single field rename explicitly authorized below. Do not touch convex/attendanceRequests.ts or any src/app/(student|faculty|admin|audit) UI files (another agent owns those right now).
+
+CONTEXT: Phase 5 offline capture per docs/report.md §13+§20: network unavailable → controlled offline capture using a pre-authorized class session; queued events enter THE SAME ledger append seam tagged origin="offline-faculty"; duplicate/replay reconciliation lives inside the ledger implementation — no parallel sync dialect. Model: FACULTY attests roster presence offline (e.g. dead connectivity in classroom), records queue on their device, sync later. Server time stays authoritative at sync time; device capturedAt is display-only evidence.
+
+FOUNDATION ALREADY LANDED (read these first):
+- `convex/lib/attendance_event.ts`: `appendAttendanceEvent(ctx, args)` — args {institutionId, studentId, sectionId, sessionId?, state: AttendanceEventState, origin? ("offline-faculty" is valid), decision?: Decision, recordedByUserId?, note?, correctsEventId?}. Seam stamps server time. This IS the same seam you must route through.
+- `src/lib/attendance/lifecycle.ts`: states/origins; also `attendanceChainHashInput` etc.
+- `src/lib/ledger/hash.ts`: canonicalEventJson (recursive key-sort canonical JSON) + computeEventHash (SHA-256 hex via crypto.subtle) — reuse canonicalEventJson for signature canonicalization.
+- `src/lib/risk/engine.ts`: `decide()` (signals → Decision) and `manualAttestationSignals` used by verifyManually in convex/classSessions.ts — study how verifyManually builds signals + decision, and mirror it for offline records (plus a signal/note marking offline capture; check how explain/reason codes work).
+- `convex/schema.ts`: `class_sessions` has optional `offlineKeyHash?: string` — RENAME THIS FIELD to `offlineKey?: string` (raw key must be stored so the server can recompute HMACs during verification; grep first to confirm nothing references offlineKeyHash yet, then rename). attendance_events has optional `syncNonceHash?: string` + index `by_nonce_hash` — your dedupe key.
+- `convex/classSessions.ts`: session shape/status lifecycle, requireOwnedSession pattern, publishChallenge minting patterns.
+- Actor conventions: public mutations take actorToken, use requireActorUserWithActiveSession from convex/lib/actor.ts; internal seams via internalMutation.
+
+BUILD:
+
+1. PURE LIB `src/lib/offline/bundle.ts` (isomorphic, no Convex imports):
+   - Types: `OfflineBundle { sessionId, key }`; `OfflineRecord { sessionId, sectionId, studentId, capturedAt, nonce, note? }` (capturedAt = device clock, display-only); `SignedOfflineRecord = OfflineRecord & { signature }`.
+   - `mintBundleKey(): string` — 32 random bytes hex (WebCrypto getRandomValues).
+   - `signRecord(key, record): SignedOfflineRecord` — HMAC-SHA256 over canonicalEventJson(record) (hex digest).
+   - `verifySignature(key, signed): boolean` — constant-time-ish compare (compare derived hex strings; simple === acceptable but prefer timingSafeEqual-style double-HMAC trick only if trivially pure).
+   - `nonceHash(sessionId, nonce): string` — SHA-256 hex of `${sessionId}:${nonce}` → stored in attendance_events.syncNonceHash for replay dedupe.
+2. MUTATIONS `convex/offlineSync.ts` (new module):
+   - `mintOfflineBundle(actorToken, sessionId)` — faculty-only, must own the session, session status "active" (minting pre-authorizes an ACTIVE session before going offline). Generate key via lib, store raw on the session row (rotate on re-mint), return {sessionId, key, expiresAt: windowEndsAt}. Emit event_ledger "session.offline_bundle_issued".
+   - `syncOfflineBatch(actorToken, records: v.array(signedRecordValidator))` — faculty-only (the syncing teacher becomes recordedByUserId). Per record, ALL inside the same mutation, each item independent (partial success):
+     a. Session lookup: must exist, belong to caller's institution, caller must be the session's faculty. Session may be active OR closed (sync typically happens after reconnect) — closed is fine.
+     b. Verify HMAC signature against stored offlineKey → invalid: result item {status:"invalid_signature"}.
+     c. Replay/duplicate: compute nonceHash; if any attendance_events row with by_nonce_hash eq exists → result {status:"duplicate"} and SKIP (keep security trail: also emit event_ledger "attendance.offline_duplicate" once per duplicate? — no, skip silently per §13 "detect and ignore replayed attempts while keeping a security trail": emit the ledger trail entry).
+     d. Compute Decision: decide() with manualAttestationSignals-equivalent (mirror verifyManually) + offline-capture marker in evidence/reason codes; claimed capturedAt goes into the note (display-only) — server time remains authoritative via the seam.
+     e. appendAttendanceEvent(state from outcomeToAttendanceStyle mapping as verifyManually does, origin "offline-faculty", syncNonceHash, recordedByUserId=caller, note incl. claimed capturedAt + any note) — plus the standard event_ledger entry pattern other writers use (check what verifyManually/challenges emit; follow suit with type "attendance.offline_synced").
+     f. Result array items: {studentId, status: "accepted"|"step_up"|"flagged"|"rejected"|"duplicate"|"invalid_signature"}.
+   - Batch size cap (e.g. ≤200) with clear error over limit.
+3. TESTS `tests/offline-bundle.test.ts` (@vitest-environment node): mint/sign/verify round-trip, tamper detection (any field flip breaks signature), wrong-key rejection, nonceHash determinism/format, canonical JSON stability (key order independence).
+4. NO UI. This is the writer seam for phases 6–7 surfaces; document the contract in the module doc comments (how a client uses bundle+sign+sync).
+
+VERIFY before reporting: `bun run typecheck` green; eslint clean on touched files; `bunx vitest run tests/offline-bundle.test.ts` green; FULL `bunx vitest run` to prove nothing regressed (another agent may be editing other files concurrently — if failures appear in files you didn't touch (esp. anything named correction/request), report them rather than fixing). No build/e2e.
+
+REPORT BACK: files changed w/ 1-line summaries, exact exported signatures from bundle.ts and the two mutations' arg/return validators, confirmation of the offlineKeyHash→offlineKey rename, deviations + reasons, verification outputs.

@@ -1,0 +1,31 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M0YETZK0M2RNQ23DZP1A43X9",
+  "strategy": "manual-commit",
+  "branch": "feat/phase-5-audit-resilience",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "convex/lib/attendance_event.ts",
+    "convex/offlineSync.ts",
+    "convex/schema.ts",
+    "src/lib/offline/bundle.ts",
+    "src/lib/risk/engine.ts",
+    "tests/offline-bundle.test.ts"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 96829,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 1795648,
+    "output_tokens": 8233,
+    "api_call_count": 31
+  }
+}
