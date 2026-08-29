@@ -6,6 +6,7 @@ import { query } from "./_generated/server";
 const DEMO_ROLES = v.union(
   v.literal("student"),
   v.literal("faculty"),
+  v.literal("department_authority"),
   v.literal("admin"),
   v.literal("auditor"),
 );
@@ -13,6 +14,7 @@ const DEMO_ROLES = v.union(
 const DEMO_EMAILS = {
   student: "aarav.patel@sit.edu.in",
   faculty: "priya.menon@sit.edu.in",
+  department_authority: "vikram.desai@sit.edu.in",
   admin: "ananya.iyer@sit.edu.in",
   auditor: "rohan.gupta@sit.edu.in",
 } as const;

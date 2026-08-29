@@ -57,4 +57,21 @@ describe("convex/seed.ts", () => {
   it("marks core seeded users active so the enrollment gate unlocks", () => {
     expect(source).toContain('status: "active"');
   });
+
+  it("backfills a full term of closed sessions with chained attendance events", () => {
+    expect(source).toContain("BACKFILL_OUTCOMES");
+    expect(source).toMatch(/insert\("class_sessions"/);
+    expect(source).toContain("sessionsBackfilled");
+    expect(source).toContain("attendanceEventsBackfilled");
+  });
+
+  it("keeps backfilled sessions clear of the live e2e slot window", () => {
+    expect(source).toContain("BACKFILL_NEWEST_AGE_MS");
+    expect(source).toMatch(/status: "closed"/);
+  });
+
+  it("self-verifies the backfilled attendance chain at seed time", () => {
+    expect(source).toContain("seed backfill chain broken");
+    expect(source).toContain("verifyBackfillChain");
+  });
 });

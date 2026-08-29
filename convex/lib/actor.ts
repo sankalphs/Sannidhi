@@ -120,6 +120,30 @@ export async function requireAdminUser(
   return user;
 }
 
+/** Analytics and flagged-review surfaces serve admins and department authority. */
+export async function requireAnalyticsAuthority(
+  ctx: MutationCtx | QueryCtx,
+  token: string,
+): Promise<Doc<"users">> {
+  let claims: ActorTokenClaims;
+  try {
+    claims = await verifyActorToken(token);
+  } catch (error) {
+    throw new ConvexError(error instanceof Error ? error.message : "unauthorized");
+  }
+  if (claims.role !== "admin" && claims.role !== "department_authority") {
+    throw new ConvexError("unauthorized");
+  }
+  let user: Doc<"users"> | null;
+  try {
+    user = await ctx.db.get(claims.userId as Id<"users">);
+  } catch {
+    throw new ConvexError("unauthorized");
+  }
+  if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  return user;
+}
+
 export function assertSameInstitution(
   adminInstitutionId: Id<"institutions">,
   targetInstitutionId: Id<"institutions">,

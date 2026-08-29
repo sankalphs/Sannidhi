@@ -22,4 +22,10 @@ crons.daily(
   internal.maintenance.pruneExpiredAuditEvents,
 );
 
+crons.daily(
+  "scan-review-alerts",
+  { hourUTC: 4, minuteUTC: 0 },
+  internal.reviewAlerts.scanReviewAlerts,
+);
+
 export default crons;
