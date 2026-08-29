@@ -1,17 +1,12 @@
 "use client";
 
+import type { FunctionReturnType } from "convex/server";
+
+import { api } from "../../../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { toCsv, renderReportPdf } from "@/lib/analytics";
 
-type ExportRow = {
-  studentName: string;
-  studentEmail: string;
-  courseCode: string;
-  sectionName: string;
-  state: string;
-  reasonCodes: string[];
-  capturedAt: number;
-};
+type ExportRow = FunctionReturnType<typeof api.analytics.reportRows>["rows"][number];
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleString("en-IN", {

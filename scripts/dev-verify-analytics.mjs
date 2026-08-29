@@ -1,13 +1,26 @@
+// Dev utility: exercise the analytics read-model against a local deployment.
+// Set DEV_CONVEX_URL and SESSION_SECRET (from .env.local) before running.
 import { ConvexHttpClient } from "convex/browser";
 import { SignJWT } from "jose";
 import { api } from "../convex/_generated/api.js";
 
-const client = new ConvexHttpClient("https://polished-toucan-265.convex.cloud");
+const convexUrl = process.env.DEV_CONVEX_URL;
+if (convexUrl === undefined || convexUrl.length === 0) {
+  console.error("DEV_CONVEX_URL must point at your local Convex deployment");
+  process.exit(1);
+}
+const secretValue = process.env.SESSION_SECRET;
+if (secretValue === undefined || secretValue.length < 16) {
+  console.error("SESSION_SECRET (>= 16 chars, from .env.local) must be set");
+  process.exit(1);
+}
+
+const client = new ConvexHttpClient(convexUrl);
 
 const admin = await client.query(api.demo.getDemoActor, { role: "admin" });
 console.log("admin actor:", JSON.stringify(admin));
 
-const secret = new TextEncoder().encode("local-dev-session-secret-0123456789");
+const secret = new TextEncoder().encode(secretValue);
 const token = await new SignJWT({ userId: admin.userId, role: "admin" })
   .setProtectedHeader({ alg: "HS256" })
   .setIssuedAt()

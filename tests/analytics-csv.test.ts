@@ -37,4 +37,16 @@ describe("toCsv", () => {
   it("serializes empty rows and multiple data rows", () => {
     expect(toCsv(["h"], [[], ["a"], []])).toBe("h\r\n\r\na\r\n\r\n");
   });
+
+  it("neutralizes formula-like string cells so spreadsheets render them as text", () => {
+    expect(toCsv(["v"], [["=SUM(A1:A2)"]])).toBe("v\r\n'=SUM(A1:A2)\r\n");
+    expect(toCsv(["v"], [["+cmd|' /C calc'!A1"]])).toBe("v\r\n'+cmd|' /C calc'!A1\r\n");
+    expect(toCsv(["v"], [["-2+3+cmd|' /C calc'!A1"]])).toBe("v\r\n'-2+3+cmd|' /C calc'!A1\r\n");
+    expect(toCsv(["v"], [["@x(name)"]])).toBe("v\r\n'@x(name)\r\n");
+  });
+
+  it("leaves numeric cells and plain negatives untouched", () => {
+    expect(toCsv(["n"], [[-5]])).toBe("n\r\n-5\r\n");
+    expect(toCsv(["n"], [[0.5]])).toBe("n\r\n0.5\r\n");
+  });
 });

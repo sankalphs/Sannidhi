@@ -276,12 +276,13 @@ export const seedDemoData = internalMutation({
     ];
 
     let enrollmentCount = 0;
+    const termEnrolledAt = now - TERM_ENROLLED_AT_OFFSET_MS;
     for (const [studentIndex, pairs] of enrollmentPlan.entries()) {
       for (const pair of pairs) {
         await ctx.db.insert("enrollments", {
           studentId: studentIds[studentIndex],
           sectionId: sectionIds[pair[1]],
-          enrolledAt: now,
+          enrolledAt: termEnrolledAt,
         });
         enrollmentCount += 1;
       }
@@ -450,6 +451,8 @@ const MS_PER_WEEK = 7 * MS_PER_DAY;
  * and e2e resume flows stay untouched.
  */
 const BACKFILL_NEWEST_AGE_MS = 26 * 60 * MS_PER_MINUTE;
+/** Enrollment start that predates every backfilled session, so term-long absence synthesis stays bounded. */
+const TERM_ENROLLED_AT_OFFSET_MS = (TERM_WEEKS + 1) * MS_PER_WEEK;
 const SECTION_START_MINUTES = [540, 600, 600, 540];
 
 type BackfillCounts = { sessions: number; attendanceEvents: number; ledgerEvents: number };

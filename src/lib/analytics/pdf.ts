@@ -101,6 +101,9 @@ export function renderReportPdf(input: {
   for (const row of input.rows) {
     if (currentY + LINE_HEIGHT > PAGE_HEIGHT - BOTTOM_LIMIT) {
       startPage();
+      // startPage leaves currentY at the repeated header baseline; advance
+      // below it so the first row of the new page never overlaps the header.
+      currentY += LINE_HEIGHT;
     } else {
       currentY += LINE_HEIGHT;
     }

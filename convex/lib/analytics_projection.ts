@@ -7,7 +7,9 @@ import type { QueryCtx } from "../_generated/server";
  * Single source of truth for trajectory records: a student's own attendance
  * events projected to record states, plus synthesized "absent" records for
  * closed sessions of enrolled sections where the student left no event.
- * Open or paused sessions never count as absences — only settled classes do.
+ * Synthesis starts at each enrollment's own start — sessions before a student
+ * joined a section never count as that student's absences — and open or
+ * paused sessions never count; only settled classes do.
  */
 export async function studentTrajectoryRecords(
   ctx: QueryCtx,
@@ -28,9 +30,6 @@ export async function studentTrajectoryRecords(
     .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
     .collect();
 
-  const earliestEventMs =
-    events.length > 0 ? Math.min(...events.map((event) => event.capturedAt)) : null;
-
   for (const enrollment of enrollments) {
     const sessions = await ctx.db
       .query("class_sessions")
@@ -38,7 +37,7 @@ export async function studentTrajectoryRecords(
       .collect();
     for (const session of sessions) {
       if (session.status !== "closed") continue;
-      if (earliestEventMs !== null && session.startedAt < earliestEventMs) continue;
+      if (session.startedAt < enrollment.enrolledAt) continue;
       const attended = events.some(
         (event) => event.sessionId !== undefined && event.sessionId === session._id,
       );

@@ -17,7 +17,6 @@ import { internalMutation, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
-const MAX_STUDENTS_PER_SCAN = 200;
 const MAX_ALERTS_PER_LIST = 200;
 const ALERT_CREATED_TYPE = "analytics.review_alert_created";
 const ALERT_RESOLVED_TYPE = "analytics.review_alert_resolved";
@@ -104,7 +103,7 @@ export async function performScan(ctx: MutationCtx): Promise<{
   let alertsCreated = 0;
   for (const institution of institutions) {
     const students = await loadStudents(ctx, institution._id);
-    for (const student of students.slice(0, MAX_STUDENTS_PER_SCAN)) {
+    for (const student of students) {
       const records = await studentTrajectoryRecords(ctx, { studentId: student._id });
       const trajectory = analyzeTrajectory(records);
       const proxy = await proxyRowForStudent(ctx, { studentId: student._id, sinceMs });

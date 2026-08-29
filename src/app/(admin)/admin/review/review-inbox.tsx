@@ -153,7 +153,11 @@ export function ReviewInbox({
         <EmptyState
           icon={Inbox}
           title="No alerts"
-          description="The daily scan routes early-warning alerts here. Run a scan to check now."
+          description={
+            canScan
+              ? "The daily scan routes early-warning alerts here. Run a scan to check now."
+              : "The daily scan routes early-warning alerts here. Ask an administrator to run a scan."
+          }
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border">
