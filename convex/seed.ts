@@ -651,9 +651,13 @@ async function backfillTermHistory(
     ledgerEvents += 1;
   }
 
-  const chainOk = await verifyBackfillChain(ctx, args.institutionId);
-  if (!chainOk) {
+  const attendanceChainOk = await verifyBackfillChain(ctx, args.institutionId);
+  if (!attendanceChainOk) {
     throw new Error("seed backfill chain broken");
+  }
+  const ledgerChainOk = await verifyBackfillLedgerChain(ctx, args.institutionId);
+  if (!ledgerChainOk) {
+    throw new Error("seed backfill ledger chain broken");
   }
 
   return {
@@ -752,6 +756,39 @@ async function verifyBackfillChain(
         prevEventHash: row.prevEventHash,
       }),
     );
+    if (recomputed !== row.eventHash) return false;
+    expectedSeq += 1;
+    expectedPrevHash = row.eventHash;
+  }
+  return true;
+}
+
+/** Walks the backfilled event_ledger chain with appendLedgerEvent's own hash math. */
+async function verifyBackfillLedgerChain(
+  ctx: MutationCtx,
+  institutionId: Id<"institutions">,
+): Promise<boolean> {
+  const rows = await ctx.db
+    .query("event_ledger")
+    .withIndex("by_institution_seq", (q) => q.eq("institutionId", institutionId))
+    .order("asc")
+    .collect();
+
+  let expectedSeq = 0;
+  let expectedPrevHash: string | undefined;
+  for (const row of rows) {
+    if (row.seq !== expectedSeq || row.prevEventHash !== expectedPrevHash) return false;
+    const recomputed = await computeEventHash({
+      institutionId: row.institutionId,
+      category: row.category,
+      type: row.type,
+      ...(row.actorUserId !== undefined ? { actorUserId: row.actorUserId } : {}),
+      ...(row.subjectUserId !== undefined ? { subjectUserId: row.subjectUserId } : {}),
+      ...(row.deviceId !== undefined ? { deviceId: row.deviceId } : {}),
+      payload: row.payload as Record<string, unknown>,
+      seq: row.seq,
+      prevEventHash: row.prevEventHash,
+    });
     if (recomputed !== row.eventHash) return false;
     expectedSeq += 1;
     expectedPrevHash = row.eventHash;

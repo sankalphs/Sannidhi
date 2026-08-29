@@ -74,4 +74,9 @@ describe("convex/seed.ts", () => {
     expect(source).toContain("seed backfill chain broken");
     expect(source).toContain("verifyBackfillChain");
   });
+
+  it("self-verifies the backfilled event_ledger chain at seed time", () => {
+    expect(source).toContain("seed backfill ledger chain broken");
+    expect(source).toContain("verifyBackfillLedgerChain");
+  });
 });
