@@ -213,7 +213,6 @@ export const redeemChallenge = mutation({
         sessionId: session._id,
         state: outcomeToAttendanceState(decision.outcome),
         decision,
-        capturedAt: now,
       });
     };
 
@@ -340,7 +339,6 @@ export const redeemChallenge = mutation({
       sessionId: session._id,
       state: outcomeToAttendanceState(decision.outcome),
       decision,
-      capturedAt: now,
     });
 
     const course = await ctx.db.get(session.courseId);

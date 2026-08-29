@@ -103,7 +103,7 @@ export default defineSchema({
       v.literal("corrected"),
     ),
     origin: v.union(v.literal("online"), v.literal("offline-faculty"), v.literal("mobile")),
-    policyVersion: v.string(),
+    policyVersion: v.optional(v.string()),
     seq: v.number(),
     prevEventHash: v.optional(v.string()),
     eventHash: v.string(),
@@ -112,12 +112,15 @@ export default defineSchema({
     capturedAt: v.number(),
     recordedByUserId: v.optional(v.id("users")),
     note: v.optional(v.string()),
+    syncNonceHash: v.optional(v.string()),
   })
     .index("by_student_section", ["studentId", "sectionId"])
     .index("by_section_captured", ["sectionId", "capturedAt"])
     .index("by_section_state", ["sectionId", "state"])
-    .index("by_seq", ["seq"])
-    .index("by_corrects_event", ["correctsEventId"]),
+    .index("by_institution_seq", ["institutionId", "seq"])
+    .index("by_capturedAt", ["capturedAt"])
+    .index("by_corrects_event", ["correctsEventId"])
+    .index("by_nonce_hash", ["syncNonceHash"]),
 
   invites: defineTable({
     institutionId: v.id("institutions"),
@@ -283,7 +286,8 @@ export default defineSchema({
     .index("by_subject", ["subjectUserId"])
     .index("by_subject_created", ["subjectUserId", "createdAt"])
     .index("by_subject_category_type_created", ["subjectUserId", "category", "type", "createdAt"])
-    .index("by_device", ["deviceId"]),
+    .index("by_device", ["deviceId"])
+    .index("by_createdAt", ["createdAt"]),
 
   class_sessions: defineTable({
     institutionId: v.id("institutions"),
@@ -299,6 +303,7 @@ export default defineSchema({
     pausedAt: v.optional(v.number()),
     closedAt: v.optional(v.number()),
     restartOfSessionId: v.optional(v.id("class_sessions")),
+    offlineKey: v.optional(v.string()),
   })
     .index("by_faculty_status", ["facultyId", "status"])
     .index("by_section_started", ["sectionId", "startedAt"])
@@ -344,10 +349,13 @@ export default defineSchema({
     studentId: v.id("users"),
     type: v.union(v.literal("correction"), v.literal("exemption"), v.literal("on_duty")),
     reason: v.string(),
-    status: v.union(v.literal("submitted"), v.literal("reviewed")),
+    status: v.union(v.literal("submitted"), v.literal("approved"), v.literal("dismissed")),
+    sessionId: v.optional(v.id("class_sessions")),
+    eventId: v.optional(v.id("attendance_events")),
     requestedAt: v.number(),
     reviewedAt: v.optional(v.number()),
     reviewedByUserId: v.optional(v.id("users")),
+    decision: v.optional(v.union(v.literal("approved"), v.literal("dismissed"))),
   })
     .index("by_student_requested", ["studentId", "requestedAt"])
     .index("by_student_status_requested", ["studentId", "status", "requestedAt"])

@@ -157,7 +157,6 @@ async function expirePendingChallenge(
     sessionId: session._id,
     state: "flagged",
     decision,
-    capturedAt: now,
     note: "spot re-check missed",
   });
   await ctx.runMutation(internal.ledger.appendLedgerEvent, {
@@ -325,7 +324,6 @@ export const completeWithFace = mutation({
             sessionId: session._id,
             state: "flagged",
             decision,
-            capturedAt: now,
             note: "step-up attempts exhausted",
           });
         }
@@ -369,7 +367,6 @@ export const completeWithFace = mutation({
         sessionId: session._id,
         state: "verified",
         decision,
-        capturedAt: now,
         note: challenge.kind === "checkin_stepup" ? "step-up satisfied" : "spot re-check passed",
       });
       await ctx.db.patch(challenge._id, { status: "passed", resolvedAt: now });
@@ -396,7 +393,6 @@ export const completeWithFace = mutation({
       sessionId: session._id,
       state: "flagged",
       decision,
-      capturedAt: now,
     });
     await ctx.db.patch(challenge._id, { status: "failed", resolvedAt: now });
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
@@ -449,7 +445,6 @@ export const escalateToReview = mutation({
       sessionId: session._id,
       state: "flagged",
       decision,
-      capturedAt: now,
       note: "escalated to faculty review: camera unavailable",
     });
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {

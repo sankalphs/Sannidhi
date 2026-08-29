@@ -18,6 +18,42 @@ type DecisionOutcome = Decision["outcome"];
 type LedgerSnapshot = FunctionReturnType<typeof api.ledger.listLedgerEvents>;
 type LedgerEvent = LedgerSnapshot["events"][number];
 
+type ChainWindow = FunctionReturnType<typeof api.ledger.verifyChain>;
+type ChainStatus =
+  { state: "valid"; count: number } | { state: "broken"; brokenAtSeq: number } | { state: "error" };
+
+type FetchChainPage = (args: {
+  actorToken: string;
+  limit: number;
+  fromSeq?: number;
+}) => Promise<ChainWindow>;
+
+/** Walks a whole chain through its windowed verify query until it ends or breaks. */
+async function walkChain(fetchPage: FetchChainPage, actorToken: string): Promise<ChainStatus> {
+  let cursorSeq: number | undefined;
+  let verifiedCount = 0;
+  try {
+    for (let window = 0; window < MAX_CHAIN_WINDOWS; window += 1) {
+      const result = await fetchPage({
+        actorToken,
+        limit: 500,
+        ...(cursorSeq !== undefined ? { fromSeq: cursorSeq } : {}),
+      });
+      if (!result.valid) {
+        return { state: "broken", brokenAtSeq: result.brokenAtSeq ?? -1 };
+      }
+      verifiedCount += result.count;
+      if (!("nextCursor" in result) || result.nextCursor === undefined) {
+        return { state: "valid", count: verifiedCount };
+      }
+      cursorSeq = result.nextCursor;
+    }
+    return { state: "valid", count: verifiedCount };
+  } catch {
+    return { state: "error" };
+  }
+}
+
 const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
   accept: "accept",
   step_up: "step-up",
@@ -98,18 +134,44 @@ export function LedgerEventsView({ actorToken }: { actorToken: string }) {
   );
 }
 
+function ChainStatusBadge({
+  status,
+  testId,
+  label,
+}: {
+  status: ChainStatus | null;
+  testId: string;
+  label: string;
+}) {
+  if (status === null) return null;
+  if (status.state === "valid") {
+    return (
+      <Badge
+        data-testid={testId}
+        className="border-verdict-accept/35 bg-verdict-accept/10 text-verdict-accept"
+      >
+        {label} valid · {status.count} events
+      </Badge>
+    );
+  }
+  return (
+    <Badge variant="destructive" data-testid={testId}>
+      {status.state === "broken"
+        ? `${label} broken at seq ${status.brokenAtSeq}`
+        : "Verification failed"}
+    </Badge>
+  );
+}
+
 function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   const convex = useConvex();
   const eventsResult = useQuery(api.ledger.listLedgerEvents, { actorToken, limit: 100 });
   const [olderEvents, setOlderEvents] = useState<LedgerEvent[]>([]);
   const [expandedSeqs, setExpandedSeqs] = useState<ReadonlySet<number>>(new Set());
   const [verifyingChain, setVerifyingChain] = useState(false);
-  const [chainStatus, setChainStatus] = useState<
-    | { state: "valid"; count: number }
-    | { state: "broken"; brokenAtSeq: number }
-    | { state: "error" }
-    | null
-  >(null);
+  const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
+  const [verifyingAttendanceChain, setVerifyingAttendanceChain] = useState(false);
+  const [attendanceChainStatus, setAttendanceChainStatus] = useState<ChainStatus | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -164,31 +226,23 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
     if (verifyingChain) return;
     setVerifyingChain(true);
     try {
-      type ChainWindow = FunctionReturnType<typeof api.ledger.verifyChain>;
-      let cursorSeq: number | undefined;
-      let verifiedCount = 0;
-      for (let window = 0; window < MAX_CHAIN_WINDOWS; window += 1) {
-        const result: ChainWindow = await convex.query(api.ledger.verifyChain, {
-          actorToken,
-          limit: 500,
-          ...(cursorSeq !== undefined ? { fromSeq: cursorSeq } : {}),
-        });
-        if (!result.valid) {
-          setChainStatus({ state: "broken", brokenAtSeq: result.brokenAtSeq ?? -1 });
-          return;
-        }
-        verifiedCount += result.count;
-        if (!("nextCursor" in result) || result.nextCursor === undefined) {
-          setChainStatus({ state: "valid", count: verifiedCount });
-          return;
-        }
-        cursorSeq = result.nextCursor;
-      }
-      setChainStatus({ state: "valid", count: verifiedCount });
-    } catch {
-      setChainStatus({ state: "error" });
+      setChainStatus(
+        await walkChain((args) => convex.query(api.ledger.verifyChain, args), actorToken),
+      );
     } finally {
       setVerifyingChain(false);
+    }
+  }
+
+  async function handleVerifyAttendanceChain() {
+    if (verifyingAttendanceChain) return;
+    setVerifyingAttendanceChain(true);
+    try {
+      setAttendanceChainStatus(
+        await walkChain((args) => convex.query(api.ledger.verifyAttendanceChain, args), actorToken),
+      );
+    } finally {
+      setVerifyingAttendanceChain(false);
     }
   }
 
@@ -200,24 +254,7 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
         description="Tamper-evident chain of attendance events with the full decision trail behind each verdict."
         actions={
           <>
-            {chainStatus !== null ? (
-              chainStatus.state === "valid" ? (
-                <Badge
-                  data-testid="chain-status"
-                  className="border-verdict-accept/35 bg-verdict-accept/10 text-verdict-accept"
-                >
-                  Chain valid · {chainStatus.count} events
-                </Badge>
-              ) : chainStatus.state === "broken" ? (
-                <Badge variant="destructive" data-testid="chain-status">
-                  Broken at seq {chainStatus.brokenAtSeq}
-                </Badge>
-              ) : (
-                <Badge variant="destructive" data-testid="chain-status">
-                  Verification failed
-                </Badge>
-              )
-            ) : null}
+            <ChainStatusBadge status={chainStatus} testId="chain-status" label="Chain" />
             <Button
               variant="outline"
               data-testid="verify-chain"
@@ -226,6 +263,20 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
             >
               {verifyingChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
               Verify chain
+            </Button>
+            <ChainStatusBadge
+              status={attendanceChainStatus}
+              testId="attendance-chain-status"
+              label="Attendance chain"
+            />
+            <Button
+              variant="outline"
+              data-testid="verify-attendance-chain"
+              onClick={() => void handleVerifyAttendanceChain()}
+              disabled={verifyingAttendanceChain}
+            >
+              {verifyingAttendanceChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+              Verify attendance chain
             </Button>
           </>
         }

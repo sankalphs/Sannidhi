@@ -4,8 +4,16 @@ import Link from "next/link";
 import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { buttonVariants } from "@/components/ui/button";
+import { mintActorToken } from "@/lib/auth/actor-token";
+import { getActiveSession } from "@/lib/auth/server";
 
-export default function FacultyPage() {
+import { ReviewQueue } from "./review-queue";
+
+export const dynamic = "force-dynamic";
+
+export default async function FacultyPage() {
+  const session = await getActiveSession();
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -23,6 +31,15 @@ export default function FacultyPage() {
           </Link>
         }
       />
+      {session !== null ? (
+        <ReviewQueue
+          actorToken={await mintActorToken({
+            userId: session.userId,
+            role: session.role,
+            ...(session.sid !== undefined ? { sid: session.sid } : {}),
+          })}
+        />
+      ) : null}
     </div>
   );
 }
