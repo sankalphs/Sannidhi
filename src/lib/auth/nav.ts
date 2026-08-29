@@ -8,7 +8,9 @@ export type NavIcon =
   | "landmark"
   | "users"
   | "scroll"
-  | "inbox";
+  | "inbox"
+  | "insights"
+  | "file";
 
 export type NavItem = {
   label: string;
@@ -34,12 +36,18 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: "Overview", href: "/admin", icon: "dashboard" },
     { label: "Courses & sections", href: "/admin/courses", icon: "book" },
     { label: "Policies", href: "/admin/policies", icon: "landmark" },
+    { label: "Analytics", href: "/admin/analytics", icon: "insights" },
+    { label: "Review inbox", href: "/admin/review", icon: "inbox" },
+    { label: "Reports", href: "/admin/reports", icon: "file" },
   ],
   admin: [
     { label: "Overview", href: "/admin", icon: "dashboard" },
     { label: "Users", href: "/admin/users", icon: "users" },
     { label: "Access requests", href: "/admin/requests", icon: "inbox" },
     { label: "Devices", href: "/admin/devices", icon: "smartphone" },
+    { label: "Analytics", href: "/admin/analytics", icon: "insights" },
+    { label: "Review inbox", href: "/admin/review", icon: "inbox" },
+    { label: "Reports", href: "/admin/reports", icon: "file" },
     { label: "Courses & sections", href: "/admin/courses", icon: "book" },
     { label: "Policies", href: "/admin/policies", icon: "landmark" },
     { label: "Event ledger", href: "/audit/events", icon: "scroll" },

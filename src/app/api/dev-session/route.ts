@@ -10,11 +10,12 @@ function notFound() {
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
-type DemoResolvableRole = "student" | "faculty" | "admin" | "auditor";
+type DemoResolvableRole = "student" | "faculty" | "department_authority" | "admin" | "auditor";
 
 const DEMO_RESOLVABLE_ROLES: readonly DemoResolvableRole[] = [
   "student",
   "faculty",
+  "department_authority",
   "admin",
   "auditor",
 ];

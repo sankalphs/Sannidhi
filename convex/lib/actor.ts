@@ -60,6 +60,31 @@ export async function resolveActorUser(
   }
 }
 
+/** Rejects tokens whose server-side session was revoked or expired; sid-less tokens (demo/dev logins) have nothing to check. */
+async function assertSessionActiveIfPresent(
+  ctx: MutationCtx | QueryCtx,
+  claims: ActorTokenClaims,
+): Promise<void> {
+  if (claims.sid === undefined) return;
+  const tokenHash = await hashSessionSid(claims.sid);
+  let row: Doc<"sessions"> | null = null;
+  try {
+    row = await ctx.db
+      .query("sessions")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+  } catch {
+    row = null;
+  }
+  const now = Date.now();
+  const sessionActive =
+    row !== null &&
+    row.revokedAt === undefined &&
+    row.expiresAt > now &&
+    row.createdAt + SESSION_ABSOLUTE_MAX_MS > now;
+  if (!sessionActive) throw new ConvexError("unauthorized");
+}
+
 /**
  * Resolve the actor and, when the token carries a server-side session id,
  * reject tokens whose session has been revoked or expired. Tokens without a
@@ -70,25 +95,7 @@ export async function requireActorUserWithActiveSession(
   token: string,
 ): Promise<Doc<"users">> {
   const claims = await verifyActorToken(token);
-  if (claims.sid !== undefined) {
-    const tokenHash = await hashSessionSid(claims.sid);
-    let row: Doc<"sessions"> | null = null;
-    try {
-      row = await ctx.db
-        .query("sessions")
-        .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
-        .unique();
-    } catch {
-      row = null;
-    }
-    const now = Date.now();
-    const sessionActive =
-      row !== null &&
-      row.revokedAt === undefined &&
-      row.expiresAt > now &&
-      row.createdAt + SESSION_ABSOLUTE_MAX_MS > now;
-    if (!sessionActive) throw new ConvexError("unauthorized");
-  }
+  await assertSessionActiveIfPresent(ctx, claims);
   let user: Doc<"users"> | null = null;
   try {
     user = await ctx.db.get(claims.userId as Id<"users">);
@@ -117,6 +124,37 @@ export async function requireAdminUser(
     throw new ConvexError("unauthorized");
   }
   if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  return user;
+}
+
+/** Analytics and flagged-review surfaces serve admins and department authority. */
+export async function requireAnalyticsAuthority(
+  ctx: MutationCtx | QueryCtx,
+  token: string,
+): Promise<Doc<"users">> {
+  let claims: ActorTokenClaims;
+  try {
+    claims = await verifyActorToken(token);
+  } catch (error) {
+    throw new ConvexError(error instanceof Error ? error.message : "unauthorized");
+  }
+  if (claims.role !== "admin" && claims.role !== "department_authority") {
+    throw new ConvexError("unauthorized");
+  }
+  // Revoked or expired server sessions invalidate the token immediately.
+  await assertSessionActiveIfPresent(ctx, claims);
+  let user: Doc<"users"> | null;
+  try {
+    user = await ctx.db.get(claims.userId as Id<"users">);
+  } catch {
+    throw new ConvexError("unauthorized");
+  }
+  if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  // The stored role is authoritative: a demoted user must not retain
+  // analytics access through a still-valid token minted for their old role.
+  if (user.role !== "admin" && user.role !== "department_authority") {
+    throw new ConvexError("unauthorized");
+  }
   return user;
 }
 

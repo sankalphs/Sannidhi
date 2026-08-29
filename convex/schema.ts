@@ -344,6 +344,25 @@ export default defineSchema({
     .index("by_email", ["email"])
     .index("by_ipHash_submitted", ["ipHash", "submittedAt"]),
 
+  review_alerts: defineTable({
+    institutionId: v.id("institutions"),
+    kind: v.union(
+      v.literal("low_attendance"),
+      v.literal("proxy_attempt"),
+      v.literal("verification_anomaly"),
+    ),
+    studentId: v.optional(v.id("users")),
+    factors: v.array(v.string()),
+    status: v.union(v.literal("open"), v.literal("acknowledged"), v.literal("dismissed")),
+    detectedAt: v.number(),
+    resolvedAt: v.optional(v.number()),
+    resolvedByUserId: v.optional(v.id("users")),
+    resolutionNote: v.optional(v.string()),
+  })
+    .index("by_institution_status_detected", ["institutionId", "status", "detectedAt"])
+    .index("by_institution_kind_status", ["institutionId", "kind", "status"])
+    .index("by_student", ["studentId"]),
+
   attendance_requests: defineTable({
     institutionId: v.id("institutions"),
     studentId: v.id("users"),
