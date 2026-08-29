@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
+  projectAttendanceState,
   summarizeAttendance,
   type AttendanceRecordState,
 } from "@/lib/attendance/projection";
@@ -166,5 +167,31 @@ describe("summarizeAttendance", () => {
 
   it.each([0, -1, 100, 150])("rejects a threshold of %d percent", (thresholdPercent) => {
     expect(() => summarizeAttendance(records("verified"), thresholdPercent)).toThrow(RangeError);
+  });
+});
+
+describe("projectAttendanceState", () => {
+  it("maps pipeline intermediates to pending", () => {
+    expect(projectAttendanceState("initiated")).toBe("pending");
+    expect(projectAttendanceState("authenticated")).toBe("pending");
+    expect(projectAttendanceState("presence_evaluated")).toBe("pending");
+    expect(projectAttendanceState("risk_evaluated")).toBe("pending");
+    expect(projectAttendanceState("step_up")).toBe("pending");
+  });
+
+  it("maps session_verified and verified to verified", () => {
+    expect(projectAttendanceState("session_verified")).toBe("verified");
+    expect(projectAttendanceState("verified")).toBe("verified");
+  });
+
+  it("passes decision states through unchanged", () => {
+    expect(projectAttendanceState("flagged")).toBe("flagged");
+    expect(projectAttendanceState("rejected")).toBe("rejected");
+    expect(projectAttendanceState("corrected")).toBe("corrected");
+  });
+
+  it("falls back to pending for unknown states", () => {
+    expect(projectAttendanceState("something_else")).toBe("pending");
+    expect(projectAttendanceState("")).toBe("pending");
   });
 });

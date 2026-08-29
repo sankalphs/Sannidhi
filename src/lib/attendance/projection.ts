@@ -13,6 +13,13 @@ export type AttendanceSummary = {
   canMiss: number;
 };
 
+/** Projects a raw attendance_events lifecycle state to the record states history and analytics surfaces render. */
+export function projectAttendanceState(state: string): AttendanceRecordState {
+  if (state === "session_verified" || state === "verified") return "verified";
+  if (state === "flagged" || state === "rejected" || state === "corrected") return state;
+  return "pending";
+}
+
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }

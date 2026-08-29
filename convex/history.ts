@@ -1,9 +1,12 @@
 import { ConvexError, v } from "convex/values";
 
-import type { AttendanceRecordState } from "../src/lib/attendance/projection";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
 import { resolveActorUser } from "./lib/actor";
+import {
+  projectAttendanceState,
+  type AttendanceRecordState,
+} from "../src/lib/attendance/projection";
 
 const UTC_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: "UTC",
@@ -14,12 +17,6 @@ const UTC_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
 
 function utcDateKey(timestamp: number): string {
   return UTC_DATE_KEY_FORMATTER.format(timestamp);
-}
-
-function projectHistoryState(state: Doc<"attendance_events">["state"]): AttendanceRecordState {
-  if (state === "session_verified" || state === "verified") return "verified";
-  if (state === "flagged" || state === "rejected" || state === "corrected") return state;
-  return "pending";
 }
 
 async function requireActorUser(ctx: QueryCtx, actorToken: string): Promise<Doc<"users">> {
@@ -89,7 +86,7 @@ export const studentHistory = query({
         courseId: cached.course._id,
         courseCode: cached.course.code,
         courseTitle: cached.course.title,
-        state: projectHistoryState(event.state),
+        state: projectAttendanceState(event.state),
         decidedAt: event.capturedAt,
         reasonCodes: event.decision?.reasonCodes ?? [],
       });
