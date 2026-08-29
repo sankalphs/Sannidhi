@@ -208,23 +208,38 @@ export function LiveBoard({
               description="The roster appears once students enroll in this section."
             />
           ) : (
-            <div className="-mx-6 overflow-x-auto px-6">
+            <div className="-mx-6 max-h-[70vh] overflow-auto px-6">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-muted-foreground border-b text-left text-xs font-medium">
-                    <th scope="col" className="pr-4 pb-2">
+                  <tr className="text-muted-foreground text-left text-xs font-medium">
+                    <th
+                      scope="col"
+                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
+                    >
                       Student
                     </th>
-                    <th scope="col" className="pr-4 pb-2">
+                    <th
+                      scope="col"
+                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
+                    >
                       State
                     </th>
-                    <th scope="col" className="pr-4 pb-2">
+                    <th
+                      scope="col"
+                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
+                    >
                       Checked in
                     </th>
-                    <th scope="col" className="pr-4 pb-2">
+                    <th
+                      scope="col"
+                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
+                    >
                       Reasons
                     </th>
-                    <th scope="col" className="pb-2">
+                    <th
+                      scope="col"
+                      className="border-border/70 bg-card sticky top-0 z-10 border-b pb-2"
+                    >
                       Actions
                     </th>
                   </tr>

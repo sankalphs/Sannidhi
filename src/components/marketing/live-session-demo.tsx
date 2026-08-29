@@ -190,7 +190,7 @@ export function LiveSessionDemo() {
               viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`}
               className="size-28 sm:size-32"
               role="img"
-              aria-label={`Rotating session challenge QR, current token ${token}`}
+              aria-label="Animated preview of a rotating session QR code"
               shapeRendering="crispEdges"
             >
               <rect width={QR_SIZE} height={QR_SIZE} fill="white" />
@@ -213,7 +213,11 @@ export function LiveSessionDemo() {
               </g>
             </svg>
           </div>
-          <div className="flex w-full flex-col items-center gap-1.5" data-testid="demo-qr-token">
+          <div
+            aria-hidden="true"
+            className="flex w-full flex-col items-center gap-1.5"
+            data-testid="demo-qr-token"
+          >
             <span className="font-mono text-sm font-semibold tracking-[0.18em]">{token}</span>
             <div className="bg-primary-foreground/20 h-1 w-full overflow-hidden rounded-full">
               <div
@@ -235,7 +239,7 @@ export function LiveSessionDemo() {
           <p className="font-mono text-[11px] tracking-[0.14em] uppercase opacity-70">
             Verification board
           </p>
-          <ul className="flex flex-col">
+          <ul aria-hidden="true" className="flex flex-col">
             {feed.map((entry) => (
               <li
                 key={entry.key}

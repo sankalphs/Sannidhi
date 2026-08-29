@@ -70,18 +70,6 @@ export async function requireActorUser(
   return user;
 }
 
-const challengeView = v.object({
-  _id: v.id("verification_challenges"),
-  kind: v.union(v.literal("checkin_stepup"), v.literal("spot_recheck")),
-  sessionId: v.id("class_sessions"),
-  attempts: v.number(),
-  maxAttempts: v.number(),
-  createdAt: v.number(),
-  expiresAt: v.number(),
-  courseCode: v.string(),
-  venueName: v.string(),
-});
-
 export type ChallengeView = {
   _id: Id<"verification_challenges">;
   kind: "checkin_stepup" | "spot_recheck";

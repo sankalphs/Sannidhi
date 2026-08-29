@@ -178,6 +178,8 @@ export function QrPanel({
         ) : challenge !== null && dataUrl !== null ? (
           <>
             <div className="mx-auto w-fit rounded-lg bg-white p-3">
+              {/* Data URL source: next/image cannot optimize inline data URLs. */}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={dataUrl} alt="Session QR code" width={280} height={280} />
             </div>
             <p className="text-primary-foreground/70 font-mono text-sm tracking-[0.08em] tabular-nums">

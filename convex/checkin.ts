@@ -29,12 +29,15 @@ import {
   CHECKIN_RATE_LIMIT_WINDOW_MS,
   countRecentChallengeAnomalies,
   countRecentCheckinAttempts,
+  RATE_LIMIT_EVENT_TYPES,
 } from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
 
 type FailureVerdict = Exclude<RedeemVerdict, "valid">;
 
-const FAILURE_EVENT_TYPES: Record<FailureVerdict, string> = {
+type SecurityEventType = (typeof RATE_LIMIT_EVENT_TYPES)[number];
+
+const FAILURE_EVENT_TYPES: Record<FailureVerdict, SecurityEventType> = {
   expired: "challenge_expired_use",
   malformed: "malformed_challenge",
   replayed: "challenge_replayed",
