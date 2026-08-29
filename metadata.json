@@ -1,0 +1,26 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M16GY72V91F0Y46332M1WH7G",
+  "strategy": "manual-commit",
+  "branch": "feat/phase-6-analytics",
+  "checkpoints_count": 1,
+  "files_touched": [
+    "README.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0/metadata.json",
+      "transcript": "/0/full.jsonl",
+      "compact_transcript": "/0/transcript.jsonl",
+      "content_hash": "/0/content_hash.txt",
+      "prompt": "/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 19420,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 72896,
+    "output_tokens": 571,
+    "api_call_count": 5
+  }
+}

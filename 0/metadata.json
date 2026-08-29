@@ -1,0 +1,39 @@
+{
+  "cli_version": "0.10.0",
+  "checkpoint_id": "01M16GY72V91F0Y46332M1WH7G",
+  "session_id": "ses_fc3955574ffeeaqcGIfOdR7gvJ",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-29T10:27:46.0155768Z",
+  "branch": "feat/phase-6-analytics",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "README.md"
+  ],
+  "agent": "OpenCode",
+  "model": "ox-alpha-free",
+  "turn_id": "1c8c135dfe26",
+  "compact_transcript_start": 0,
+  "token_usage": {
+    "input_tokens": 19420,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 72896,
+    "output_tokens": 571,
+    "api_call_count": 5
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-29T10:27:45.9365092Z",
+    "agent_lines": 5,
+    "agent_removed": 3,
+    "human_added": 216,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 221,
+    "total_lines_changed": 225,
+    "agent_percentage": 3.5555555555555554,
+    "metric_version": 2
+  }
+}
