@@ -113,7 +113,11 @@ export async function performScan(ctx: MutationCtx): Promise<{
         sinceMs,
       });
 
-      for (const alert of deriveAlerts({ trajectory, proxy, verificationAnomalyCount: anomalyCount })) {
+      for (const alert of deriveAlerts({
+        trajectory,
+        proxy,
+        verificationAnomalyCount: anomalyCount,
+      })) {
         const duplicate = await hasOpenAlert(ctx, {
           institutionId: institution._id,
           kind: alert.kind,
@@ -230,9 +234,7 @@ export const listReviewAlerts = query({
       }),
     );
 
-    return mapped
-      .sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt)
-      .slice(0, limit);
+    return mapped.sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt).slice(0, limit);
   },
 });
 

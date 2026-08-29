@@ -35,6 +35,16 @@ describe("evaluateAccess", () => {
     expect(allowedRolesFor("/admin/policies")).toEqual(["department_authority", "admin"]);
   });
 
+  it("serves analytics surfaces to admin and department authority only", () => {
+    expect(allowedRolesFor("/admin/analytics")).toEqual(["department_authority", "admin"]);
+    expect(allowedRolesFor("/admin/review")).toEqual(["department_authority", "admin"]);
+    expect(allowedRolesFor("/admin/reports")).toEqual(["department_authority", "admin"]);
+    expect(evaluateAccess("/admin/analytics", "student")).toEqual({
+      status: "redirect",
+      to: "/student",
+    });
+  });
+
   it("sends wrong-role users to their own role home", () => {
     expect(evaluateAccess("/student", "faculty")).toEqual({ status: "redirect", to: "/faculty" });
     expect(evaluateAccess("/admin/users", "student")).toEqual({

@@ -62,8 +62,6 @@ export async function flaggedEventsForStudent(
     .collect();
   return events.filter(
     (event) =>
-      event.state === "flagged" &&
-      event.decision !== undefined &&
-      event.capturedAt >= args.sinceMs,
+      event.state === "flagged" && event.decision !== undefined && event.capturedAt >= args.sinceMs,
   );
 }

@@ -16,7 +16,9 @@ const token = await new SignJWT({ userId: admin.userId, role: "admin" })
 const overview = await client.query(api.analytics.overview, { actorToken: token });
 console.log("overview:", JSON.stringify(overview, null, 2));
 
-const trajectories = await client.query(api.analytics.attendanceTrajectories, { actorToken: token });
+const trajectories = await client.query(api.analytics.attendanceTrajectories, {
+  actorToken: token,
+});
 for (const row of trajectories) {
   console.log(
     `${row.studentName}: ${row.summary.percentage}% held=${row.summary.totalHeld} trend=${row.trend} atRisk=${row.atRisk} misses=${row.consecutiveMisses} factors=${JSON.stringify(row.factors)}`,
@@ -44,7 +46,10 @@ for (const alert of alerts) {
   );
 }
 
-const monthly = await client.query(api.analytics.reportRows, { actorToken: token, period: "monthly" });
+const monthly = await client.query(api.analytics.reportRows, {
+  actorToken: token,
+  period: "monthly",
+});
 console.log(
   `monthly report: ${monthly.rows.length} rows, summary=${JSON.stringify(monthly.summary)}`,
 );

@@ -2,7 +2,9 @@
 
 import {
   BookOpen,
+  ChartColumn,
   ClipboardList,
+  FileText,
   GraduationCap,
   Inbox,
   Landmark,
@@ -30,6 +32,8 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   users: Users,
   scroll: ScrollText,
   inbox: Inbox,
+  insights: ChartColumn,
+  file: FileText,
 };
 
 type SideNavProps = {

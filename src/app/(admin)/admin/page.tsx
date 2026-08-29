@@ -1,4 +1,13 @@
-import { ArrowRight, BookOpen, Inbox, Landmark, Smartphone, Users } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  ChartColumn,
+  FileText,
+  Inbox,
+  Landmark,
+  Smartphone,
+  Users,
+} from "lucide-react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
@@ -33,6 +42,27 @@ const DIRECTORY: DirectoryCard[] = [
     href: "/admin/devices",
     cta: "Review devices",
   },
+  {
+    icon: ChartColumn,
+    title: "Analytics",
+    description: "Attendance trajectories, subject trends, and verification anomalies.",
+    href: "/admin/analytics",
+    cta: "Open analytics",
+  },
+  {
+    icon: Inbox,
+    title: "Review inbox",
+    description: "Early-warning alerts routed to human review.",
+    href: "/admin/review",
+    cta: "Open inbox",
+  },
+  {
+    icon: FileText,
+    title: "Reports",
+    description: "Rolling-window reports with CSV and PDF exports.",
+    href: "/admin/reports",
+    cta: "Open reports",
+  },
 ];
 
 const UPCOMING = [
@@ -60,7 +90,7 @@ export default function AdminPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Manage</h2>
-        <div className="bg-border/70 grid gap-px overflow-hidden rounded-xl border md:grid-cols-3">
+        <div className="bg-border/70 grid gap-px overflow-hidden rounded-xl border md:grid-cols-2 lg:grid-cols-3">
           {DIRECTORY.map((card) => (
             <Link
               key={card.href}

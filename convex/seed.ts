@@ -425,10 +425,11 @@ const BACKFILL_LATE: Array<{ student: 0 | 1; week: number; section: number; minu
 ];
 
 /** Flagged rows carrying proxy reason codes (student, week, section), all in recent weeks. */
-const BACKFILL_PROXY_FLAGS: Array<{ student: 0 | 1; week: number; section: number; code: string }> = [
-  { student: 1, week: 10, section: 2, code: "person_spoof_suspected" },
-  { student: 1, week: 9, section: 0, code: "person_face_mismatch" },
-];
+const BACKFILL_PROXY_FLAGS: Array<{ student: 0 | 1; week: number; section: number; code: string }> =
+  [
+    { student: 1, week: 10, section: 2, code: "person_spoof_suspected" },
+    { student: 1, week: 9, section: 0, code: "person_face_mismatch" },
+  ];
 
 /** Backfilled challenge-anomaly ledger rows (student, week, type), all recent. */
 const BACKFILL_LEDGER_ANOMALIES: Array<{ student: 0 | 1; week: number; type: string }> = [
@@ -486,10 +487,16 @@ async function backfillTermHistory(
     BACKFILL_LATE.map((late) => [backfillKey(late.student, late.week, late.section), late.minutes]),
   );
   const proxyCodes = new Map(
-    BACKFILL_PROXY_FLAGS.map((flag) => [backfillKey(flag.student, flag.week, flag.section), flag.code]),
+    BACKFILL_PROXY_FLAGS.map((flag) => [
+      backfillKey(flag.student, flag.week, flag.section),
+      flag.code,
+    ]),
   );
 
-  const sessionsByWeekSection = new Map<string, { sessionId: Id<"class_sessions">; startedAt: number }>();
+  const sessionsByWeekSection = new Map<
+    string,
+    { sessionId: Id<"class_sessions">; startedAt: number }
+  >();
 
   for (let week = 0; week < TERM_WEEKS; week += 1) {
     for (let sectionIndex = 0; sectionIndex < 4; sectionIndex += 1) {
@@ -548,8 +555,7 @@ async function backfillTermHistory(
         if (session === undefined) continue;
 
         const late = lateMinutes.get(backfillKey(studentIndex, week, sectionIndex));
-        const minutesIn =
-          late ?? ((week * 3 + sectionIndex * 2 + studentIndex * 5) % 9) + 2;
+        const minutesIn = late ?? ((week * 3 + sectionIndex * 2 + studentIndex * 5) % 9) + 2;
         const capturedAt = session.startedAt + minutesIn * MS_PER_MINUTE;
 
         const proxyCode = proxyCodes.get(backfillKey(studentIndex, week, sectionIndex));
@@ -671,11 +677,17 @@ function buildBackfillDecision(
                   category: "person",
                   source: "face_match",
                   status: "failed",
-                  detail:
-                    proxyCode === "person_spoof_suspected" ? "spoof_suspected" : "mismatch",
+                  detail: proxyCode === "person_spoof_suspected" ? "spoof_suspected" : "mismatch",
                 },
               ]
-            : [{ category: "device", source: "device_registry", status: "failed", detail: "suspended" }],
+            : [
+                {
+                  category: "device",
+                  source: "device_registry",
+                  status: "failed",
+                  detail: "suspended",
+                },
+              ],
       },
       reasonCodes: proxyCode !== undefined ? [proxyCode] : ["device_distrusted"],
       policyVersion: RISK_POLICY_VERSION,
@@ -687,7 +699,12 @@ function buildBackfillDecision(
       outcome: "reject",
       evidence: {
         signals: [
-          { category: "identity", source: "passkey_session", status: "failed", detail: "challenge_expired_use" },
+          {
+            category: "identity",
+            source: "passkey_session",
+            status: "failed",
+            detail: "challenge_expired_use",
+          },
         ],
       },
       reasonCodes: ["challenge_expired_use"],
@@ -738,4 +755,3 @@ async function verifyBackfillChain(
   }
   return true;
 }
-

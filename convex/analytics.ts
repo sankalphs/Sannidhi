@@ -28,10 +28,7 @@ export type AnalyticsOverview = {
   openAlerts: number;
 };
 
-async function trajectoryFor(
-  ctx: QueryCtx,
-  studentId: Id<"users">,
-): Promise<StudentTrajectory> {
+async function trajectoryFor(ctx: QueryCtx, studentId: Id<"users">): Promise<StudentTrajectory> {
   const records = await studentTrajectoryRecords(ctx, { studentId });
   return analyzeTrajectory(records);
 }
@@ -249,9 +246,7 @@ export const anomalyDashboard = query({
       .query("users")
       .withIndex("by_institution", (q) => q.eq("institutionId", caller.institutionId))
       .collect();
-    const studentById = new Map(
-      students.map((user) => [user._id as string, user] as const),
-    );
+    const studentById = new Map(students.map((user) => [user._id as string, user] as const));
 
     const ledgerRows = (
       await ctx.db
@@ -319,8 +314,7 @@ export const reportRows = query({
         .withIndex("by_capturedAt", (q) => q.gte("capturedAt", window.startMs))
         .collect()
     ).filter(
-      (event) =>
-        event.capturedAt < window.endMs && event.institutionId === caller.institutionId,
+      (event) => event.capturedAt < window.endMs && event.institutionId === caller.institutionId,
     );
 
     const sectionCache = new Map<Id<"sections">, { sectionName: string; courseCode: string }>();
@@ -336,7 +330,10 @@ export const reportRows = query({
           section = { sectionName: sectionDoc.name, courseCode: course.code };
           sectionCache.set(event.sectionId, section);
         } else {
-          sectionCache.set(event.sectionId, null as unknown as { sectionName: string; courseCode: string });
+          sectionCache.set(
+            event.sectionId,
+            null as unknown as { sectionName: string; courseCode: string },
+          );
           continue;
         }
       }
