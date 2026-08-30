@@ -6,6 +6,7 @@ import {
   deviceTrustSignal,
   manualAttestationSignals,
   outcomeToAttendanceState,
+  type ResolvedRiskPolicy,
 } from "../src/lib/risk";
 import { mintBundleKey, nonceHash, verifySignature } from "../src/lib/offline/bundle";
 import type { Decision, DecisionOutcome } from "../src/lib/decision";
@@ -14,6 +15,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type MutationCtx } from "./_generated/server";
 import { requireActorUserWithActiveSession } from "./lib/actor";
 import { appendAttendanceEvent, bestDeviceForStudent } from "./lib/attendance_event";
+import { resolveSessionPolicy } from "./lib/policyContext";
 
 /**
  * Phase 5 offline capture writer seam (spec §13+§20).
@@ -145,6 +147,9 @@ export const syncOfflineBatch = mutation({
 
     const results: Array<{ studentId: Id<"users">; status: SyncStatus }> = [];
 
+    // Batch records may span sessions; each session's policy resolves once.
+    const policies = new Map<Id<"class_sessions">, ResolvedRiskPolicy>();
+
     for (const record of args.records) {
       const session = sessions.get(record.sessionId);
       if (session === undefined) throw new ConvexError("unauthorized");
@@ -182,6 +187,11 @@ export const syncOfflineBatch = mutation({
       // Mirror verifyManually's signal building, plus a marker that presence
       // was attested offline; the claimed capture time rides along as detail.
       const device = await bestDeviceForStudent(ctx, record.studentId);
+      let policy = policies.get(record.sessionId);
+      if (policy === undefined) {
+        policy = await resolveSessionPolicy(ctx, session);
+        policies.set(record.sessionId, policy);
+      }
       const offlineDecision = decide({
         signals: [
           ...manualAttestationSignals(record.note?.trim() || "offline roster attestation"),
@@ -195,6 +205,7 @@ export const syncOfflineBatch = mutation({
         ],
         anomalies: { recentSecurityFailures: 0 },
         now: Date.now(),
+        policy,
       });
       const decision: Decision = {
         ...offlineDecision,
