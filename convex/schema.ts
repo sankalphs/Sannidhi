@@ -15,6 +15,7 @@ export default defineSchema({
     email: v.string(),
     name: v.string(),
     usn: v.optional(v.string()),
+    departmentIds: v.optional(v.array(v.id("departments"))),
     role: v.union(
       v.literal("student"),
       v.literal("faculty"),
@@ -48,6 +49,7 @@ export default defineSchema({
     code: v.string(),
     title: v.string(),
     department: v.optional(v.string()),
+    departmentId: v.optional(v.id("departments")),
   }).index("by_institution_code", ["institutionId", "code"]),
 
   sections: defineTable({
@@ -64,6 +66,29 @@ export default defineSchema({
     longitude: v.optional(v.number()),
     geofenceRadiusMeters: v.optional(v.number()),
   }).index("by_institution", ["institutionId"]),
+
+  departments: defineTable({
+    institutionId: v.id("institutions"),
+    code: v.string(),
+    name: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_institution_code", ["institutionId", "code"])
+    .index("by_institution", ["institutionId"]),
+
+  policy_rows: defineTable({
+    institutionId: v.id("institutions"),
+    scope: v.string(),
+    departmentId: v.optional(v.id("departments")),
+    venueId: v.optional(v.id("venues")),
+    settings: v.any(),
+    revision: v.number(),
+    createdByUserId: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_institution_scope", ["institutionId", "scope"])
+    .index("by_institution_scope_department", ["institutionId", "scope", "departmentId"])
+    .index("by_institution_scope_venue", ["institutionId", "scope", "venueId"]),
 
   timetable_slots: defineTable({
     sectionId: v.id("sections"),
