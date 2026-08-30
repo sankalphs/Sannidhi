@@ -33,6 +33,7 @@ import {
   spotRecheckPickIndex,
 } from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
+import { resolveSessionPolicy } from "./lib/policyContext";
 
 /**
  * Step-up + spot-recheck challenge store (Phase 4).
@@ -149,6 +150,7 @@ async function expirePendingChallenge(
     signals: await sessionSignals(ctx, challenge.studentId, challenge.sessionId),
     anomalies: { recentSecurityFailures: 0, missedSpotRecheck: true },
     now,
+    policy: await resolveSessionPolicy(ctx, session),
   });
   await appendAttendanceEvent(ctx, {
     institutionId: session.institutionId,
@@ -307,6 +309,7 @@ export const completeWithFace = mutation({
         await ctx.db.patch(challenge._id, { attempts, status: "failed", resolvedAt: now });
         // A fresh decision (never the origin step_up's) so the flagged event
         // carries evidence of the failed attempts' category.
+        const session = await ctx.db.get(challenge.sessionId);
         const decision = decide({
           signals: [
             ...(await sessionSignals(ctx, caller._id, challenge.sessionId)),
@@ -314,8 +317,8 @@ export const completeWithFace = mutation({
           ],
           anomalies: { recentSecurityFailures: 0, reviewRequested: true },
           now,
+          policy: session !== null ? await resolveSessionPolicy(ctx, session) : undefined,
         });
-        const session = await ctx.db.get(challenge.sessionId);
         if (session !== null) {
           await appendAttendanceEvent(ctx, {
             institutionId: session.institutionId,
@@ -350,14 +353,14 @@ export const completeWithFace = mutation({
     }
 
     const personSignal = faceMatchSignal(personOutcome(classification));
+    const session = await ctx.db.get(challenge.sessionId);
+    if (session === null) return { kind: "gone" as const };
     const decision = decide({
       signals: [...(await sessionSignals(ctx, caller._id, challenge.sessionId)), personSignal],
       anomalies: { recentSecurityFailures: 0 },
       now,
+      policy: await resolveSessionPolicy(ctx, session),
     });
-
-    const session = await ctx.db.get(challenge.sessionId);
-    if (session === null) return { kind: "gone" as const };
 
     if (classification.verdict === "match") {
       await appendAttendanceEvent(ctx, {
@@ -436,6 +439,7 @@ export const escalateToReview = mutation({
       signals: await sessionSignals(ctx, caller._id, challenge.sessionId),
       anomalies: { recentSecurityFailures: 0, reviewRequested: true },
       now,
+      policy: await resolveSessionPolicy(ctx, session),
     });
 
     await appendAttendanceEvent(ctx, {

@@ -32,6 +32,7 @@ import {
   RATE_LIMIT_EVENT_TYPES,
 } from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
+import { resolveSessionPolicy } from "./lib/policyContext";
 
 type FailureVerdict = Exclude<RedeemVerdict, "valid">;
 
@@ -204,6 +205,7 @@ export const redeemChallenge = mutation({
         ],
         anomalies: { recentSecurityFailures },
         now,
+        policy: await resolveSessionPolicy(ctx, session),
       });
       if (decision.outcome !== "reject") return;
       await appendAttendanceEvent(ctx, {
@@ -301,6 +303,7 @@ export const redeemChallenge = mutation({
     await ctx.db.patch(storedDoc._id, { consumedAt: now, consumedByUserId: caller._id });
 
     const venue = await ctx.db.get(session.venueId);
+    const policy = await resolveSessionPolicy(ctx, session);
 
     const locationOutcome = evaluateLocationConsistency({
       fix: args.location ?? null,
@@ -314,6 +317,11 @@ export const redeemChallenge = mutation({
               geofenceRadiusMeters: venue.geofenceRadiusMeters ?? null,
             }
           : null,
+      policy: {
+        defaultRadiusMeters: policy.locationDefaultRadiusMeters,
+        inconclusiveMarginMeters: policy.locationInconclusiveMarginMeters,
+        maxAccuracyMarginMeters: policy.locationMaxAccuracyMarginMeters,
+      },
     });
 
     const device = await bestDeviceForStudent(ctx, caller._id);
@@ -330,6 +338,7 @@ export const redeemChallenge = mutation({
       ],
       anomalies: { recentSecurityFailures },
       now,
+      policy,
     });
 
     const attendanceEventId = await appendAttendanceEvent(ctx, {

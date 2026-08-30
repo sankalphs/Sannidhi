@@ -1,0 +1,13 @@
+department_code,department_name,course_code,course_title,section_name,term,student_email,student_name,usn
+CSE,Computer Science,CS101,Introduction to Computer Science,CS101 - Section A,2026-Autumn,aarav.patel@sit.edu.in,Aarav Patel,SIT-CS-2023-001
+CSE,Computer Science,CS101,Introduction to Computer Science,CS101 - Section A,2026-Autumn,diya.sharma@sit.edu.in,Diya Sharma,SIT-CS-2023-002
+CSE,Computer Science,CS101,Introduction to Computer Science,CS101 - Section A,2026-Autumn,kabir.rao@sit.edu.in,Kabir Rao
+CSE,Computer Science,CS101,Introduction to Computer Science,CS101 - Section A,2026-Autumn,ishita.bhatt@sit.edu.in,Ishita Bhatt
+CSE,Computer Science,CS101,Introduction to Computer Science,CS101 - Section B,2026-Autumn,dev.kulkarni@sit.edu.in,Dev Kulkarni,SIT-CS-2024-014
+CSE,Computer Science,CS101,Introduction to Computer Science,CS101 - Section B,2026-Autumn,tara.mehra@sit.edu.in,Tara Mehra
+MATH,Mathematics,MA201,Discrete Mathematics,MA201 - Section A,2026-Autumn,arjun.nambiar@sit.edu.in,Arjun Nambiar,SIT-MA-2023-007
+MATH,Mathematics,MA201,Discrete Mathematics,MA201 - Section A,2026-Autumn,sneha.kulkarni@sit.edu.in,Sneha Kulkarni
+ECE,Electronics & Communication,EC210,Digital Electronics,EC210 - Section A,2026-Autumn,nikhil.joshi@sit.edu.in,Nikhil Joshi,SIT-EC-2023-021
+ECE,Electronics & Communication,EC210,Digital Electronics,EC210 - Section A,2026-Autumn,riya.das@sit.edu.in,Riya Das
+ECE,Electronics & Communication,EC210,Digital Electronics,EC210 - Section A,2026-Autumn,aditya.verma@sit.edu.in,Aditya Verma
+ECE,Electronics & Communication,EC210,Digital Electronics,EC210 - Guest Lecture,,farah.khan@sit.edu.in,Farah Khan

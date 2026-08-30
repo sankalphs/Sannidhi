@@ -50,8 +50,13 @@ export function evaluateLocationConsistency(args: {
   consent: LocationConsent;
   availability: LocationAvailability;
   venue: VenueGeoReference | null;
+  policy?: {
+    defaultRadiusMeters?: number;
+    inconclusiveMarginMeters?: number;
+    maxAccuracyMarginMeters?: number;
+  } | null;
 }): LocationOutcome {
-  const { fix, consent, availability, venue } = args;
+  const { fix, consent, availability, venue, policy } = args;
 
   if (consent === "denied") return { verdict: "not_consented" };
   if (availability === "unavailable" || fix === null) return { verdict: "unavailable" };
@@ -59,18 +64,21 @@ export function evaluateLocationConsistency(args: {
     return { verdict: "no_reference" };
   }
 
-  const radius = venue.geofenceRadiusMeters ?? LOCATION_DEFAULT_RADIUS_METERS;
+  const radius =
+    venue.geofenceRadiusMeters ?? policy?.defaultRadiusMeters ?? LOCATION_DEFAULT_RADIUS_METERS;
   const margin = Math.min(
-    LOCATION_MAX_ACCURACY_MARGIN_METERS,
+    policy?.maxAccuracyMarginMeters ?? LOCATION_MAX_ACCURACY_MARGIN_METERS,
     Math.max(0, fix.accuracyMeters ?? 0),
   );
+  const inconclusiveMarginMeters =
+    policy?.inconclusiveMarginMeters ?? LOCATION_INCONCLUSIVE_MARGIN_METERS;
   const distanceMeters = haversineMeters(fix, {
     latitude: venue.latitude,
     longitude: venue.longitude,
   });
 
   if (distanceMeters - margin <= radius) return { verdict: "consistent", distanceMeters };
-  if (distanceMeters - margin <= radius + LOCATION_INCONCLUSIVE_MARGIN_METERS) {
+  if (distanceMeters - margin <= radius + inconclusiveMarginMeters) {
     return { verdict: "inconclusive", distanceMeters };
   }
   return { verdict: "mismatch", distanceMeters };

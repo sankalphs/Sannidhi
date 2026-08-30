@@ -14,6 +14,7 @@ import {
   latestEventsByStudentSince,
 } from "./lib/attendance_event";
 import { resolveActorUser } from "./lib/actor";
+import { resolveSessionPolicy } from "./lib/policyContext";
 
 const DEFAULT_WINDOW_MINUTES = 45;
 
@@ -490,6 +491,7 @@ export const verifyManually = mutation({
       signals: [...manualAttestationSignals(trimmed), deviceTrustSignal(device)],
       anomalies: { recentSecurityFailures: 0 },
       now,
+      policy: await resolveSessionPolicy(ctx, session),
     });
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {

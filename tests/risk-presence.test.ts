@@ -18,8 +18,15 @@ function fixNorthOfVenue(degrees: number): GeoFix {
 function evaluate(
   fix: GeoFix | null,
   venue: Parameters<typeof evaluateLocationConsistency>[0]["venue"],
+  policy?: Parameters<typeof evaluateLocationConsistency>[0]["policy"],
 ) {
-  return evaluateLocationConsistency({ fix, consent: "granted", availability: "ok", venue });
+  return evaluateLocationConsistency({
+    fix,
+    consent: "granted",
+    availability: "ok",
+    venue,
+    policy,
+  });
 }
 
 describe("haversineMeters", () => {
@@ -191,5 +198,83 @@ describe("radius and margin semantics", () => {
 
   it("exposes the presence evidence version constant", () => {
     expect(PRESENCE_EVIDENCE_VERSION).toBe("presence-evidence/v1");
+  });
+});
+
+describe("policy-parameterized margins", () => {
+  it("shrinks the inconclusive band to zero", () => {
+    const venue = { ...VENUE, geofenceRadiusMeters: 100 };
+    const fix = fixNorthOfVenue(0.001);
+    const d = haversineMeters(fix, VENUE);
+    expect(d).toBeGreaterThan(100);
+    expect(d).toBeLessThan(250);
+
+    const mismatch = evaluate(fix, venue, { inconclusiveMarginMeters: 0 });
+    expect(mismatch).toEqual({ verdict: "mismatch", distanceMeters: d });
+  });
+
+  it("widens the inconclusive band with a larger margin", () => {
+    const venue = { ...VENUE, geofenceRadiusMeters: 100 };
+    const fix = fixNorthOfVenue(0.005);
+    const d = haversineMeters(fix, VENUE);
+    expect(d).toBeGreaterThan(250);
+    expect(d).toBeLessThan(100 + 500);
+
+    const mismatch = evaluate(fix, venue);
+    expect(mismatch.verdict).toBe("mismatch");
+
+    const inconclusive = evaluate(fix, venue, { inconclusiveMarginMeters: 500 });
+    expect(inconclusive).toEqual({ verdict: "inconclusive", distanceMeters: d });
+  });
+
+  it("uses the policy default radius when the venue lacks geofenceRadiusMeters", () => {
+    const fix = fixNorthOfVenue(0.001);
+    const d = haversineMeters(fix, VENUE);
+    expect(d).toBeGreaterThan(100);
+    expect(d).toBeLessThan(150);
+
+    const consistent = evaluate(fix, VENUE, {
+      defaultRadiusMeters: 100,
+      inconclusiveMarginMeters: 0,
+    });
+    expect(consistent).toEqual({ verdict: "mismatch", distanceMeters: d });
+    expect(evaluate(fix, VENUE, { defaultRadiusMeters: 1000 })).toEqual({
+      verdict: "consistent",
+      distanceMeters: d,
+    });
+  });
+
+  it("still prefers the venue's own geofence radius over the policy default", () => {
+    const venue = { ...VENUE, geofenceRadiusMeters: 100 };
+    const fix = fixNorthOfVenue(0.001);
+    const d = haversineMeters(fix, VENUE);
+    expect(d).toBeGreaterThan(100);
+
+    const outcome = evaluate(fix, venue, { defaultRadiusMeters: 1000 });
+    expect(outcome).toEqual({ verdict: "inconclusive", distanceMeters: d });
+  });
+
+  it("respects a tighter policy accuracy cap", () => {
+    const venue = { ...VENUE, geofenceRadiusMeters: 100 };
+    const fix = fixNorthOfVenue(0.00225);
+    const d = haversineMeters(fix, VENUE);
+    expect(d).toBeGreaterThan(240);
+
+    const spoofed = evaluate({ ...fix, accuracyMeters: 5000 }, venue, {
+      maxAccuracyMarginMeters: 50,
+      inconclusiveMarginMeters: 0,
+    });
+    expect(spoofed).toEqual({ verdict: "mismatch", distanceMeters: d });
+
+    const trusted = evaluate({ ...fix, accuracyMeters: 30 }, venue, {
+      maxAccuracyMarginMeters: 50,
+      inconclusiveMarginMeters: 0,
+    });
+    expect(trusted).toEqual({ verdict: "mismatch", distanceMeters: d });
+    expect(
+      evaluate({ ...fix, accuracyMeters: 200 }, venue, {
+        maxAccuracyMarginMeters: 200,
+      }),
+    ).toEqual({ verdict: "consistent", distanceMeters: d });
   });
 });
