@@ -156,6 +156,7 @@ export function parseRosterCsv(text: string): ParsedRoster {
       studentEmail: value(6).toLowerCase(),
       studentName: value(7),
       studentUsn: value(8).length > 0 ? value(8) : undefined,
+      sourceRow: record.line,
     };
 
     if (Object.values(row).every((v) => v === undefined || (v as string).length === 0)) continue;

@@ -11,9 +11,10 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * through parseRosterCsv: trims every field, uppercases codes, lowercases
  * emails, treats empty term/usn as undefined, drops rows with blank required
  * fields or invalid emails (matching parseRosterCsv), and collapses exact
- * duplicate enrollments. Issue row numbers are 1-based positions in the
- * submitted array. Row-count capping stays with the handlers; empty-row
- * dropping stays with computeRosterDiff.
+ * duplicate enrollments. A source-CSV row number carried on the row
+ * (sourceRow) is passed through untouched. Issue row numbers are 1-based
+ * positions in the submitted array. Row-count capping stays with the handlers;
+ * empty-row dropping stays with computeRosterDiff.
  */
 export function normalizeRosterRows(rows: RosterRow[]): {
   rows: RosterRow[];
@@ -36,6 +37,7 @@ export function normalizeRosterRows(rows: RosterRow[]): {
       ...(raw.studentUsn !== undefined && raw.studentUsn.trim().length > 0
         ? { studentUsn: raw.studentUsn.trim() }
         : {}),
+      ...(raw.sourceRow !== undefined ? { sourceRow: raw.sourceRow } : {}),
     };
 
     const required: [keyof RosterRow, string][] = [

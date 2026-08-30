@@ -58,6 +58,12 @@ describe("normalizeRosterRows", () => {
     expect(rows[0].studentUsn).toBeUndefined();
   });
 
+  it("passes a source-CSV row number through untouched for apply-time issues", () => {
+    const { rows, issues } = normalizeRosterRows([row({ sourceRow: 7 })]);
+    expect(issues).toEqual([]);
+    expect(rows[0]?.sourceRow).toBe(7);
+  });
+
   it("drops exact duplicate enrollments, reporting the 1-based row and first occurrence", () => {
     const { rows, issues } = normalizeRosterRows([
       row(),

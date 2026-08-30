@@ -22,6 +22,7 @@ describe("parseRosterCsv", () => {
         studentEmail: "aarav.patel@sit.edu.in",
         studentName: "Aarav Patel",
         studentUsn: "SIT-001",
+        sourceRow: 2,
       },
     ]);
   });
@@ -41,6 +42,7 @@ describe("parseRosterCsv", () => {
         studentEmail: "x@y.edu.in",
         studentName: "X Person",
         studentUsn: undefined,
+        sourceRow: 2,
       },
     ]);
   });
@@ -153,8 +155,22 @@ describe("parseRosterCsv", () => {
         studentEmail: "a@sit.edu.in",
         studentName: 'A "AP" Person',
         studentUsn: undefined,
+        sourceRow: 2,
       },
     ]);
+  });
+
+  it("stamps each valid row with its source CSV line, not its filtered position", () => {
+    // Row 2 is invalid (dropped), so the valid row from CSV line 3 must keep
+    // sourceRow 3 rather than becoming position 1 of the filtered array.
+    const csv =
+      `${HEADER}\n` +
+      "CSE,Computer Science,CS101,Intro,Section A,2026-Autumn,not-an-email,A Person,\n" +
+      "CSE,Computer Science,CS101,Intro,Section A,2026-Autumn,ok@sit.edu.in,Ok Person,";
+    const result = parseRosterCsv(csv);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.sourceRow).toBe(3);
+    expect(result.rows[0]?.studentEmail).toBe("ok@sit.edu.in");
   });
 
   it("reports an unterminated quoted field with a row number", () => {

@@ -1,4 +1,6 @@
-// One normalized roster row = one intended enrollment.
+// One normalized roster row = one intended enrollment. sourceRow is metadata
+// from the source CSV (1-based line number), not an enrollment field: the
+// sync API echoes it so apply-time issues can cite the row the admin uploaded.
 export type RosterRow = {
   departmentCode: string;
   departmentName: string;
@@ -9,6 +11,7 @@ export type RosterRow = {
   studentEmail: string;
   studentName: string;
   studentUsn?: string;
+  sourceRow?: number;
 };
 
 export type RosterIssue = {

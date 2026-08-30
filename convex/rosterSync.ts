@@ -20,6 +20,7 @@ const rosterRowValidator = v.object({
   studentEmail: v.string(),
   studentName: v.string(),
   studentUsn: v.optional(v.string()),
+  sourceRow: v.optional(v.number()),
 });
 
 /** Days a roster-sync invite stays redeemable; matches the invites default TTL. */
@@ -262,12 +263,15 @@ export const applyRosterSync = mutation({
       if (existingUser !== null) {
         // The email resolves to a user of another institution or a non-student
         // role: the global by_email index is not scoped, so verify before
-        // attaching an invite to it. The row number cites the position in the
-        // submitted array so it matches what the admin uploaded, not the
-        // filtered set normalizeRosterRows produced.
+        // attaching an invite to it. Prefer the source CSV row parseRosterCsv
+        // stamped (positions drift when invalid rows are filtered out); fall
+        // back to the submitted array position for direct API callers.
         if (existingUser.institutionId !== admin.institutionId || existingUser.role !== "student") {
+          const submittedIndex = args.rows.findIndex(
+            (row) => row.studentEmail.trim().toLowerCase() === email,
+          );
           const sourceRow =
-            args.rows.findIndex((row) => row.studentEmail.trim().toLowerCase() === email) + 1;
+            submittedIndex === -1 ? 0 : (args.rows[submittedIndex].sourceRow ?? submittedIndex + 1);
           issues.push({
             row: sourceRow,
             field: "student_email",
