@@ -1,4 +1,5 @@
 import type { ParsedRoster, RosterIssue, RosterRow } from "./types";
+import { enrollmentKey } from "./keys";
 
 export const ROSTER_CSV_HEADERS = [
   "department_code",
@@ -103,11 +104,6 @@ function tokenize(text: string): TokenizeResult {
   return { records, error: null };
 }
 
-function enrollmentKey(row: RosterRow): string {
-  const term = row.term ?? "";
-  return `${row.studentEmail}\n${row.courseCode}\n${row.sectionName}\n${term}`;
-}
-
 /**
  * Parses an SIS/LMS roster extract into normalized rows. Invalid rows are
  * dropped and reported in issues (row numbers are 2-based, 1 being the header).
@@ -118,7 +114,10 @@ export function parseRosterCsv(text: string): ParsedRoster {
 
   const withoutBom = text.replace(/^\uFEFF/, "");
   const { records, error } = tokenize(withoutBom);
-  if (error !== null) issues.push(error);
+  if (error !== null) {
+    // Malformed input: the records array may be truncated, so never parse it.
+    return { rows, issues: [error] };
+  }
 
   const header = records[0];
   if (header === undefined) {

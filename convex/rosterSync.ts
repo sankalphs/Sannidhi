@@ -1,5 +1,6 @@
 import { ConvexError, v } from "convex/values";
 
+import { sectionKey } from "../src/lib/roster/keys";
 import { computeRosterDiff } from "../src/lib/roster/diff";
 import type { RosterCatalogSnapshot, RosterRow } from "../src/lib/roster/types";
 import { hashInviteToken, randomToken } from "../src/lib/invites/token";
@@ -23,10 +24,6 @@ const rosterRowValidator = v.object({
 
 /** Days a roster-sync invite stays redeemable; matches the invites default TTL. */
 const INVITE_TTL_DAYS = 7;
-
-function sectionKey(courseCode: string, sectionName: string, term: string | undefined): string {
-  return `${courseCode}\n${sectionName}\n${term ?? ""}`;
-}
 
 function assertRowLimit(rows: RosterRow[]): void {
   if (rows.length > MAX_ROSTER_ROWS) {
@@ -63,13 +60,17 @@ async function loadInstitutionSnapshot(
   const sections: RosterCatalogSnapshot["sections"] = [];
   const sectionIds: Id<"sections">[] = [];
   const courseCodeById = new Map<Id<"courses">, string>();
-  for (const course of courses) {
+  const sectionsPerCourse = await Promise.all(
+    courses.map((course) =>
+      ctx.db
+        .query("sections")
+        .withIndex("by_course", (q) => q.eq("courseId", course._id))
+        .collect(),
+    ),
+  );
+  courses.forEach((course, index) => {
     courseCodeById.set(course._id, course.code.toUpperCase());
-    const courseSections = await ctx.db
-      .query("sections")
-      .withIndex("by_course", (q) => q.eq("courseId", course._id))
-      .collect();
-    for (const section of courseSections) {
+    for (const section of sectionsPerCourse[index] ?? []) {
       sections.push({
         id: section._id,
         courseId: course._id,
@@ -78,14 +79,18 @@ async function loadInstitutionSnapshot(
       });
       sectionIds.push(section._id);
     }
-  }
+  });
 
   const enrollments: RosterCatalogSnapshot["enrollments"] = [];
-  for (const sectionId of sectionIds) {
-    const rows = await ctx.db
-      .query("enrollments")
-      .withIndex("by_section", (q) => q.eq("sectionId", sectionId))
-      .collect();
+  const enrollmentsPerSection = await Promise.all(
+    sectionIds.map((sectionId) =>
+      ctx.db
+        .query("enrollments")
+        .withIndex("by_section", (q) => q.eq("sectionId", sectionId))
+        .collect(),
+    ),
+  );
+  for (const rows of enrollmentsPerSection) {
     for (const row of rows) {
       enrollments.push({ studentId: row.studentId, sectionId: row.sectionId });
     }
@@ -254,7 +259,19 @@ export const applyRosterSync = mutation({
         .query("users")
         .withIndex("by_email", (q) => q.eq("email", email))
         .first();
-      if (existingUser === null) {
+      if (existingUser !== null) {
+        // The email resolves to a user of another institution or a non-student
+        // role: the global by_email index is not scoped, so verify before
+        // attaching an invite to it.
+        if (existingUser.institutionId !== admin.institutionId || existingUser.role !== "student") {
+          issues.push({
+            row: 0,
+            field: "student_email",
+            message: `"${email}" belongs to an existing account that cannot be invited as a student here`,
+          });
+          continue;
+        }
+      } else {
         const name = studentNameByEmail.get(email);
         const userId = await ctx.db.insert("users", {
           institutionId: admin.institutionId,

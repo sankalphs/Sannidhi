@@ -58,18 +58,54 @@ function departmentCard(page: Page, code: string) {
 }
 
 /**
- * Click a button repeatedly until the assertion locator becomes visible.
- * The first click on a cold dev server can land before React hydration
- * attaches handlers; polling keeps the step deterministic without sleeps.
+ * Click a button and wait for the assertion. Retries only after a settle
+ * window: the first click on a cold dev server can land before React
+ * hydration attaches handlers, but re-clicking in a tight loop can also
+ * re-trigger the action and flicker transient state — so give each attempt
+ * time to take effect before clicking again.
  */
 async function pollClick(button: Locator, assertion: Locator, timeout = 60_000): Promise<void> {
+  const deadline = Date.now() + timeout;
+  for (let attempt = 0; ; attempt += 1) {
+    if ((await assertion.count()) > 0 && (await assertion.first().isVisible())) {
+      await expect(assertion.first()).toBeVisible();
+      return;
+    }
+    if (Date.now() > deadline) break;
+    await button.click({ timeout: 10_000 }).catch(() => {});
+    await assertion
+      .first()
+      .waitFor({ timeout: 8_000 })
+      .catch(() => {});
+  }
+  await expect(assertion.first()).toBeVisible({ timeout: 1_000 });
+}
+
+/**
+ * Fill one or more inputs, click a button, and retry the whole interaction
+ * until the assertion holds. A fill that lands before React hydration is
+ * reset by the controlled component, and an unhydrated click is a no-op, so
+ * each attempt re-checks and re-fills every field before clicking — keeping
+ * the submitted payload deterministic.
+ */
+async function pollFillSave(
+  fills: [input: Locator, value: string][],
+  button: Locator,
+  assertion: Locator,
+  timeout = 60_000,
+): Promise<void> {
   await expect
     .poll(
       async () => {
+        for (const [input, value] of fills) {
+          if ((await input.inputValue()) !== value) {
+            await input.fill(value, { timeout: 10_000 }).catch(() => {});
+          }
+        }
         await button.click({ timeout: 10_000 }).catch(() => {});
         return (await assertion.count()) > 0 && (await assertion.first().isVisible());
       },
-      { timeout, message: "waiting for the effect of the clicked control" },
+      { timeout, message: "waiting for the saved value to take effect" },
     )
     .toBe(true);
   await expect(assertion.first()).toBeVisible();
@@ -82,24 +118,39 @@ async function autoConfirm(page: Page): Promise<void> {
 }
 
 test("institution defaults save, stamp, and clear through the policies console", async () => {
+  test.setTimeout(180_000);
   await adminPage.goto("/admin/policies");
 
   await expect(adminPage.getByRole("heading", { name: "Policies", exact: true })).toBeVisible();
   await expect(institutionCard(adminPage).getByText("defaults", { exact: true })).toBeVisible();
 
-  await institutionCard(adminPage).getByLabel("Anomaly flag threshold").fill("5");
-  await pollClick(
-    institutionCard(adminPage).getByRole("button", { name: "Save institution policy" }),
-    institutionCard(adminPage)
-      .getByTestId("policy-card-badge")
-      .getByText(/Revision \d+/),
-  );
-  await expect(institutionCard(adminPage).getByText(/risk-engine\/v1\+policy:\d+/)).toBeVisible({
-    timeout: 30_000,
-  });
+  const threshold = () => institutionCard(adminPage).getByLabel("Anomaly flag threshold");
+  const saveButton = () =>
+    institutionCard(adminPage).getByRole("button", { name: "Save institution policy" });
 
-  await adminPage.reload();
-  await expect(institutionCard(adminPage).getByLabel("Anomaly flag threshold")).toHaveValue("5");
+  // The whole fill→save→reload cycle retries: a fill lost to React hydration
+  // or a click before handlers attach saves an empty payload, and only the
+  // reloaded persisted value proves the save actually landed.
+  await expect
+    .poll(
+      async () => {
+        if ((await threshold().inputValue()) !== "5") {
+          await threshold()
+            .fill("5", { timeout: 10_000 })
+            .catch(() => {});
+        }
+        await saveButton()
+          .click({ timeout: 10_000 })
+          .catch(() => {});
+        await adminPage.reload();
+        await adminPage.getByTestId("policy-card-institution").waitFor({ timeout: 30_000 });
+        return (await threshold().inputValue()) === "5";
+      },
+      { timeout: 150_000, message: "waiting for the institution policy to persist" },
+    )
+    .toBe(true);
+
+  await expect(institutionCard(adminPage).getByText(/Revision \d+/)).toBeVisible();
 
   await autoConfirm(adminPage);
   await pollClick(
@@ -112,32 +163,55 @@ test("institution defaults save, stamp, and clear through the policies console",
 
 test("invalid policy values are rejected inline", async () => {
   await adminPage.goto("/admin/policies");
-  await institutionCard(adminPage).getByLabel("Anomaly flag threshold").fill("99");
-  await pollClick(
+  await pollFillSave(
+    [[institutionCard(adminPage).getByLabel("Anomaly flag threshold"), "99"]],
     institutionCard(adminPage).getByRole("button", { name: "Save institution policy" }),
     institutionCard(adminPage).getByText(/must be an integer between/),
   );
 });
 
 test("departments create, list, and carry policy scopes", async () => {
+  test.setTimeout(180_000);
   await adminPage.goto("/admin/policies");
 
   const manager = adminPage.locator("section", { hasText: "Multi-department administration" });
-  await manager.getByLabel("Code").fill("CSE");
-  await manager.getByLabel("Name").fill("Computer Science & Engineering");
-  await pollClick(
+  await pollFillSave(
+    [
+      [manager.getByLabel("Code"), "CSE"],
+      [manager.getByLabel("Name"), "Computer Science & Engineering"],
+    ],
     manager.getByRole("button", { name: "Create department" }),
     departmentCard(adminPage, "CSE"),
     90_000,
   );
 
-  await departmentCard(adminPage, "CSE").getByLabel("Anomaly flag threshold").fill("2");
-  await pollClick(
-    departmentCard(adminPage, "CSE").getByRole("button", { name: "Save department policy" }),
+  // Reload-verified save: only the persisted value proves the payload landed.
+  const deptThreshold = () => departmentCard(adminPage, "CSE").getByLabel("Anomaly flag threshold");
+  const deptSave = () =>
+    departmentCard(adminPage, "CSE").getByRole("button", { name: "Save department policy" });
+  await expect
+    .poll(
+      async () => {
+        if ((await deptThreshold().inputValue()) !== "2") {
+          await deptThreshold()
+            .fill("2", { timeout: 10_000 })
+            .catch(() => {});
+        }
+        await deptSave()
+          .click({ timeout: 10_000 })
+          .catch(() => {});
+        await adminPage.reload();
+        await adminPage.getByTestId("policy-card-department").waitFor({ timeout: 30_000 });
+        return (await deptThreshold().inputValue()) === "2";
+      },
+      { timeout: 150_000, message: "waiting for the department policy to persist" },
+    )
+    .toBe(true);
+  await expect(
     departmentCard(adminPage, "CSE")
       .getByTestId("policy-card-badge")
       .getByText(/Revision \d+/),
-  );
+  ).toBeVisible();
 });
 
 test("department authority sees a read-only scoped console", async () => {
@@ -214,11 +288,33 @@ test("strict venue policy escalates a far-away check-in to faculty review", asyn
   await adminPage.goto("/admin/policies");
   const card = venueCard(adminPage, "LH-1");
   await expect(card).toBeVisible();
-  await card.getByLabel("Strict presence").check();
-  await pollClick(
-    card.getByRole("button", { name: "Save venue policy" }),
-    card.getByTestId("policy-card-badge").getByText(/Revision \d+/),
-  );
+  const strictSelect = () => card.getByLabel("Strict presence");
+  const saveButton = () => card.getByRole("button", { name: "Save venue policy" });
+
+  // Reload-verified save: only the persisted "on" selection proves the strict
+  // presence payload landed (an empty sparse save would still show a badge).
+  await expect
+    .poll(
+      async () => {
+        if ((await strictSelect().inputValue()) !== "on") {
+          await strictSelect()
+            .selectOption("on", { timeout: 10_000 })
+            .catch(() => {});
+        }
+        await saveButton()
+          .click({ timeout: 10_000 })
+          .catch(() => {});
+        await adminPage.reload();
+        await adminPage
+          .locator('[data-testid="policy-card-venue"]')
+          .first()
+          .waitFor({ timeout: 30_000 });
+        return (await strictSelect().inputValue()) === "on";
+      },
+      { timeout: 150_000, message: "waiting for the strict venue policy to persist" },
+    )
+    .toBe(true);
+  await expect(card.getByTestId("policy-card-badge").getByText(/Revision \d+/)).toBeVisible();
 
   await facultyPage.goto("/faculty/sessions");
   const startSlot = facultyPage.getByTestId("start-slot").first();

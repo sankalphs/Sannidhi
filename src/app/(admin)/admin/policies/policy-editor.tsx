@@ -70,21 +70,25 @@ const NUMBER_FIELDS: { key: NumberKey; label: string; hint: string; scopes: Poli
   },
 ];
 
-const BOOLEAN_FIELDS: { key: BooleanKey; label: string; hint: string; defaultChecked: boolean }[] =
-  [
-    {
-      key: "stepUpOnWeakDevice",
-      label: "Step up on weak device trust",
-      hint: "Uncheck to accept weak or missing device signals without a step-up challenge",
-      defaultChecked: true,
-    },
-    {
-      key: "strictPresence",
-      label: "Strict presence",
-      hint: "Location mismatches escalate to faculty review instead of a step-up challenge",
-      defaultChecked: false,
-    },
-  ];
+const BOOLEAN_FIELDS: {
+  key: BooleanKey;
+  label: string;
+  hint: string;
+  inheritedDefault: boolean;
+}[] = [
+  {
+    key: "stepUpOnWeakDevice",
+    label: "Step up on weak device trust",
+    hint: "Off accepts weak or missing device signals without a step-up challenge",
+    inheritedDefault: true,
+  },
+  {
+    key: "strictPresence",
+    label: "Strict presence",
+    hint: "Location mismatches escalate to faculty review instead of a step-up challenge",
+    inheritedDefault: false,
+  },
+];
 
 function describeError(cause: unknown): string {
   if (typeof cause === "object" && cause !== null && "data" in cause) {
@@ -95,9 +99,10 @@ function describeError(cause: unknown): string {
 }
 
 /**
- * Sparse editor for one policy layer. Fields left blank stay unset so the
- * layer below (venue → department → institution → built-in defaults) keeps
- * supplying the value; only explicitly entered keys are saved.
+ * Sparse editor for one policy layer. Blank numeric fields and "inherit"
+ * booleans omit the key entirely so the layer below (venue → department →
+ * institution → built-in defaults) keeps supplying the value; only explicit
+ * values are saved. Clearing a saved override back to blank removes it.
  */
 export function PolicyEditor({
   scope,
@@ -112,7 +117,7 @@ export function PolicyEditor({
 }: PolicyEditorProps) {
   const router = useRouter();
   const [values, setValues] = useState<Partial<Record<NumberKey, string>>>({});
-  const [booleans, setBooleans] = useState<Partial<Record<BooleanKey, boolean>>>({});
+  const [booleans, setBooleans] = useState<Partial<Record<BooleanKey, "on" | "off">>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedRevision, setSavedRevision] = useState<number | null>(null);
@@ -131,20 +136,17 @@ export function PolicyEditor({
     for (const field of NUMBER_FIELDS) {
       if (!field.scopes.includes(scope)) continue;
       const raw = values[field.key]?.trim();
+      // Blank (or never-touched with nothing saved) omits the key — inherit.
       if (raw !== undefined && raw.length > 0) {
         const parsed = Number(raw);
         if (Number.isFinite(parsed)) next[field.key] = parsed;
-      } else if (typeof saved[field.key] === "number") {
-        next[field.key] = saved[field.key] as number;
       }
     }
     for (const field of BOOLEAN_FIELDS) {
       const override = booleans[field.key];
-      if (override !== undefined) {
-        next[field.key] = override;
-      } else if (typeof saved[field.key] === "boolean") {
-        next[field.key] = saved[field.key] as boolean;
-      }
+      if (override === "on") next[field.key] = true;
+      else if (override === "off") next[field.key] = false;
+      // undefined ("inherit") omits the key.
     }
     return next as PolicySettings;
   }
@@ -171,6 +173,8 @@ export function PolicyEditor({
         result = await saveVenue({ actorToken, venueId, settings: next });
       }
       setSavedRevision(result.revision);
+      setValues({});
+      setBooleans({});
       router.refresh();
     } catch (cause) {
       setError(describeError(cause));
@@ -245,29 +249,36 @@ export function PolicyEditor({
         ))}
       </div>
 
-      <div className="grid gap-2">
-        {BOOLEAN_FIELDS.map((field) => (
-          <label key={field.key} className="flex items-start gap-2">
-            <input
-              type="checkbox"
-              className="accent-primary mt-0.5 size-4"
-              disabled={!isAdmin}
-              checked={
-                booleans[field.key] ??
-                (typeof saved[field.key] === "boolean"
-                  ? (saved[field.key] as boolean)
-                  : field.defaultChecked)
-              }
-              onChange={(event) =>
-                setBooleans((current) => ({ ...current, [field.key]: event.target.checked }))
-              }
-            />
-            <span className="flex flex-col">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {BOOLEAN_FIELDS.map((field) => {
+          const stored = saved[field.key];
+          const selection =
+            booleans[field.key] ??
+            (typeof stored === "boolean" ? (stored ? "on" : "off") : "inherit");
+          return (
+            <label key={field.key} className="flex flex-col gap-1">
               <span className="text-sm font-medium">{field.label}</span>
+              <select
+                className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+                disabled={!isAdmin}
+                value={selection}
+                onChange={(event) =>
+                  setBooleans((current) => ({
+                    ...current,
+                    [field.key]: event.target.value as "inherit" | "on" | "off",
+                  }))
+                }
+              >
+                <option value="inherit">
+                  Inherit ({field.inheritedDefault ? "on" : "off"} by default)
+                </option>
+                <option value="on">On</option>
+                <option value="off">Off</option>
+              </select>
               <span className="text-muted-foreground text-xs">{field.hint}</span>
-            </span>
-          </label>
-        ))}
+            </label>
+          );
+        })}
       </div>
 
       {error ? <p className="text-destructive text-sm">{error}</p> : null}

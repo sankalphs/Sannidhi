@@ -8,6 +8,9 @@ export default defineSchema({
     name: v.string(),
     code: v.string(),
     createdAt: v.number(),
+    // Monotonic policy revision counter — never regresses, even when policy
+    // rows are deleted, so decision stamps always move forward.
+    policyRevision: v.optional(v.number()),
   }).index("by_code", ["code"]),
 
   users: defineTable({

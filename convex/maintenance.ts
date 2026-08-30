@@ -15,6 +15,8 @@ import {
 const MAX_CHALLENGE_PRUNES_PER_RUN = 200;
 const MAX_SESSION_AUTOCLOSES_PER_RUN = 100;
 const MAX_AUDIT_PRUNES_PER_RUN = 200;
+/** Upper bound on rows examined per chain per run, prunable or kept. */
+const MAX_AUDIT_INSPECTED_PER_RUN = 2000;
 const BATCH_SIZE = 50;
 
 const DEFAULT_AUDIT_RETENTION_DAYS = 730;
@@ -109,20 +111,23 @@ export const pruneExpiredAuditEvents = internalMutation({
     // Query each chain once per batch with the LOOSEST cutoff (now - min
     // retention): rows past it are candidates for some institution. Rows the
     // batch fetches but their institution keeps are skipped in place; the
-    // cursor advances past them so the loop always makes progress. When a page
-    // holds nothing prunable, we break and let the next daily run re-scan —
-    // the multi-day backlog model already tolerates deferred drains.
+    // cursor advances past them so the loop always makes progress. A separate
+    // inspected-row cap bounds the scan even when every fetched row is kept,
+    // so a run never walks an unbounded retained prefix.
     const looseCutoff = now - minRetentionDays(retentionTable, envRetentionDays) * MS_PER_DAY;
 
     let prunedLedgerEvents = 0;
     {
       let cursor: string | null = null;
+      let inspected = 0;
       ledgerLoop: for (;;) {
         const page = await ctx.db
           .query("event_ledger")
           .withIndex("by_createdAt", (q) => q.lt("createdAt", looseCutoff))
           .paginate({ numItems: BATCH_SIZE, cursor });
         for (const row of page.page) {
+          inspected += 1;
+          if (inspected > MAX_AUDIT_INSPECTED_PER_RUN) break ledgerLoop;
           if (
             !isPrunable(row.createdAt, {
               institutionId: row.institutionId,
@@ -144,12 +149,15 @@ export const pruneExpiredAuditEvents = internalMutation({
     let prunedAttendanceEvents = 0;
     {
       let cursor: string | null = null;
+      let inspected = 0;
       attendanceLoop: for (;;) {
         const page = await ctx.db
           .query("attendance_events")
           .withIndex("by_capturedAt", (q) => q.lt("capturedAt", looseCutoff))
           .paginate({ numItems: BATCH_SIZE, cursor });
         for (const row of page.page) {
+          inspected += 1;
+          if (inspected > MAX_AUDIT_INSPECTED_PER_RUN) break attendanceLoop;
           if (
             !isPrunable(row.capturedAt, {
               institutionId: row.institutionId,

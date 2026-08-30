@@ -75,14 +75,19 @@ export async function getInstitutionPolicyRows(
 }
 
 /**
- * Next revision for any policy write in this institution. One counter across
- * all scopes so the revision stamped on resolved policies always moves forward.
+ * Next revision for any policy write in this institution. The counter lives on
+ * the institution row so it never regresses when policy rows (even the
+ * highest-revision one) are deleted.
  */
 export async function nextPolicyRevision(
-  ctx: MutationCtx | QueryCtx,
+  ctx: MutationCtx,
   args: { institutionId: Id<"institutions"> },
 ): Promise<number> {
-  const rows = await getInstitutionPolicyRows(ctx, args);
-  const max = rows.reduce((acc, row) => Math.max(acc, row.revision), 0);
-  return Math.max(1, max + 1);
+  const institution = await ctx.db.get(args.institutionId);
+  const current = institution?.policyRevision ?? 0;
+  const next = Math.max(1, current + 1);
+  if (institution !== null) {
+    await ctx.db.patch(args.institutionId, { policyRevision: next });
+  }
+  return next;
 }

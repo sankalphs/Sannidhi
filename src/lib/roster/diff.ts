@@ -1,8 +1,7 @@
 import type { RosterCatalogSnapshot, RosterDiff, RosterIssue, RosterRow } from "./types";
+import { enrollmentKey, sectionKey } from "./keys";
 
-function sectionKey(courseCode: string, sectionName: string, term: string | undefined): string {
-  return `${courseCode}\n${sectionName}\n${term ?? ""}`;
-}
+export { sectionKey };
 
 /**
  * Computes an apply/preview diff between normalized roster rows and an
@@ -105,9 +104,8 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
       if (student === undefined) {
         pendingInviteEmails.add(row.studentEmail);
       } else {
-        const enrollmentKey = `${row.studentEmail}\n${sectionKey(row.courseCode, row.sectionName, row.term)}`;
-        if (!enrollmentsToCreateKeys.has(enrollmentKey)) {
-          enrollmentsToCreateKeys.add(enrollmentKey);
+        if (!enrollmentsToCreateKeys.has(enrollmentKey(row))) {
+          enrollmentsToCreateKeys.add(enrollmentKey(row));
           enrollmentsToCreate.push({
             studentEmail: row.studentEmail,
             courseCode: row.courseCode,
@@ -177,9 +175,9 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
       continue;
     }
 
-    const enrollmentKey = `${row.studentEmail}\n${sectionKey(row.courseCode, row.sectionName, row.term)}`;
-    if (!enrollmentsToCreateKeys.has(enrollmentKey)) {
-      enrollmentsToCreateKeys.add(enrollmentKey);
+    const enrollmentId = enrollmentKey(row);
+    if (!enrollmentsToCreateKeys.has(enrollmentId)) {
+      enrollmentsToCreateKeys.add(enrollmentId);
       enrollmentsToCreate.push({
         studentEmail: row.studentEmail,
         courseCode: row.courseCode,

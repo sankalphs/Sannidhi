@@ -68,13 +68,21 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
     if (previewing || !hasRows) return;
     setPreviewing(true);
     setError(null);
-    setPreview(null);
     setApplied(null);
     try {
-      const result = await convex.query(api.rosterSync.previewRosterSync, {
-        actorToken,
-        rows: parsed.rows,
-      });
+      // A dropped websocket can leave the one-shot query pending forever;
+      // racing a timeout re-enables the button so the user can retry. The
+      // previous preview stays rendered until the new diff arrives so a
+      // re-click never flickers the panel empty.
+      const result = await Promise.race([
+        convex.query(api.rosterSync.previewRosterSync, {
+          actorToken,
+          rows: parsed.rows,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Preview timed out — try again")), 30_000),
+        ),
+      ]);
       setPreview(result.diff);
     } catch (cause) {
       setError(describeError(cause));
@@ -135,7 +143,7 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
           Preview sync
         </Button>
         {isAdmin ? (
-          <Button size="sm" onClick={apply} disabled={!hasRows || applying}>
+          <Button size="sm" onClick={apply} disabled={!hasRows || applying || previewing}>
             {applying ? <Loader2 className="animate-spin" /> : null}
             Apply sync
           </Button>

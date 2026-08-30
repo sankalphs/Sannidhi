@@ -75,8 +75,6 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Previous milestones
 
-## Previous milestones
-
 > **Phase 6 merged (PR #24)** — analytics & insights for investigation and early intervention. A pure analytics core (`src/lib/analytics/`) projects the Event Ledger's own records into attendance trajectories (percentage, trend, must-attend math reusing `summarizeAttendance`), subject-level trends with late-arrival counting, proxy-attempt summaries over reason codes, and rolling daily/weekly/monthly report windows — no direct row access anywhere, and every anomaly alert carries explainable factors. A daily `scanReviewAlerts` cron (plus an admin-triggered `triggerScan`) derives `low_attendance`, `proxy_attempt`, and `verification_anomaly` alerts into a `review_alerts` inbox served to admins and department authority; resolving an alert is acknowledge-or-dismiss with a ledger-stamped trail, and nothing ever acts on a student automatically. Surfaces: `/admin/analytics` (stat cards, trajectory table, subject trends, proxy/verification-anomaly panels), `/admin/review` (the inbox with live convex sync), and `/admin/reports` (rolling windows with hand-rolled CSV/PDF exports — zero new dependencies). The demo seed now backfills a full 12-week term — 48 closed sessions with 84 hash-chained attendance events replicating the exact seam math, self-verified at seed time — so trajectories, tardiness, proxy dashboards, and exports all render against realistic history without touching the seeded live slot or e2e resume flows.
 >
 

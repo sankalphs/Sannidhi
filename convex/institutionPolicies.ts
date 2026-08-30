@@ -340,6 +340,8 @@ export const clearPolicyScope = mutation({
     }
 
     if (rows.length > 0) {
+      // Bump the counter so post-clear saves never reuse a stamped revision.
+      await nextPolicyRevision(ctx, { institutionId: caller.institutionId });
       await ctx.runMutation(internal.ledger.appendLedgerEvent, {
         institutionId: caller.institutionId,
         category: "identity",

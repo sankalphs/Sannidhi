@@ -1,20 +1,19 @@
 import type { RosterIssue, RosterRow } from "../../src/lib/roster/types";
+import { enrollmentKey } from "../../src/lib/roster/keys";
 
 /** Row-count cap enforced by the rosterSync handlers, not by normalizeRosterRows. */
 export const MAX_ROSTER_ROWS = 500;
 
-function enrollmentKey(row: RosterRow): string {
-  const term = row.term ?? "";
-  return `${row.studentEmail}\n${row.courseCode}\n${row.sectionName}\n${term}`;
-}
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Defensive re-normalization for rows that reached the sync API without going
  * through parseRosterCsv: trims every field, uppercases codes, lowercases
- * emails, treats empty term/usn as undefined, and collapses exact duplicate
- * enrollments. Issue row numbers are 1-based positions in the submitted
- * array. Row-count capping stays with the handlers; dropping empty rows stays
- * with computeRosterDiff.
+ * emails, treats empty term/usn as undefined, drops rows with blank required
+ * fields or invalid emails (matching parseRosterCsv), and collapses exact
+ * duplicate enrollments. Issue row numbers are 1-based positions in the
+ * submitted array. Row-count capping stays with the handlers; empty-row
+ * dropping stays with computeRosterDiff.
  */
 export function normalizeRosterRows(rows: RosterRow[]): {
   rows: RosterRow[];
@@ -38,6 +37,28 @@ export function normalizeRosterRows(rows: RosterRow[]): {
         ? { studentUsn: raw.studentUsn.trim() }
         : {}),
     };
+
+    const required: [keyof RosterRow, string][] = [
+      ["departmentCode", "department_code"],
+      ["departmentName", "department_name"],
+      ["courseCode", "course_code"],
+      ["courseTitle", "course_title"],
+      ["sectionName", "section_name"],
+      ["studentEmail", "student_email"],
+      ["studentName", "student_name"],
+    ];
+    let invalid = false;
+    for (const [field, column] of required) {
+      if ((row[field] as string).length === 0) {
+        issues.push({ row: index + 1, field: column, message: "is required" });
+        invalid = true;
+      }
+    }
+    if (row.studentEmail.length > 0 && !EMAIL_PATTERN.test(row.studentEmail)) {
+      issues.push({ row: index + 1, field: "student_email", message: "is not a valid email" });
+      invalid = true;
+    }
+    if (invalid) return;
 
     const key = enrollmentKey(row);
     const first = firstSeenRow.get(key);
