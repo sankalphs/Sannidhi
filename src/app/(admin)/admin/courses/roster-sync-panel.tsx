@@ -277,6 +277,17 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
             <Badge variant="outline">{applied.enrollmentsExisting} already enrolled</Badge>
             <Badge>{applied.invitesCreated} invites</Badge>
           </div>
+          {applied.issues.length > 0 ? (
+            <ul className="text-destructive list-disc pl-5 text-xs">
+              {applied.issues.map((issue, index) => (
+                <li key={`${issue.row}-${issue.field}-${index}`}>
+                  {issue.row > 0 ? `Row ${issue.row} ` : ""}
+                  {issue.row > 0 && issue.field.length > 0 ? `(${issue.field}) ` : ""}
+                  {issue.message}
+                </li>
+              ))}
+            </ul>
+          ) : null}
           <p className="text-muted-foreground text-xs">
             Invites are pending on the Users page — each student receives a one-time enrollment
             link.

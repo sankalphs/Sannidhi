@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 
-import { sectionKey } from "../src/lib/roster/keys";
+import { enrollmentKey, sectionKey } from "../src/lib/roster/keys";
 import { computeRosterDiff } from "../src/lib/roster/diff";
 import type { RosterCatalogSnapshot, RosterRow } from "../src/lib/roster/types";
 import { hashInviteToken, randomToken } from "../src/lib/invites/token";
@@ -264,8 +264,9 @@ export const applyRosterSync = mutation({
         // role: the global by_email index is not scoped, so verify before
         // attaching an invite to it.
         if (existingUser.institutionId !== admin.institutionId || existingUser.role !== "student") {
+          const sourceRow = rows.findIndex((row) => row.studentEmail === email) + 1;
           issues.push({
-            row: 0,
+            row: sourceRow,
             field: "student_email",
             message: `"${email}" belongs to an existing account that cannot be invited as a student here`,
           });
@@ -306,11 +307,7 @@ export const applyRosterSync = mutation({
     const seenNewStudentEnrollment = new Set<string>();
     for (const row of rows) {
       if (!invitedEmails.has(row.studentEmail)) continue;
-      const key = sectionKey(
-        row.courseCode.toUpperCase(),
-        row.sectionName,
-        row.term ?? undefined,
-      ).concat("\n", row.studentEmail);
+      const key = enrollmentKey(row);
       if (seenNewStudentEnrollment.has(key)) continue;
       seenNewStudentEnrollment.add(key);
       enrollmentsToCreate.push({

@@ -117,7 +117,9 @@ export function PolicyEditor({
 }: PolicyEditorProps) {
   const router = useRouter();
   const [values, setValues] = useState<Partial<Record<NumberKey, string>>>({});
-  const [booleans, setBooleans] = useState<Partial<Record<BooleanKey, "on" | "off">>>({});
+  const [booleans, setBooleans] = useState<Partial<Record<BooleanKey, "inherit" | "on" | "off">>>(
+    {},
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedRevision, setSavedRevision] = useState<number | null>(null);
@@ -132,21 +134,28 @@ export function PolicyEditor({
   const currentRevision = savedRevision ?? revision;
 
   function collectSettings(): PolicySettings {
-    const next: Record<string, number | boolean> = {};
+    // Merge-save: untouched keys (values[key] undefined) keep their stored
+    // overrides so saving one field never silently drops another; a blanked
+    // numeric field ("" input) or a boolean set to "inherit" removes that
+    // key explicitly.
+    const next: Record<string, number | boolean> = { ...saved };
     for (const field of NUMBER_FIELDS) {
       if (!field.scopes.includes(scope)) continue;
       const raw = values[field.key]?.trim();
-      // Blank (or never-touched with nothing saved) omits the key — inherit.
-      if (raw !== undefined && raw.length > 0) {
+      if (raw === undefined) continue;
+      if (raw.length > 0) {
         const parsed = Number(raw);
         if (Number.isFinite(parsed)) next[field.key] = parsed;
+      } else {
+        delete next[field.key];
       }
     }
     for (const field of BOOLEAN_FIELDS) {
       const override = booleans[field.key];
       if (override === "on") next[field.key] = true;
       else if (override === "off") next[field.key] = false;
-      // undefined ("inherit") omits the key.
+      else if (override === "inherit") delete next[field.key];
+      // undefined (untouched) keeps the stored override.
     }
     return next as PolicySettings;
   }
