@@ -167,7 +167,10 @@ async function findExistingPolicyRow(
 /**
  * Shared upsert for one policy layer: revision comes from the institution-wide
  * counter so any write moves the resolved-policy stamp forward. Returns the
- * row id plus the revision it was stamped with.
+ * row id plus the revision it was stamped with. expectedRevision is a
+ * precondition: when the caller loaded a different revision (or none), the
+ * scope changed underneath them and the save is rejected rather than
+ * overwriting the newer write.
  */
 async function upsertPolicyRow(
   ctx: MutationCtx,
@@ -178,9 +181,16 @@ async function upsertPolicyRow(
     venueId?: Id<"venues"> | null;
     settings: PolicySettings;
     createdByUserId: Id<"users">;
+    expectedRevision: number;
   },
 ): Promise<{ rowId: Id<"policy_rows">; revision: number }> {
   const existing = await findExistingPolicyRow(ctx, args);
+  const loadedRevision = existing !== null ? existing.revision : 0;
+  if (loadedRevision !== args.expectedRevision) {
+    throw new ConvexError(
+      `policy changed since you loaded it (revision ${loadedRevision}); reload and try again`,
+    );
+  }
 
   const revision = await nextPolicyRevision(ctx, { institutionId: args.institutionId });
   const now = Date.now();
@@ -216,6 +226,7 @@ function validateSettings(settings: PolicySettings): void {
 export const saveInstitutionPolicy = mutation({
   args: {
     actorToken: v.string(),
+    expectedRevision: v.number(),
     settings: v.any(),
   },
   handler: async (ctx, args) => {
@@ -228,6 +239,7 @@ export const saveInstitutionPolicy = mutation({
       scope: "institution",
       settings,
       createdByUserId: caller._id,
+      expectedRevision: args.expectedRevision,
     });
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
@@ -245,6 +257,7 @@ export const saveDepartmentPolicy = mutation({
   args: {
     actorToken: v.string(),
     departmentId: v.id("departments"),
+    expectedRevision: v.number(),
     settings: v.any(),
   },
   handler: async (ctx, args) => {
@@ -262,6 +275,7 @@ export const saveDepartmentPolicy = mutation({
       departmentId: args.departmentId,
       settings,
       createdByUserId: caller._id,
+      expectedRevision: args.expectedRevision,
     });
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
@@ -279,6 +293,7 @@ export const saveVenuePolicy = mutation({
   args: {
     actorToken: v.string(),
     venueId: v.id("venues"),
+    expectedRevision: v.number(),
     settings: v.any(),
   },
   handler: async (ctx, args) => {
@@ -296,6 +311,7 @@ export const saveVenuePolicy = mutation({
       venueId: args.venueId,
       settings,
       createdByUserId: caller._id,
+      expectedRevision: args.expectedRevision,
     });
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {

@@ -133,19 +133,24 @@ export function PolicyEditor({
   const hasRow = settings !== null;
   const currentRevision = savedRevision ?? revision;
 
-  function collectSettings(): PolicySettings {
+  function collectSettings(): { settings: PolicySettings; issues: string[] } {
     // Merge-save: untouched keys (values[key] undefined) keep their stored
     // overrides so saving one field never silently drops another; a blanked
     // numeric field ("" input) or a boolean set to "inherit" removes that
     // key explicitly.
     const next: Record<string, number | boolean> = { ...saved };
+    const issues: string[] = [];
     for (const field of NUMBER_FIELDS) {
       if (!field.scopes.includes(scope)) continue;
       const raw = values[field.key]?.trim();
       if (raw === undefined) continue;
       if (raw.length > 0) {
         const parsed = Number(raw);
-        if (Number.isFinite(parsed)) next[field.key] = parsed;
+        if (Number.isFinite(parsed)) {
+          next[field.key] = parsed;
+        } else {
+          issues.push(`${field.label} is not a valid number`);
+        }
       } else {
         delete next[field.key];
       }
@@ -157,29 +162,42 @@ export function PolicyEditor({
       else if (override === "inherit") delete next[field.key];
       // undefined (untouched) keeps the stored override.
     }
-    return next as PolicySettings;
+    return { settings: next as PolicySettings, issues };
   }
 
   async function save() {
     if (saving) return;
-    const next = collectSettings();
-    const issues = validatePolicySettings(next);
+    const { settings: next, issues } = collectSettings();
     if (issues.length > 0) {
       setError(issues.join("; "));
+      return;
+    }
+    const validationIssues = validatePolicySettings(next);
+    if (validationIssues.length > 0) {
+      setError(validationIssues.join("; "));
       return;
     }
     setSaving(true);
     setError(null);
     try {
+      // The loaded revision rides along as a precondition: the server rejects
+      // the save when another admin changed this scope in the meantime. A
+      // save made right after this one uses the revision this save produced.
+      const expectedRevision = savedRevision ?? revision ?? 0;
       let result: { revision: number };
       if (scope === "institution") {
-        result = await saveInstitution({ actorToken, settings: next });
+        result = await saveInstitution({ actorToken, expectedRevision, settings: next });
       } else if (scope === "department") {
         if (departmentId === undefined) throw new Error("Missing department");
-        result = await saveDepartment({ actorToken, departmentId, settings: next });
+        result = await saveDepartment({
+          actorToken,
+          departmentId,
+          expectedRevision,
+          settings: next,
+        });
       } else {
         if (venueId === undefined) throw new Error("Missing venue");
-        result = await saveVenue({ actorToken, venueId, settings: next });
+        result = await saveVenue({ actorToken, venueId, expectedRevision, settings: next });
       }
       setSavedRevision(result.revision);
       setValues({});

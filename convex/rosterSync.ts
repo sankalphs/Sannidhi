@@ -262,9 +262,12 @@ export const applyRosterSync = mutation({
       if (existingUser !== null) {
         // The email resolves to a user of another institution or a non-student
         // role: the global by_email index is not scoped, so verify before
-        // attaching an invite to it.
+        // attaching an invite to it. The row number cites the position in the
+        // submitted array so it matches what the admin uploaded, not the
+        // filtered set normalizeRosterRows produced.
         if (existingUser.institutionId !== admin.institutionId || existingUser.role !== "student") {
-          const sourceRow = rows.findIndex((row) => row.studentEmail === email) + 1;
+          const sourceRow =
+            args.rows.findIndex((row) => row.studentEmail.trim().toLowerCase() === email) + 1;
           issues.push({
             row: sourceRow,
             field: "student_email",
