@@ -159,7 +159,8 @@ export function parseRosterCsv(text: string): ParsedRoster {
       sourceRow: record.line,
     };
 
-    if (Object.values(row).every((v) => v === undefined || (v as string).length === 0)) continue;
+    // sourceRow is metadata, not content: an otherwise-empty record stays empty.
+    if (record.fields.every((field) => field.trim().length === 0)) continue;
 
     let invalid = false;
     for (const column of REQUIRED_COLUMNS) {
