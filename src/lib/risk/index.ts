@@ -32,6 +32,13 @@ export {
   manualAttestationSignals,
 } from "./signals";
 export type { FaceMatchOutcome } from "./signals";
+export {
+  DEFAULT_RISK_POLICY_SETTINGS,
+  mergeRiskPolicySettings,
+  resolveRiskPolicy,
+  validateRiskPolicySettings,
+} from "./policy";
+export type { ResolvedRiskPolicy, RiskPolicySettings } from "./policy";
 export { RISK_POLICY_VERSION, SIGNAL_STATUSES } from "./types";
 export type {
   AnomalyContext,

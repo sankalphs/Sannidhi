@@ -1,5 +1,7 @@
 import type { EvidenceSignal } from "@/lib/decision";
 
+import type { ResolvedRiskPolicy } from "./policy";
+
 export const RISK_POLICY_VERSION = "risk-engine/v1";
 
 export const SIGNAL_STATUSES = ["verified", "weak", "missing", "unavailable", "failed"] as const;
@@ -16,6 +18,7 @@ export type RiskInput = {
   signals: EvidenceSignal[];
   anomalies?: AnomalyContext;
   now?: number;
+  policy?: ResolvedRiskPolicy;
 };
 
 export type RiskExplanationTier = "student" | "faculty" | "admin";

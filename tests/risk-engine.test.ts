@@ -15,7 +15,9 @@ import {
   identitySessionSignal,
   manualAttestationSignals,
   outcomeToAttendanceState,
+  resolveRiskPolicy,
   type LocationOutcome,
+  type ResolvedRiskPolicy,
   type RiskInput,
 } from "@/lib/risk";
 
@@ -516,3 +518,170 @@ describe("outcomeToAttendanceState", () => {
     expect(outcomeToAttendanceState("reject")).toBe("rejected");
   });
 });
+
+function policy(overrides?: Partial<ResolvedRiskPolicy>): ResolvedRiskPolicy {
+  return { ...resolveRiskPolicy([]), stamp: "policy:9", ...overrides };
+}
+
+describe("policy-driven decide", () => {
+  it("leaves policyVersion exactly at RISK_POLICY_VERSION when no policy is supplied", () => {
+    const decision = decide(cleanInput());
+    expect(decision.policyVersion).toBe("risk-engine/v1");
+  });
+
+  it("suffixes policyVersion with the policy stamp", () => {
+    const decision = decide(cleanInput({ policy: policy() }));
+    expect(decision.policyVersion).toBe("risk-engine/v1+policy:9");
+  });
+
+  it("keeps the bare version when the resolved stamp is empty", () => {
+    const decision = decide(cleanInput({ policy: policy({ stamp: "" }) }));
+    expect(decision.policyVersion).toBe(RISK_POLICY_VERSION);
+  });
+
+  it("raises the anomaly threshold so 3 recent failures no longer flag", () => {
+    const decision = decide(
+      cleanInput({
+        anomalies: { recentSecurityFailures: 3 },
+        policy: policy({ anomalyFlagThreshold: 5 }),
+      }),
+    );
+    expect(decision.outcome).not.toBe("flag");
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([]);
+  });
+
+  it("still flags at a lowered anomaly threshold", () => {
+    const decision = decide(
+      cleanInput({
+        anomalies: { recentSecurityFailures: 2 },
+        policy: policy({ anomalyFlagThreshold: 2 }),
+      }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.repeatedAnomaly]);
+  });
+
+  it("stepUpOnWeakDevice false drops the device weakness but keeps location weakness", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "device"
+        ? deviceTrustSignal({ state: "new" })
+        : signal.category === "presence" && signal.source === "geolocation"
+          ? geolocationSignal({ verdict: "mismatch", distanceMeters: 940 })
+          : signal,
+    );
+    const decision = decide(cleanInput({ signals, policy: policy({ stepUpOnWeakDevice: false }) }));
+    expect(decision.outcome).toBe("step_up");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.locationMismatch]);
+  });
+
+  it("stepUpOnWeakDevice false treats a missing device as no weakness", () => {
+    const decision = decide(
+      cleanInput({
+        signals: withBaseDevice(null),
+        policy: policy({ stepUpOnWeakDevice: false }),
+      }),
+    );
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([]);
+  });
+
+  it("strictPresence flags a weak geolocation instead of stepping up", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "presence" && signal.source === "geolocation"
+        ? geolocationSignal({ verdict: "mismatch", distanceMeters: 940 })
+        : signal,
+    );
+    const decision = decide(cleanInput({ signals, policy: policy({ strictPresence: true }) }));
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.locationMismatch]);
+  });
+
+  it("strictPresence never flags missing geolocation (not_consented maps to missing)", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "presence" && signal.source === "geolocation"
+        ? geolocationSignal({ verdict: "not_consented" })
+        : signal,
+    );
+    const decision = decide(cleanInput({ signals, policy: policy({ strictPresence: true }) }));
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([]);
+  });
+
+  it("strictPresence never flags inconclusive or unavailable geolocation", () => {
+    const inconclusive = decide(
+      cleanInput({
+        signals: baseSignals().map((signal) =>
+          signal.category === "presence" && signal.source === "geolocation"
+            ? geolocationSignal({ verdict: "inconclusive", distanceMeters: 340 })
+            : signal,
+        ),
+        policy: policy({ strictPresence: true }),
+      }),
+    );
+    expect(inconclusive.outcome).toBe("accept");
+
+    const unavailable = decide(
+      cleanInput({
+        signals: baseSignals().map((signal) =>
+          signal.category === "presence" && signal.source === "geolocation"
+            ? geolocationSignal({ verdict: "unavailable" })
+            : signal,
+        ),
+        policy: policy({ strictPresence: true }),
+      }),
+    );
+    expect(unavailable.outcome).toBe("accept");
+  });
+
+  it("combines strictPresence with stepUpOnWeakDevice false", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "device"
+        ? deviceTrustSignal({ state: "new" })
+        : signal.category === "presence" && signal.source === "geolocation"
+          ? geolocationSignal({ verdict: "mismatch", distanceMeters: 940 })
+          : signal,
+    );
+    const decision = decide(
+      cleanInput({
+        signals,
+        policy: policy({ strictPresence: true, stepUpOnWeakDevice: false }),
+      }),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.locationMismatch]);
+  });
+
+  it("strictPresence flag ranks after anomaly and recheck flags", () => {
+    const signals = baseSignals().map((signal) =>
+      signal.category === "presence" && signal.source === "geolocation"
+        ? geolocationSignal({ verdict: "mismatch", distanceMeters: 940 })
+        : signal,
+    );
+    const anomaly = decide(
+      cleanInput({
+        signals,
+        anomalies: { recentSecurityFailures: 3 },
+        policy: policy({ strictPresence: true }),
+      }),
+    );
+    expect(anomaly.outcome).toBe("flag");
+    expect(anomaly.reasonCodes).toEqual([RISK_REASON_CODES.repeatedAnomaly]);
+
+    const recheck = decide(
+      cleanInput({
+        signals,
+        anomalies: { recentSecurityFailures: 0, missedSpotRecheck: true },
+        policy: policy({ strictPresence: true }),
+      }),
+    );
+    expect(recheck.outcome).toBe("flag");
+    expect(recheck.reasonCodes).toEqual([RISK_REASON_CODES.spotRecheckMissed]);
+  });
+});
+
+function withBaseDevice(state: Parameters<typeof deviceTrustSignal>[0]): EvidenceSignal[] {
+  return baseSignals().map((signal) =>
+    signal.category === "device" ? deviceTrustSignal(state) : signal,
+  );
+}

@@ -87,7 +87,10 @@ export function decide(input: RiskInput): Decision {
       RISK_REASON_CODES.deviceDistrusted,
       `${RISK_REASON_CODES.deviceStatePrefix}${distrusted.detail ?? ""}`,
     );
-  } else if ((input.anomalies?.recentSecurityFailures ?? 0) >= RISK_ANOMALY_FLAG_THRESHOLD) {
+  } else if (
+    (input.anomalies?.recentSecurityFailures ?? 0) >=
+    (input.policy?.anomalyFlagThreshold ?? RISK_ANOMALY_FLAG_THRESHOLD)
+  ) {
     outcome = "flag";
     reasonCodes.push(RISK_REASON_CODES.repeatedAnomaly);
   } else if (input.anomalies?.missedSpotRecheck) {
@@ -96,15 +99,34 @@ export function decide(input: RiskInput): Decision {
   } else if (input.anomalies?.reviewRequested) {
     outcome = "flag";
     reasonCodes.push(RISK_REASON_CODES.stepupEscalatedReview);
+  } else if (
+    input.policy?.strictPresence === true &&
+    signals.some(
+      (signal) =>
+        signal.category === "presence" &&
+        signal.source === "geolocation" &&
+        signal.status === "weak",
+    )
+  ) {
+    outcome = "flag";
+    reasonCodes.push(RISK_REASON_CODES.locationMismatch);
   } else {
     const weaknesses: string[] = [];
     for (const signal of signals) {
-      if (signal.category === "device" && signal.status === "weak") {
+      if (
+        signal.category === "device" &&
+        signal.status === "weak" &&
+        input.policy?.stepUpOnWeakDevice !== false
+      ) {
         weaknesses.push(RISK_REASON_CODES.deviceUntrusted);
       }
     }
     for (const signal of signals) {
-      if (signal.category === "device" && signal.status === "missing") {
+      if (
+        signal.category === "device" &&
+        signal.status === "missing" &&
+        input.policy?.stepUpOnWeakDevice !== false
+      ) {
         weaknesses.push(RISK_REASON_CODES.deviceMissing);
       }
     }
@@ -135,7 +157,9 @@ export function decide(input: RiskInput): Decision {
     outcome,
     evidence: { signals: [...signals] },
     reasonCodes,
-    policyVersion: RISK_POLICY_VERSION,
+    policyVersion: input.policy?.stamp
+      ? `${RISK_POLICY_VERSION}+${input.policy.stamp}`
+      : RISK_POLICY_VERSION,
     decidedAt: input.now ?? Date.now(),
   };
 }
