@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { describeConvexError } from "@/lib/client/describe-error";
 import { DEFAULT_RETENTION_DAYS } from "@/lib/compliance/retention";
 import { type PolicySettings, validatePolicySettings } from "@/lib/policies/settings";
 
@@ -91,11 +92,7 @@ const BOOLEAN_FIELDS: {
 ];
 
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") return data;
-  }
-  return "Could not save the policy. Please try again.";
+  return describeConvexError(cause, [], "Could not save the policy. Please try again.");
 }
 
 /**

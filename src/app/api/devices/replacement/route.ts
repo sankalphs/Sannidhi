@@ -5,7 +5,7 @@ import type { Id } from "../../../../../convex/_generated/dataModel";
 import { deviceErrorResponse } from "@/lib/api/device-errors";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
-import { isFreshAuth, REPLACEMENT_REASON_MAX_LENGTH } from "@/lib/devices/replacement";
+import { REPLACEMENT_REASON_MAX_LENGTH } from "@/lib/devices/replacement";
 import { getConvexClient } from "@/lib/convex/server-client";
 
 export async function POST(request: Request) {
@@ -41,23 +41,13 @@ export async function POST(request: Request) {
       sid: session.sid,
     });
 
-    if (session.role !== "admin") {
-      const stepUp = (await client.query(api.sessions.getSessionStepUpStatus, {
-        actorToken,
-      })) as { lastStepUpAt: number | null };
-      if (!isFreshAuth(stepUp.lastStepUpAt ?? undefined, Date.now())) {
-        return NextResponse.json(
-          { error: "Identity re-verification required.", code: "step-up-required" },
-          { status: 403 },
-        );
-      }
-    }
+    // Fresh-auth is enforced inside the Convex mutation (requireFreshAuth);
+    // the sid in the token is what it checks against.
 
     const result = await client.mutation(api.devices.requestReplacement, {
       actorToken,
       oldDeviceId: oldDeviceId as Id<"devices">,
       reason,
-      identityReverified: true,
     });
     return NextResponse.json(result);
   } catch (error) {

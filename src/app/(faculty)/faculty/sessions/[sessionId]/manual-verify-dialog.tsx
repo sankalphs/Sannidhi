@@ -7,32 +7,22 @@ import { ShieldCheck, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 const MIN_REASON_LENGTH = 10;
 
 const textareaClasses =
   "border-input placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 flex min-h-24 w-full resize-y rounded-md border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-[3px] disabled:cursor-not-allowed disabled:opacity-50";
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "reason_too_short", message: "The reason must be at least 10 characters." },
+  { match: "student_not_enrolled", message: "This student is not enrolled in this session's section." },
+  { match: "unauthorized", message: "You are not authorized to verify attendance for this session." },
+  { match: "session_not_active", message: "This session is no longer active." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "reason_too_short") {
-        return "The reason must be at least 10 characters.";
-      }
-      if (data === "student_not_enrolled") {
-        return "This student is not enrolled in this session's section.";
-      }
-      if (data === "unauthorized") {
-        return "You are not authorized to verify attendance for this session.";
-      }
-      if (data === "session_not_active") {
-        return "This session is no longer active.";
-      }
-      return data;
-    }
-  }
-  return "Something went wrong. Please try again.";
+  return describeConvexError(cause, ERROR_TRANSLATIONS, "Something went wrong. Please try again.");
 }
 
 export function ManualVerifyDialog({

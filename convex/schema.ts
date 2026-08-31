@@ -147,6 +147,7 @@ export default defineSchema({
     .index("by_section_state", ["sectionId", "state"])
     .index("by_institution_seq", ["institutionId", "seq"])
     .index("by_capturedAt", ["capturedAt"])
+    .index("by_institution_capturedAt", ["institutionId", "capturedAt"])
     .index("by_corrects_event", ["correctsEventId"])
     .index("by_nonce_hash", ["syncNonceHash"]),
 
@@ -315,7 +316,8 @@ export default defineSchema({
     .index("by_subject_created", ["subjectUserId", "createdAt"])
     .index("by_subject_category_type_created", ["subjectUserId", "category", "type", "createdAt"])
     .index("by_device", ["deviceId"])
-    .index("by_createdAt", ["createdAt"]),
+    .index("by_createdAt", ["createdAt"])
+    .index("by_institution_createdAt", ["institutionId", "createdAt"]),
 
   class_sessions: defineTable({
     institutionId: v.id("institutions"),

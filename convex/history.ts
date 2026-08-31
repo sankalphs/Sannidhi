@@ -1,28 +1,18 @@
 import { ConvexError, v } from "convex/values";
 
 import type { Doc, Id } from "./_generated/dataModel";
-import { query, type QueryCtx } from "./_generated/server";
-import { resolveActorUser } from "./lib/actor";
+import { query } from "./_generated/server";
+import { requireActorUser } from "./lib/actor";
+import { institutionDateKey } from "../src/lib/attendance/timezone";
 import {
   projectAttendanceState,
   type AttendanceRecordState,
 } from "../src/lib/attendance/projection";
 
-const UTC_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "UTC",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
-function utcDateKey(timestamp: number): string {
-  return UTC_DATE_KEY_FORMATTER.format(timestamp);
-}
-
-async function requireActorUser(ctx: QueryCtx, actorToken: string): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken).catch(() => null);
-  if (user === null) throw new ConvexError("unauthorized");
-  return user;
+// Day keys bucket events by the institution's calendar day (IST), so a
+// 00:30 IST check-in lands on the day the student actually attended.
+function dateKey(timestamp: number): string {
+  return institutionDateKey(timestamp);
 }
 
 export const studentHistory = query({
@@ -49,8 +39,8 @@ export const studentHistory = query({
 
     const latestByKey = new Map<string, { dateKey: string; event: Doc<"attendance_events"> }>();
     for (const event of events) {
-      latestByKey.set(`${utcDateKey(event.capturedAt)}:${event.sectionId}`, {
-        dateKey: utcDateKey(event.capturedAt),
+      latestByKey.set(`${dateKey(event.capturedAt)}:${event.sectionId}`, {
+        dateKey: dateKey(event.capturedAt),
         event,
       });
     }

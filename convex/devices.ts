@@ -10,10 +10,16 @@ import {
   POSSESSION_CODE_TTL_MS,
 } from "../src/lib/devices/verification";
 import { buildDeviceTrustEvidence } from "../src/lib/trust-evidence";
+import { FRESH_AUTH_WINDOW_MS } from "../src/lib/devices/replacement";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
-import { assertSameInstitution, requireAdminUser, verifyActorToken } from "./lib/actor";
+import {
+  assertSameInstitution,
+  requireAdminUser,
+  requireFreshAuth,
+  verifyActorToken,
+} from "./lib/actor";
 
 const MAX_LABEL_LENGTH = 80;
 const MAX_LISTED_DEVICES = 200;
@@ -234,10 +240,14 @@ export const verifyPossession = mutation({
 });
 
 export const verifySuccessorDevice = mutation({
-  args: { actorToken: v.string(), deviceId: v.id("devices"), identityReverified: v.boolean() },
+  args: { actorToken: v.string(), deviceId: v.id("devices") },
   handler: async (ctx, args) => {
+    // Fresh-auth is enforced server-side: the client can only pass its token,
+    // not a boolean claiming it re-verified.
+    await requireFreshAuth(ctx, args.actorToken, FRESH_AUTH_WINDOW_MS, {
+      allowWithoutSession: true,
+    });
     const claims = await requireActor(args.actorToken);
-    if (!args.identityReverified) throw new ConvexError("identity re-verification required");
 
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     if (claims.userId !== device.userId) throw new ConvexError("unauthorized");
@@ -451,11 +461,14 @@ export const requestReplacement = mutation({
     actorToken: v.string(),
     oldDeviceId: v.id("devices"),
     reason: v.string(),
-    identityReverified: v.boolean(),
   },
   handler: async (ctx, args) => {
+    // Fresh-auth enforced at the boundary; admin-initiated replacements mint
+    // sid-less tokens, so they pass through the session-less allowance.
+    await requireFreshAuth(ctx, args.actorToken, FRESH_AUTH_WINDOW_MS, {
+      allowWithoutSession: true,
+    });
     const claims = await requireActor(args.actorToken);
-    if (!args.identityReverified) throw new ConvexError("identity re-verification required");
 
     const device = await getDeviceOrThrow(ctx, args.oldDeviceId);
     if (claims.role !== "admin" && claims.userId !== device.userId) {
@@ -466,7 +479,7 @@ export const requestReplacement = mutation({
 
     const eligibility = checkReplacementEligibility({
       deviceState: device.state,
-      freshAuth: args.identityReverified,
+      freshAuth: true,
       hasPendingReplacementForDevice: pending !== null,
       reasonLength: args.reason.trim().length,
     });

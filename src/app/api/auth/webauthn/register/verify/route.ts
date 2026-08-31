@@ -37,7 +37,13 @@ export async function POST(request: Request) {
       }
     }
 
-    const actorToken = await mintActorToken({ userId: session.userId, role: session.role });
+    // The sid-carrying token lets the Convex action re-verify freshness and
+    // suspension itself; enrollment sessions (no sid) are exempt by design.
+    const actorToken = await mintActorToken({
+      userId: session.userId,
+      role: session.role,
+      ...(session.sid !== undefined ? { sid: session.sid } : {}),
+    });
     const result = await getConvexClient().action(api.passkeys.registerVerify, {
       actorToken,
       response: body.response,

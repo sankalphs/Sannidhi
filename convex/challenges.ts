@@ -32,7 +32,7 @@ import {
   parseTtlMs,
   spotRecheckPickIndex,
 } from "./lib/attendance_event";
-import { resolveActorUser } from "./lib/actor";
+import { requireActorUser } from "./lib/actor";
 import { resolveSessionPolicy } from "./lib/policyContext";
 
 /**
@@ -61,15 +61,6 @@ export const SPOT_RECHECK_TTL_MS = parseTtlMs(
 );
 export const MAX_CHALLENGE_ATTEMPTS = 3;
 const SWEEP_BATCH_SIZE = 50;
-
-export async function requireActorUser(
-  ctx: MutationCtx | QueryCtx,
-  actorToken: string,
-): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken).catch(() => null);
-  if (user === null) throw new ConvexError("unauthorized");
-  return user;
-}
 
 export type ChallengeView = {
   _id: Id<"verification_challenges">;

@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/shell/empty-state";
+import { institutionDayOfWeek } from "@/lib/attendance/timezone";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -16,20 +18,13 @@ import { GuestSessionDialog } from "./guest-session-dialog";
 
 export type ScheduleRow = FunctionReturnType<typeof api.classSessions.listMySchedule>[number];
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "session_already_active", message: "A session is already running for this section." },
+  { match: "unauthorized", message: "You are not authorized to start this session." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "session_already_active") {
-        return "A session is already running for this section.";
-      }
-      if (data === "unauthorized") {
-        return "You are not authorized to start this session.";
-      }
-      return data;
-    }
-  }
-  return "Something went wrong. Please try again.";
+  return describeConvexError(cause, ERROR_TRANSLATIONS, "Something went wrong. Please try again.");
 }
 
 function formatMinutes(minutes: number): string {
@@ -107,7 +102,7 @@ export function ScheduleList({
   const startFromSlot = useMutation(api.classSessions.startFromSlot);
   const [pendingSlotId, setPendingSlotId] = useState<string | null>(null);
   const [errorsBySlot, setErrorsBySlot] = useState<Record<string, string>>({});
-  const today = new Date().getDay();
+  const today = institutionDayOfWeek(Date.now());
 
   const todaysRows = initialRows.filter((row) => row.dayOfWeek === today);
   const otherRows = initialRows

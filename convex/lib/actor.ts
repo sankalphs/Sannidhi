@@ -5,6 +5,7 @@ import {
   ACTOR_TOKEN_ALGORITHM,
   ACTOR_TOKEN_MAX_AGE_SECONDS,
   getActorSecret,
+  SESSION_ACTOR_TOKEN_MAX_AGE_SECONDS,
   type ActorTokenClaims,
 } from "../../src/lib/auth/actor-token";
 import { SESSION_ABSOLUTE_MAX_MS } from "../../src/lib/auth/token-hash";
@@ -25,15 +26,22 @@ export async function verifyActorToken(token: string): Promise<ActorTokenClaims>
     throw new Error(`Invalid actor token: ${reason}`);
   }
 
+  const { userId, role, sid } = payload;
+  // Sid-carrying tokens are bounded by the server session itself (checked in
+  // requireActorUser*); sid-less ones only by this issued-at window.
+  const maxAge =
+    typeof sid === "string" && sid.length > 0
+      ? SESSION_ACTOR_TOKEN_MAX_AGE_SECONDS
+      : ACTOR_TOKEN_MAX_AGE_SECONDS;
+
   const now = Math.floor(Date.now() / 1000);
   if (typeof payload.iat !== "number") {
     throw new Error("Invalid actor token: missing issued-at claim");
   }
-  if (now - payload.iat > ACTOR_TOKEN_MAX_AGE_SECONDS) {
-    throw new Error(`Invalid actor token: issued more than ${ACTOR_TOKEN_MAX_AGE_SECONDS}s ago`);
+  if (now - payload.iat > maxAge) {
+    throw new Error(`Invalid actor token: issued more than ${maxAge}s ago`);
   }
 
-  const { userId, role, sid } = payload;
   if (typeof userId !== "string" || userId.length === 0) {
     throw new Error("Invalid actor token: missing userId claim");
   }
@@ -48,6 +56,12 @@ export async function verifyActorToken(token: string): Promise<ActorTokenClaims>
   return claims;
 }
 
+/**
+ * Resolves the token to a user without any status checks. Demo/dev surfaces
+ * that render "is this user real" information use this; anything that mutates
+ * must use requireActorUser below so suspension and role changes take effect
+ * immediately.
+ */
 export async function resolveActorUser(
   ctx: MutationCtx | QueryCtx,
   token: string,
@@ -86,9 +100,10 @@ async function assertSessionActiveIfPresent(
 }
 
 /**
- * Resolve the actor and, when the token carries a server-side session id,
- * reject tokens whose session has been revoked or expired. Tokens without a
- * sid (demo/dev logins) have no server-side session record to check.
+ * The one actor guard for every mutating entry point: verifies the token,
+ * rejects suspended users, and — when the token carries a server session id —
+ * rejects revoked/expired sessions. Callers gate roles off the returned user
+ * doc, so the stored role is always what gets enforced.
  */
 export async function requireActorUserWithActiveSession(
   ctx: MutationCtx | QueryCtx,
@@ -106,6 +121,46 @@ export async function requireActorUserWithActiveSession(
   return user;
 }
 
+/** Alias so new call sites read naturally next to resolveActorUser. */
+export const requireActorUser = requireActorUserWithActiveSession;
+
+/**
+ * Enforces the fresh-auth (recent step-up) window server-side, inside the
+ * Convex boundary, so caller-supplied booleans can never satisfy it. Tokens
+ * without a sid (demo/dev logins) have no step-up record; they fail closed
+ * unless allowWithoutSession is set for seed/dev-only paths.
+ */
+export async function requireFreshAuth(
+  ctx: MutationCtx | QueryCtx,
+  token: string,
+  windowMs: number,
+  options?: { allowWithoutSession?: boolean },
+): Promise<void> {
+  const claims = await verifyActorToken(token);
+  if (claims.sid === undefined) {
+    if (options?.allowWithoutSession === true) return;
+    throw new ConvexError("identity re-verification required");
+  }
+  const tokenHash = await hashSessionSid(claims.sid);
+  let row: Doc<"sessions"> | null = null;
+  try {
+    row = await ctx.db
+      .query("sessions")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+  } catch {
+    row = null;
+  }
+  const now = Date.now();
+  const stepUpFresh =
+    row !== null &&
+    row.revokedAt === undefined &&
+    row.expiresAt > now &&
+    row.lastStepUpAt !== undefined &&
+    now - row.lastStepUpAt <= windowMs;
+  if (!stepUpFresh) throw new ConvexError("identity re-verification required");
+}
+
 export async function requireAdminUser(
   ctx: MutationCtx | QueryCtx,
   token: string,
@@ -116,7 +171,7 @@ export async function requireAdminUser(
   } catch (error) {
     throw new ConvexError(error instanceof Error ? error.message : "unauthorized");
   }
-  if (claims.role !== "admin") throw new ConvexError("unauthorized");
+  await assertSessionActiveIfPresent(ctx, claims);
   let user: Doc<"users"> | null;
   try {
     user = await ctx.db.get(claims.userId as Id<"users">);
@@ -124,6 +179,9 @@ export async function requireAdminUser(
     throw new ConvexError("unauthorized");
   }
   if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  // Stored role is authoritative: a demoted admin must not keep admin power
+  // through a still-valid token minted for their old role.
+  if (user.role !== "admin") throw new ConvexError("unauthorized");
   return user;
 }
 

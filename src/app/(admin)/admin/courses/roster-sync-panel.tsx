@@ -8,6 +8,7 @@ import { useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { describeConvexError } from "@/lib/client/describe-error";
 import type { RosterDiff } from "@/lib/roster/types";
 import { parseRosterCsv } from "@/lib/roster/csv";
 
@@ -23,11 +24,7 @@ type ApplyResult = {
 };
 
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") return data;
-  }
-  return "Roster sync failed. Please try again.";
+  return describeConvexError(cause, [], "Roster sync failed. Please try again.");
 }
 
 /**

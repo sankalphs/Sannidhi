@@ -8,6 +8,7 @@ import {
 } from "../src/lib/auth/token-hash";
 import {
   internalMutation,
+  internalQuery,
   mutation,
   query,
   type MutationCtx,
@@ -190,6 +191,31 @@ export const getSessionStatus = query({
     return row !== null
       ? { active: true, expiresAt: row.expiresAt }
       : { active: false, expiresAt: null };
+  },
+});
+
+/**
+ * Server-side fresh-auth check for boundary enforcement: given a raw sid
+ * (known only to the session holder), confirm the session is active and its
+ * last step-up is within maxAgeMs. Throws on failure so Convex mutations
+ * that gate on it cannot be satisfied by caller-supplied booleans.
+ */
+export const getSessionFreshAuthBySid = internalQuery({
+  args: { sid: v.string(), maxAgeMs: v.number() },
+  handler: async (ctx, args) => {
+    const tokenHash = await hashSessionSid(args.sid);
+    const row = await ctx.db
+      .query("sessions")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    const now = Date.now();
+    const fresh =
+      row !== null &&
+      isActiveSession(row, now) &&
+      row.lastStepUpAt !== undefined &&
+      now - row.lastStepUpAt <= args.maxAgeMs;
+    if (!fresh) throw new Error("identity re-verification required");
+    return { fresh: true as const };
   },
 });
 

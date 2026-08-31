@@ -8,26 +8,20 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 const DURATIONS = [30, 45, 60, 90];
 
 const selectClasses =
   "border-input flex h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-[3px] focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50";
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "session_already_active", message: "A session is already running for this section." },
+  { match: "unauthorized", message: "You are not authorized to start a session." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "session_already_active") {
-        return "A session is already running for this section.";
-      }
-      if (data === "unauthorized") {
-        return "You are not authorized to start a session.";
-      }
-      return data;
-    }
-  }
-  return "Something went wrong. Please try again.";
+  return describeConvexError(cause, ERROR_TRANSLATIONS, "Something went wrong. Please try again.");
 }
 
 export function GuestSessionDialog({ actorToken }: { actorToken: string }) {

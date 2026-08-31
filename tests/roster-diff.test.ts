@@ -287,4 +287,96 @@ describe("computeRosterDiff", () => {
     expect(diff.droppedRows).toEqual([]);
     expect(diff.enrollmentsExisting).toBe(4);
   });
+
+  it("re-assigns a linked course to a new department and surfaces the move as an issue", () => {
+    const diff = computeRosterDiff(
+      [row({ departmentCode: "MATH", departmentName: "Mathematics" })],
+      snapshot(),
+    );
+    expect(diff.coursesToUpdate).toEqual([
+      {
+        id: "course-cs101",
+        code: "CS101",
+        title: "Introduction to Computer Science",
+        departmentId: "dept-math",
+      },
+    ]);
+    expect(diff.droppedRows).toEqual([
+      {
+        row: 0,
+        field: "departmentCode",
+        message: 'course CS101 moves from department "CSE" to "MATH"',
+      },
+    ]);
+  });
+
+  it("surfaces conflicting names for the same department code", () => {
+    const diff = computeRosterDiff(
+      [
+        row({ departmentCode: "ECE", departmentName: "Electronics", sourceRow: 2 }),
+        row({
+          departmentCode: "ECE",
+          departmentName: "Electronics & Communication",
+          sourceRow: 5,
+          courseCode: "EC210",
+          courseTitle: "Digital Electronics",
+          studentEmail: "diya.sharma@sit.edu.in",
+        }),
+      ],
+      snapshot(),
+    );
+    expect(diff.droppedRows).toEqual([
+      {
+        row: 5,
+        field: "departmentName",
+        message:
+          'department code "ECE" appears with conflicting names: "Electronics" vs "Electronics & Communication"',
+      },
+    ]);
+  });
+
+  it("surfaces conflicting definitions for the same new course code", () => {
+    const diff = computeRosterDiff(
+      [
+        row({
+          departmentCode: "ECE",
+          departmentName: "Electronics",
+          courseCode: "EC210",
+          courseTitle: "Digital Electronics",
+          sourceRow: 2,
+        }),
+        row({
+          departmentCode: "ECE",
+          departmentName: "Electronics",
+          courseCode: "EC210",
+          courseTitle: "Digital Circuits",
+          studentEmail: "diya.sharma@sit.edu.in",
+          sourceRow: 7,
+        }),
+      ],
+      snapshot(),
+    );
+    expect(diff.droppedRows).toEqual([
+      {
+        row: 7,
+        field: "courseTitle",
+        message:
+          'course code "EC210" appears with conflicting definitions: "Digital Electronics" (ECE) vs "Digital Circuits" (ECE)',
+      },
+    ]);
+  });
+
+  it("cites the source row when a trimmed-empty row is dropped", () => {
+    const diff = computeRosterDiff(
+      [row({ courseCode: "   ", sourceRow: 9 })],
+      snapshot(),
+    );
+    expect(diff.droppedRows).toEqual([
+      {
+        row: 9,
+        field: "row",
+        message: `row for "aarav.patel@sit.edu.in" (${"   "} Section A) is empty after trimming`,
+      },
+    ]);
+  });
 });
