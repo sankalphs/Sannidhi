@@ -54,7 +54,11 @@ const ERROR_TRANSLATIONS: ErrorTranslation = [
 ];
 
 function describeError(cause: unknown): string {
-  return describeConvexError(cause, ERROR_TRANSLATIONS, "Could not record the decision. Please try again.");
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Could not record the decision. Please try again.",
+  );
 }
 
 /**

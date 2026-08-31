@@ -34,7 +34,11 @@ const ERROR_TRANSLATIONS: ErrorTranslation = [
 ];
 
 function describeError(cause: unknown): string {
-  return describeConvexError(cause, ERROR_TRANSLATIONS, "Could not record the review. Please try again.");
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Could not record the review. Please try again.",
+  );
 }
 
 export function ReviewQueue({ actorToken }: { actorToken: string }) {

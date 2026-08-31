@@ -25,7 +25,10 @@ const ERROR_TRANSLATIONS: ErrorTranslation = [
   { match: "session_not_active", message: "This session is no longer active." },
   { match: "session_already_closed", message: "This session is already closed." },
   { match: "session_not_restartable", message: "Only paused or closed sessions can be restarted." },
-  { match: "session_window_closed", message: "The session window has closed. Restart to open a new one." },
+  {
+    match: "session_window_closed",
+    message: "The session window has closed. Restart to open a new one.",
+  },
   { match: "unauthorized", message: "You are not authorized to manage this session." },
 ];
 

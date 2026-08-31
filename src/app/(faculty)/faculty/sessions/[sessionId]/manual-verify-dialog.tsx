@@ -16,8 +16,14 @@ const textareaClasses =
 
 const ERROR_TRANSLATIONS: ErrorTranslation = [
   { match: "reason_too_short", message: "The reason must be at least 10 characters." },
-  { match: "student_not_enrolled", message: "This student is not enrolled in this session's section." },
-  { match: "unauthorized", message: "You are not authorized to verify attendance for this session." },
+  {
+    match: "student_not_enrolled",
+    message: "This student is not enrolled in this session's section.",
+  },
+  {
+    match: "unauthorized",
+    message: "You are not authorized to verify attendance for this session.",
+  },
   { match: "session_not_active", message: "This session is no longer active." },
 ];
 
