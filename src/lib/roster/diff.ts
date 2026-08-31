@@ -10,16 +10,23 @@ export { sectionKey };
  */
 export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnapshot): RosterDiff {
   const droppedRows: RosterIssue[] = [];
+  const addIssue = (row: RosterRow | undefined, field: string, message: string) => {
+    droppedRows.push({
+      row: row?.sourceRow ?? 0,
+      field,
+      message,
+    });
+  };
 
   const usable: RosterRow[] = [];
   for (const row of rows) {
     const fields = [row.departmentCode, row.courseCode, row.sectionName, row.studentEmail];
     if (fields.some((value) => value.trim().length === 0)) {
-      droppedRows.push({
-        row: 0,
-        field: "row",
-        message: `row for "${row.studentEmail}" (${row.courseCode} ${row.sectionName}) is empty after trimming`,
-      });
+      addIssue(
+        row,
+        "row",
+        `row for "${row.studentEmail}" (${row.courseCode} ${row.sectionName}) is empty after trimming`,
+      );
       continue;
     }
     usable.push(row);
@@ -50,12 +57,16 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
     enrolledPairs.add(`${enrollment.studentId}\n${enrollment.sectionId}`);
   }
 
-  // Departments: create-only, keyed by first-seen name.
-  const departmentsToCreateMap = new Map<string, { code: string; name: string }>();
-  // Courses to create keyed by code; departmentCode from first occurrence.
+  // Departments: create-only, keyed by first-seen code. A later row using a
+  // different name for the same code is surfaced rather than silently ignored.
+  const departmentsToCreateMap = new Map<
+    string,
+    { code: string; name: string; firstRow?: RosterRow }
+  >();
+  // Courses to create keyed by code; departmentCode/title from first occurrence.
   const coursesToCreateMap = new Map<
     string,
-    { code: string; title: string; departmentCode: string }
+    { code: string; title: string; departmentCode: string; firstRow?: RosterRow }
   >();
 
   const coursesToUpdate: RosterDiff["coursesToUpdate"] = [];
@@ -77,18 +88,46 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
       departmentsToCreateMap.set(row.departmentCode, {
         code: row.departmentCode,
         name: row.departmentName,
+        firstRow: row,
       });
+    } else {
+      const seen =
+        departmentsByCode.get(row.departmentCode) ?? departmentsToCreateMap.get(row.departmentCode);
+      const seenName =
+        seen !== undefined && "name" in seen && seen.name !== undefined ? seen.name : undefined;
+      if (
+        seenName !== undefined &&
+        seenName.trim().length > 0 &&
+        seenName.trim().toLowerCase() !== row.departmentName.trim().toLowerCase()
+      ) {
+        addIssue(
+          row,
+          "departmentName",
+          `department code "${row.departmentCode}" appears with conflicting names: "${seenName}" vs "${row.departmentName}"`,
+        );
+      }
     }
 
     const existingCourse = coursesByCode.get(row.courseCode);
 
     if (existingCourse === undefined) {
-      if (!coursesToCreateMap.has(row.courseCode)) {
+      const alreadyCreating = coursesToCreateMap.get(row.courseCode);
+      if (alreadyCreating === undefined) {
         coursesToCreateMap.set(row.courseCode, {
           code: row.courseCode,
           title: row.courseTitle,
           departmentCode: row.departmentCode,
+          firstRow: row,
         });
+      } else if (
+        alreadyCreating.title.trim().toLowerCase() !== row.courseTitle.trim().toLowerCase() ||
+        alreadyCreating.departmentCode !== row.departmentCode
+      ) {
+        addIssue(
+          row,
+          "courseTitle",
+          `course code "${row.courseCode}" appears with conflicting definitions: "${alreadyCreating.title}" (${alreadyCreating.departmentCode}) vs "${row.courseTitle}" (${row.departmentCode})`,
+        );
       }
       if (
         !sectionsToCreateMap.has(sectionKey(row.courseCode, row.sectionName, row.term)) &&
@@ -117,22 +156,45 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
       continue;
     }
 
-    // Existing course: check title and department linking.
+    // Existing course: check title, plus both linking an unlinked course and
+    // re-assigning a linked one — a roster that moves a course to a new
+    // department must surface as an update, not be silently ignored. A move
+    // to a department that doesn't exist yet keeps departmentId null: the
+    // apply mutation resolves it after creating the new department.
     const titleDiffers = existingCourse.title.trim() !== row.courseTitle.trim();
     const snapshotDepartment = existingCourse.departmentId
       ? snapshot.departments.find((d) => d.id === existingCourse.departmentId)
       : undefined;
-    const rosterDeptExists =
-      departmentsByCode.has(row.departmentCode) || departmentsToCreateMap.has(row.departmentCode);
+    const rosterDept = departmentsByCode.get(row.departmentCode);
+    const rosterDeptPending = departmentsToCreateMap.get(row.departmentCode);
+    const reassigningDepartment =
+      existingCourse.departmentId != null &&
+      (rosterDept !== undefined || rosterDeptPending !== undefined) &&
+      rosterDept?.id !== existingCourse.departmentId;
     const departmentDiffers =
-      (existingCourse.departmentId === null ||
-        existingCourse.departmentId === undefined ||
-        snapshotDepartment === undefined) &&
-      rosterDeptExists;
+      ((existingCourse.departmentId == null || snapshotDepartment === undefined) &&
+        (rosterDept !== undefined || rosterDeptPending !== undefined)) ||
+      reassigningDepartment;
+    if (reassigningDepartment) {
+      addIssue(
+        row,
+        "departmentCode",
+        `course ${row.courseCode} moves from department "${snapshotDepartment?.code ?? existingCourse.departmentId}" to "${row.departmentCode}"`,
+      );
+    }
     if ((titleDiffers || departmentDiffers) && !coursesToUpdateIds.has(existingCourse.id)) {
       coursesToUpdateIds.add(existingCourse.id);
       let departmentId: string | null = null;
-      if (existingCourse.departmentId !== null && existingCourse.departmentId !== undefined) {
+      if (reassigningDepartment && rosterDept !== undefined) {
+        departmentId = rosterDept.id;
+      } else if (reassigningDepartment) {
+        // Moving to a pending (not-yet-created) department: null lets the
+        // apply mutation link the freshly created department.
+        departmentId = null;
+      } else if (
+        existingCourse.departmentId !== null &&
+        existingCourse.departmentId !== undefined
+      ) {
         departmentId = existingCourse.departmentId;
       } else {
         const snapshotDept = departmentsByCode.get(row.departmentCode);
@@ -188,8 +250,15 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
   }
 
   return {
-    departmentsToCreate: [...departmentsToCreateMap.values()],
-    coursesToCreate: [...coursesToCreateMap.values()],
+    departmentsToCreate: [...departmentsToCreateMap.values()].map(({ code, name }) => ({
+      code,
+      name,
+    })),
+    coursesToCreate: [...coursesToCreateMap.values()].map(({ code, title, departmentCode }) => ({
+      code,
+      title,
+      departmentCode,
+    })),
     coursesToUpdate,
     sectionsToCreate: [...sectionsToCreateMap.values()],
     enrollmentsToCreate,

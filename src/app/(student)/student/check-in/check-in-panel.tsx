@@ -331,8 +331,8 @@ export function CheckInPanel({
           {cameraState === "unavailable" ? (
             <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
               {unavailableReason === "scanner_unsupported"
-                ? "QR scanning isn't supported in this browser — paste the check-in code below instead."
-                : "Camera is unavailable on this device — paste the check-in code below instead."}
+                ? "QR scanning isn't supported in this browser — copy the code shown under the class QR and paste it below."
+                : "Camera is unavailable on this device — copy the code shown under the class QR and paste it below."}
             </p>
           ) : (
             <div className="bg-muted relative aspect-video overflow-hidden rounded-lg border">

@@ -13,6 +13,7 @@ import { VerdictStamp } from "@/components/marketing/verdict-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 import type { Decision } from "@/lib/decision";
 import { explainDecision } from "@/lib/risk";
 
@@ -58,13 +59,16 @@ function CountdownChip({ expiresAt }: { expiresAt: number }) {
   );
 }
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "unauthorized", message: "Your session expired — sign in again." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (data === "unauthorized") return "Your session expired — sign in again.";
-    if (typeof data === "string" && data.length > 0) return data;
-  }
-  return "Something went wrong while submitting your check. Try again.";
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Something went wrong while submitting your check. Try again.",
+  );
 }
 
 function FallbackRequest({

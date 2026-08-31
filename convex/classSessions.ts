@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { decide, deviceTrustSignal, manualAttestationSignals } from "../src/lib/risk";
+import { institutionDayOfWeek } from "../src/lib/attendance/timezone";
 import {
   SESSION_CHALLENGE_ROTATION_HINT_MS,
   mintChallengeToken,
@@ -13,7 +14,7 @@ import {
   bestDeviceForStudent,
   latestEventsByStudentSince,
 } from "./lib/attendance_event";
-import { resolveActorUser } from "./lib/actor";
+import { requireActorUser } from "./lib/actor";
 import { resolveSessionPolicy } from "./lib/policyContext";
 
 const DEFAULT_WINDOW_MINUTES = 45;
@@ -46,15 +47,6 @@ export type ScheduleRow = {
   dayOfWeek: number;
   enrolledCount: number;
 };
-
-async function requireActorUser(
-  ctx: MutationCtx | QueryCtx,
-  actorToken: string,
-): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken).catch(() => null);
-  if (user === null) throw new ConvexError("unauthorized");
-  return user;
-}
 
 function requireFaculty(user: Doc<"users">): void {
   if (user.role !== "faculty") throw new ConvexError("unauthorized");
@@ -128,7 +120,7 @@ export const listMySchedule = query({
     const caller = await requireActorUser(ctx, args.actorToken);
     requireFaculty(caller);
     const now = Date.now();
-    const today = new Date().getDay();
+    const today = institutionDayOfWeek(now);
 
     const slots = await ctx.db.query("timetable_slots").collect();
     const rows: ScheduleRow[] = [];

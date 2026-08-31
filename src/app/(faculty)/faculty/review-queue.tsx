@@ -10,6 +10,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/shell/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 const PREVIOUS_STATE_BADGES: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   verified: "default",
@@ -24,26 +25,20 @@ function formatDate(ms: number): string {
   });
 }
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "unauthorized", message: "You are not authorized to review this request." },
+  { match: "request_already_reviewed", message: "This request was already reviewed." },
+  { match: "event_already_corrected", message: "The disputed record has already been corrected." },
+  { match: "event_not_correctionable", message: "The disputed record can no longer be corrected." },
+  { match: "event_not_found", message: "The disputed record can no longer be corrected." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "unauthorized") {
-        return "You are not authorized to review this request.";
-      }
-      if (data === "request_already_reviewed") {
-        return "This request was already reviewed.";
-      }
-      if (data === "event_already_corrected") {
-        return "The disputed record has already been corrected.";
-      }
-      if (data === "event_not_correctionable" || data === "event_not_found") {
-        return "The disputed record can no longer be corrected.";
-      }
-      return data;
-    }
-  }
-  return "Could not record the review. Please try again.";
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Could not record the review. Please try again.",
+  );
 }
 
 export function ReviewQueue({ actorToken }: { actorToken: string }) {

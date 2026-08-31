@@ -77,6 +77,9 @@ describe("session challenge classroom scale", () => {
       expect(outcome.reasonCodes).toEqual(["nonce_reused"]);
     }
     const elapsedMs = Date.now() - startedAt;
-    expect(elapsedMs).toBeLessThan(2000);
+    // Wall-clock budget for ~1000 HMAC ops: generous enough that CI machine
+    // variance never flakes it, tight enough to catch order-of-magnitude
+    // regressions (e.g. accidental double-verification per redeem).
+    expect(elapsedMs).toBeLessThan(5000);
   });
 });

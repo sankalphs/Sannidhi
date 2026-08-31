@@ -5,18 +5,12 @@ import {
 import { internal } from "./_generated/api";
 import { internalMutation } from "./_generated/server";
 import { parseTtlMs } from "./lib/attendance_event";
-import {
-  buildRetentionTable,
-  isPrunable,
-  minRetentionDays,
-  MS_PER_DAY,
-} from "./lib/retentionSweep";
+import type { Id } from "./_generated/dataModel";
+import { buildRetentionTable, MS_PER_DAY } from "./lib/retentionSweep";
 
 const MAX_CHALLENGE_PRUNES_PER_RUN = 200;
 const MAX_SESSION_AUTOCLOSES_PER_RUN = 100;
 const MAX_AUDIT_PRUNES_PER_RUN = 200;
-/** Upper bound on rows examined per chain per run, prunable or kept. */
-const MAX_AUDIT_INSPECTED_PER_RUN = 2000;
 const BATCH_SIZE = 50;
 
 const DEFAULT_AUDIT_RETENTION_DAYS = 730;
@@ -108,71 +102,67 @@ export const pruneExpiredAuditEvents = internalMutation({
       retentionDays: entry.retentionDays,
     }));
 
-    // Query each chain once per batch with the LOOSEST cutoff (now - min
-    // retention): rows past it are candidates for some institution. Rows the
-    // batch fetches but their institution keeps are skipped in place; the
-    // cursor advances past them so the loop always makes progress. A separate
-    // inspected-row cap bounds the scan even when every fetched row is kept,
-    // so a run never walks an unbounded retained prefix.
-    const looseCutoff = now - minRetentionDays(retentionTable, envRetentionDays) * MS_PER_DAY;
+    // Sweep per institution with that institution's own cutoff. One
+    // institution's kept (long-retention) rows can never front-run another
+    // institution's prunable rows, so retention can't be starved by table
+    // layout. A per-institution quota keeps the walk fair when one
+    // institution's backlog alone would eat the whole run budget, and the
+    // starting position rotates daily so every institution gets a turn at
+    // the front of the line across days.
+    const perInstitutionQuota = Math.max(
+      1,
+      Math.floor(MAX_AUDIT_PRUNES_PER_RUN / Math.max(1, retentionTable.length)),
+    );
+    const dayTick = Math.floor(now / (24 * 60 * 60 * 1000));
+    const startIndex = dayTick % retentionTable.length;
 
     let prunedLedgerEvents = 0;
-    {
-      let cursor: string | null = null;
-      let inspected = 0;
-      ledgerLoop: for (;;) {
-        const page = await ctx.db
+    let prunedAttendanceEvents = 0;
+
+    for (let offset = 0; offset < retentionTable.length; offset += 1) {
+      const entry = retentionTable[(startIndex + offset) % retentionTable.length];
+      const ledgerCutoff = now - entry.retentionDays * MS_PER_DAY;
+      const institutionId = entry.institutionId as Id<"institutions">;
+
+      if (prunedLedgerEvents < MAX_AUDIT_PRUNES_PER_RUN) {
+        const ledgerQuota = Math.min(
+          perInstitutionQuota,
+          MAX_AUDIT_PRUNES_PER_RUN - prunedLedgerEvents,
+        );
+        const range = await ctx.db
           .query("event_ledger")
-          .withIndex("by_createdAt", (q) => q.lt("createdAt", looseCutoff))
-          .paginate({ numItems: BATCH_SIZE, cursor });
-        for (const row of page.page) {
-          inspected += 1;
-          if (inspected > MAX_AUDIT_INSPECTED_PER_RUN) break ledgerLoop;
-          if (
-            !isPrunable(row.createdAt, {
-              institutionId: row.institutionId,
-              now,
-              table: retentionTable,
-            })
-          ) {
-            continue;
-          }
+          .withIndex("by_institution_createdAt", (q) =>
+            q.eq("institutionId", institutionId).lt("createdAt", ledgerCutoff),
+          )
+          .take(ledgerQuota);
+        for (const row of range) {
           await ctx.db.delete(row._id);
           prunedLedgerEvents += 1;
-          if (prunedLedgerEvents >= MAX_AUDIT_PRUNES_PER_RUN) break ledgerLoop;
         }
-        if (page.isDone) break;
-        cursor = page.continueCursor;
       }
-    }
 
-    let prunedAttendanceEvents = 0;
-    {
-      let cursor: string | null = null;
-      let inspected = 0;
-      attendanceLoop: for (;;) {
-        const page = await ctx.db
+      if (prunedAttendanceEvents < MAX_AUDIT_PRUNES_PER_RUN) {
+        const attendanceQuota = Math.min(
+          perInstitutionQuota,
+          MAX_AUDIT_PRUNES_PER_RUN - prunedAttendanceEvents,
+        );
+        const range = await ctx.db
           .query("attendance_events")
-          .withIndex("by_capturedAt", (q) => q.lt("capturedAt", looseCutoff))
-          .paginate({ numItems: BATCH_SIZE, cursor });
-        for (const row of page.page) {
-          inspected += 1;
-          if (inspected > MAX_AUDIT_INSPECTED_PER_RUN) break attendanceLoop;
-          if (
-            !isPrunable(row.capturedAt, {
-              institutionId: row.institutionId,
-              now,
-              table: retentionTable,
-            })
-          ) {
-            continue;
-          }
+          .withIndex("by_institution_capturedAt", (q) =>
+            q.eq("institutionId", institutionId).lt("capturedAt", ledgerCutoff),
+          )
+          .take(attendanceQuota);
+        for (const row of range) {
           await ctx.db.delete(row._id);
           prunedAttendanceEvents += 1;
-          if (prunedAttendanceEvents >= MAX_AUDIT_PRUNES_PER_RUN) break attendanceLoop;
         }
-        if (page.isDone) break;
-        cursor = page.continueCursor;
+      }
+
+      if (
+        prunedLedgerEvents >= MAX_AUDIT_PRUNES_PER_RUN &&
+        prunedAttendanceEvents >= MAX_AUDIT_PRUNES_PER_RUN
+      ) {
+        break;
       }
     }
 

@@ -9,6 +9,7 @@ import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 const MIN_REASON_LENGTH = 10;
 const MAX_REASON_LENGTH = 1000;
@@ -36,15 +37,16 @@ function RequestStatusBadge({ status }: { status: "submitted" | "approved" | "di
   return <Badge variant="outline">dismissed</Badge>;
 }
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "unauthorized", message: "Your session expired — sign in again." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string" && data.length > 0) {
-      if (data === "unauthorized") return "Your session expired — sign in again.";
-      return data;
-    }
-  }
-  return "Could not file the request. Please try again.";
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Could not file the request. Please try again.",
+  );
 }
 
 export function RequestsManager({ actorToken }: { actorToken: string }) {

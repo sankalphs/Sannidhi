@@ -20,7 +20,7 @@ import {
 } from "../src/lib/session-challenge";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
 import { MAX_CHALLENGE_ATTEMPTS, STEPUP_CHALLENGE_TTL_MS } from "./challenges";
 import {
   appendAttendanceEvent,
@@ -31,7 +31,7 @@ import {
   countRecentCheckinAttempts,
   RATE_LIMIT_EVENT_TYPES,
 } from "./lib/attendance_event";
-import { resolveActorUser } from "./lib/actor";
+import { requireActorUser } from "./lib/actor";
 import { resolveSessionPolicy } from "./lib/policyContext";
 
 type FailureVerdict = Exclude<RedeemVerdict, "valid">;
@@ -44,15 +44,6 @@ const FAILURE_EVENT_TYPES: Record<FailureVerdict, SecurityEventType> = {
   replayed: "challenge_replayed",
   wrong_session: "wrong_session_challenge",
 };
-
-async function requireActorUser(
-  ctx: MutationCtx | QueryCtx,
-  actorToken: string,
-): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken).catch(() => null);
-  if (user === null) throw new ConvexError("unauthorized");
-  return user;
-}
 
 export const getActiveForStudent = query({
   args: { actorToken: v.string() },

@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { describeConvexError } from "@/lib/client/describe-error";
 
 type DepartmentRow = {
   id: Id<"departments">;
@@ -19,11 +20,7 @@ type DepartmentRow = {
 };
 
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") return data;
-  }
-  return "Could not update departments. Please try again.";
+  return describeConvexError(cause, [], "Could not update departments. Please try again.");
 }
 
 /**

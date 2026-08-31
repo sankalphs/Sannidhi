@@ -22,6 +22,9 @@ import { verifyActorToken } from "./lib/actor";
 
 const RP_NAME = "Sannidhi";
 
+/** How recent a step-up must be for adding a new passkey to an existing account. */
+const REGISTER_FRESH_AUTH_WINDOW_MS = 5 * 60 * 1000;
+
 type SessionIssued = { userId: string; role: Role; sid: string; expiresAt: number };
 
 async function requireActor(actorToken: string): Promise<ActorTokenClaims> {
@@ -186,6 +189,15 @@ export const registerVerify = action({
   args: { actorToken: v.string(), response: v.any() },
   handler: async (ctx, args): Promise<SessionIssued> => {
     const claims = await requireActor(args.actorToken);
+    // Fresh-auth enforced server-side: a sid-carrying token must have a
+    // recent step-up; enrollment sessions (sid-less) pass through because
+    // registration is their whole purpose.
+    if (claims.sid !== undefined) {
+      await ctx.runQuery(internal.sessions.getSessionFreshAuthBySid, {
+        sid: claims.sid,
+        maxAgeMs: REGISTER_FRESH_AUTH_WINDOW_MS,
+      });
+    }
     const { rpID, origin } = resolveRelyingParty();
 
     const response = parseCeremonyResponse(args.response) as RegistrationResponseJSON;

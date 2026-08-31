@@ -11,6 +11,7 @@ import { EmptyState } from "@/components/shell/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatReasonCode } from "@/lib/analytics/labels";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 type ReviewAlertRow = {
   id: Id<"review_alerts">;
@@ -46,23 +47,18 @@ function formatDate(ms: number): string {
   });
 }
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "unauthorized", message: "You are not authorized to resolve this alert." },
+  { match: "alert_not_found", message: "This alert no longer exists." },
+  { match: "alert_not_open", message: "This alert was already resolved." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "unauthorized") {
-        return "You are not authorized to resolve this alert.";
-      }
-      if (data === "alert_not_found") {
-        return "This alert no longer exists.";
-      }
-      if (data === "alert_not_open") {
-        return "This alert was already resolved.";
-      }
-      return data;
-    }
-  }
-  return "Could not record the decision. Please try again.";
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Could not record the decision. Please try again.",
+  );
 }
 
 /**

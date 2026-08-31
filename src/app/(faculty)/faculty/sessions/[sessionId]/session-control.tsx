@@ -11,6 +11,7 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 import { LiveBoard } from "./live-board";
 import { QrPanel } from "./qr-panel";
@@ -20,29 +21,19 @@ export type BoardSnapshot = FunctionReturnType<typeof api.classSessions.getBoard
 type SessionStatus = "active" | "paused" | "closed";
 type ControlAction = "pause" | "close" | "restart";
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "session_not_active", message: "This session is no longer active." },
+  { match: "session_already_closed", message: "This session is already closed." },
+  { match: "session_not_restartable", message: "Only paused or closed sessions can be restarted." },
+  {
+    match: "session_window_closed",
+    message: "The session window has closed. Restart to open a new one.",
+  },
+  { match: "unauthorized", message: "You are not authorized to manage this session." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "session_not_active") {
-        return "This session is no longer active.";
-      }
-      if (data === "session_already_closed") {
-        return "This session is already closed.";
-      }
-      if (data === "session_not_restartable") {
-        return "Only paused or closed sessions can be restarted.";
-      }
-      if (data === "session_window_closed") {
-        return "The session window has closed. Restart to open a new one.";
-      }
-      if (data === "unauthorized") {
-        return "You are not authorized to manage this session.";
-      }
-      return data;
-    }
-  }
-  return "Something went wrong. Please try again.";
+  return describeConvexError(cause, ERROR_TRANSLATIONS, "Something went wrong. Please try again.");
 }
 
 function StatusBadge({ status }: { status: SessionStatus }) {

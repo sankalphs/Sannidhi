@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 import { cn } from "@/lib/utils";
 
 type Challenge = {
@@ -18,19 +19,21 @@ type Challenge = {
 
 type SessionStatus = "active" | "paused" | "closed";
 
+const ERROR_TRANSLATIONS: ErrorTranslation = [
+  { match: "session_not_active", message: "This session is not active." },
+  {
+    match: "session_window_closed",
+    message: "The session window has closed. Restart to publish a new code.",
+  },
+  { match: "unauthorized", message: "You are not authorized to publish this code." },
+];
+
 function describeError(cause: unknown): string {
-  if (typeof cause === "object" && cause !== null && "data" in cause) {
-    const data = (cause as { data?: unknown }).data;
-    if (typeof data === "string") {
-      if (data === "session_not_active") return "This session is not active.";
-      if (data === "session_window_closed") {
-        return "The session window has closed. Restart to publish a new code.";
-      }
-      if (data === "unauthorized") return "You are not authorized to publish this code.";
-      return data;
-    }
-  }
-  return "Could not publish the check-in code. Please try again.";
+  return describeConvexError(
+    cause,
+    ERROR_TRANSLATIONS,
+    "Could not publish the check-in code. Please try again.",
+  );
 }
 
 export function QrPanel({
@@ -181,6 +184,17 @@ export function QrPanel({
               {/* Data URL source: next/image cannot optimize inline data URLs. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={dataUrl} alt="Session QR code" width={280} height={280} />
+            </div>
+            <div className="w-full max-w-[280px] space-y-1">
+              <p className="text-primary-foreground/70 text-center text-xs">
+                Camera not available? Enter this code instead:
+              </p>
+              <p
+                data-testid="qr-code-text"
+                className="text-primary-foreground bg-primary-foreground/10 rounded-md px-3 py-2 text-center font-mono text-sm font-semibold break-all select-all"
+              >
+                {challenge.token}
+              </p>
             </div>
             <p className="text-primary-foreground/70 font-mono text-sm tracking-[0.08em] tabular-nums">
               Refreshes in {secondsLeft}s
