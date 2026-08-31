@@ -310,6 +310,29 @@ describe("computeRosterDiff", () => {
     ]);
   });
 
+  it("re-assigns a linked course to a not-yet-created department with a null id the apply mutation resolves", () => {
+    const diff = computeRosterDiff(
+      [row({ departmentCode: "ECE", departmentName: "Electronics" })],
+      snapshot(),
+    );
+    expect(diff.coursesToUpdate).toEqual([
+      {
+        id: "course-cs101",
+        code: "CS101",
+        title: "Introduction to Computer Science",
+        departmentId: null,
+      },
+    ]);
+    expect(diff.departmentsToCreate).toEqual([{ code: "ECE", name: "Electronics" }]);
+    expect(diff.droppedRows).toEqual([
+      {
+        row: 0,
+        field: "departmentCode",
+        message: 'course CS101 moves from department "CSE" to "ECE"',
+      },
+    ]);
+  });
+
   it("surfaces conflicting names for the same department code", () => {
     const diff = computeRosterDiff(
       [
@@ -326,6 +349,11 @@ describe("computeRosterDiff", () => {
       snapshot(),
     );
     expect(diff.droppedRows).toEqual([
+      {
+        row: 2,
+        field: "departmentCode",
+        message: 'course CS101 moves from department "CSE" to "ECE"',
+      },
       {
         row: 5,
         field: "departmentName",

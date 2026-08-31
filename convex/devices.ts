@@ -16,6 +16,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import {
   assertSameInstitution,
+  requireActorUserWithActiveSession,
   requireAdminUser,
   requireFreshAuth,
   verifyActorToken,
@@ -247,10 +248,10 @@ export const verifySuccessorDevice = mutation({
     await requireFreshAuth(ctx, args.actorToken, FRESH_AUTH_WINDOW_MS, {
       allowWithoutSession: true,
     });
-    const claims = await requireActor(args.actorToken);
+    const caller = await requireActorUserWithActiveSession(ctx, args.actorToken);
 
     const device = await getDeviceOrThrow(ctx, args.deviceId);
-    if (claims.userId !== device.userId) throw new ConvexError("unauthorized");
+    if (caller._id !== device.userId) throw new ConvexError("unauthorized");
     if (device.replacesDeviceId === undefined) {
       throw new ConvexError("device is not a replacement successor");
     }
@@ -273,7 +274,7 @@ export const verifySuccessorDevice = mutation({
     await appendDeviceEvent(ctx, {
       institutionId: device.institutionId,
       type: "device.enrolled",
-      actorUserId: await resolveActorUserId(ctx, claims),
+      actorUserId: caller._id,
       subjectUserId: device.userId,
       deviceId: device._id,
       payload: { via: "replacement-approval", requestId: approvedRequest._id },
@@ -468,10 +469,10 @@ export const requestReplacement = mutation({
     await requireFreshAuth(ctx, args.actorToken, FRESH_AUTH_WINDOW_MS, {
       allowWithoutSession: true,
     });
-    const claims = await requireActor(args.actorToken);
+    const caller = await requireActorUserWithActiveSession(ctx, args.actorToken);
 
     const device = await getDeviceOrThrow(ctx, args.oldDeviceId);
-    if (claims.role !== "admin" && claims.userId !== device.userId) {
+    if (caller.role !== "admin" && caller._id !== device.userId) {
       throw new ConvexError("unauthorized");
     }
 
@@ -498,7 +499,7 @@ export const requestReplacement = mutation({
     await appendDeviceEvent(ctx, {
       institutionId: device.institutionId,
       type: "device.replacement_requested",
-      actorUserId: await resolveActorUserId(ctx, claims),
+      actorUserId: caller._id,
       subjectUserId: device.userId,
       deviceId: device._id,
       payload: { requestId },

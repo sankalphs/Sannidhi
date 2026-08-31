@@ -105,22 +105,36 @@ export const pruneExpiredAuditEvents = internalMutation({
     // Sweep per institution with that institution's own cutoff. One
     // institution's kept (long-retention) rows can never front-run another
     // institution's prunable rows, so retention can't be starved by table
-    // layout. Each institution's walk starts at its oldest row and stops at
-    // the first row still inside its retention window.
+    // layout. A per-institution quota keeps the walk fair when one
+    // institution's backlog alone would eat the whole run budget, and the
+    // starting position rotates daily so every institution gets a turn at
+    // the front of the line across days.
+    const perInstitutionQuota = Math.max(
+      1,
+      Math.floor(MAX_AUDIT_PRUNES_PER_RUN / Math.max(1, retentionTable.length)),
+    );
+    const dayTick = Math.floor(now / (24 * 60 * 60 * 1000));
+    const startIndex = dayTick % retentionTable.length;
+
     let prunedLedgerEvents = 0;
     let prunedAttendanceEvents = 0;
 
-    for (const entry of retentionTable) {
+    for (let offset = 0; offset < retentionTable.length; offset += 1) {
+      const entry = retentionTable[(startIndex + offset) % retentionTable.length];
       const ledgerCutoff = now - entry.retentionDays * MS_PER_DAY;
       const institutionId = entry.institutionId as Id<"institutions">;
 
       if (prunedLedgerEvents < MAX_AUDIT_PRUNES_PER_RUN) {
+        const ledgerQuota = Math.min(
+          perInstitutionQuota,
+          MAX_AUDIT_PRUNES_PER_RUN - prunedLedgerEvents,
+        );
         const range = await ctx.db
           .query("event_ledger")
           .withIndex("by_institution_createdAt", (q) =>
             q.eq("institutionId", institutionId).lt("createdAt", ledgerCutoff),
           )
-          .take(MAX_AUDIT_PRUNES_PER_RUN - prunedLedgerEvents);
+          .take(ledgerQuota);
         for (const row of range) {
           await ctx.db.delete(row._id);
           prunedLedgerEvents += 1;
@@ -128,12 +142,16 @@ export const pruneExpiredAuditEvents = internalMutation({
       }
 
       if (prunedAttendanceEvents < MAX_AUDIT_PRUNES_PER_RUN) {
+        const attendanceQuota = Math.min(
+          perInstitutionQuota,
+          MAX_AUDIT_PRUNES_PER_RUN - prunedAttendanceEvents,
+        );
         const range = await ctx.db
           .query("attendance_events")
           .withIndex("by_institution_capturedAt", (q) =>
             q.eq("institutionId", institutionId).lt("capturedAt", ledgerCutoff),
           )
-          .take(MAX_AUDIT_PRUNES_PER_RUN - prunedAttendanceEvents);
+          .take(attendanceQuota);
         for (const row of range) {
           await ctx.db.delete(row._id);
           prunedAttendanceEvents += 1;

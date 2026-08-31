@@ -39,8 +39,9 @@ export const studentHistory = query({
 
     const latestByKey = new Map<string, { dateKey: string; event: Doc<"attendance_events"> }>();
     for (const event of events) {
-      latestByKey.set(`${dateKey(event.capturedAt)}:${event.sectionId}`, {
-        dateKey: dateKey(event.capturedAt),
+      const eventDateKey = dateKey(event.capturedAt);
+      latestByKey.set(`${eventDateKey}:${event.sectionId}`, {
+        dateKey: eventDateKey,
         event,
       });
     }

@@ -152,7 +152,9 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
 
     // Existing course: check title, plus both linking an unlinked course and
     // re-assigning a linked one — a roster that moves a course to a new
-    // department must surface as an update, not be silently ignored.
+    // department must surface as an update, not be silently ignored. A move
+    // to a department that doesn't exist yet keeps departmentId null: the
+    // apply mutation resolves it after creating the new department.
     const titleDiffers = existingCourse.title.trim() !== row.courseTitle.trim();
     const snapshotDepartment = existingCourse.departmentId
       ? snapshot.departments.find((d) => d.id === existingCourse.departmentId)
@@ -161,8 +163,8 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
     const rosterDeptPending = departmentsToCreateMap.get(row.departmentCode);
     const reassigningDepartment =
       existingCourse.departmentId != null &&
-      rosterDept !== undefined &&
-      rosterDept.id !== existingCourse.departmentId;
+      (rosterDept !== undefined || rosterDeptPending !== undefined) &&
+      rosterDept?.id !== existingCourse.departmentId;
     const departmentDiffers =
       ((existingCourse.departmentId == null || snapshotDepartment === undefined) &&
         (rosterDept !== undefined || rosterDeptPending !== undefined)) ||
@@ -179,6 +181,10 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
       let departmentId: string | null = null;
       if (reassigningDepartment && rosterDept !== undefined) {
         departmentId = rosterDept.id;
+      } else if (reassigningDepartment) {
+        // Moving to a pending (not-yet-created) department: null lets the
+        // apply mutation link the freshly created department.
+        departmentId = null;
       } else if (
         existingCourse.departmentId !== null &&
         existingCourse.departmentId !== undefined

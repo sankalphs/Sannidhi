@@ -18,11 +18,13 @@ export function institutionDayOfWeek(timestamp: number): number {
 }
 
 /** Calendar date (YYYY-MM-DD) of an instant in the institution timezone. */
+const DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: INSTITUTION_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 export function institutionDateKey(timestamp: number): string {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: INSTITUTION_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(timestamp);
+  return DATE_KEY_FORMATTER.format(timestamp);
 }
