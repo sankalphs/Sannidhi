@@ -21,7 +21,10 @@ type SessionStatus = "active" | "paused" | "closed";
 
 const ERROR_TRANSLATIONS: ErrorTranslation = [
   { match: "session_not_active", message: "This session is not active." },
-  { match: "session_window_closed", message: "The session window has closed. Restart to publish a new code." },
+  {
+    match: "session_window_closed",
+    message: "The session window has closed. Restart to publish a new code.",
+  },
   { match: "unauthorized", message: "You are not authorized to publish this code." },
 ];
 

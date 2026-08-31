@@ -158,7 +158,10 @@ export const pruneExpiredAuditEvents = internalMutation({
         }
       }
 
-      if (prunedLedgerEvents >= MAX_AUDIT_PRUNES_PER_RUN && prunedAttendanceEvents >= MAX_AUDIT_PRUNES_PER_RUN) {
+      if (
+        prunedLedgerEvents >= MAX_AUDIT_PRUNES_PER_RUN &&
+        prunedAttendanceEvents >= MAX_AUDIT_PRUNES_PER_RUN
+      ) {
         break;
       }
     }

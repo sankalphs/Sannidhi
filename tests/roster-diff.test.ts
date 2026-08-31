@@ -395,10 +395,7 @@ describe("computeRosterDiff", () => {
   });
 
   it("cites the source row when a trimmed-empty row is dropped", () => {
-    const diff = computeRosterDiff(
-      [row({ courseCode: "   ", sourceRow: 9 })],
-      snapshot(),
-    );
+    const diff = computeRosterDiff([row({ courseCode: "   ", sourceRow: 9 })], snapshot());
     expect(diff.droppedRows).toEqual([
       {
         row: 9,

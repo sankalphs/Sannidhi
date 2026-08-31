@@ -22,7 +22,11 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
   for (const row of rows) {
     const fields = [row.departmentCode, row.courseCode, row.sectionName, row.studentEmail];
     if (fields.some((value) => value.trim().length === 0)) {
-      addIssue(row, "row", `row for "${row.studentEmail}" (${row.courseCode} ${row.sectionName}) is empty after trimming`);
+      addIssue(
+        row,
+        "row",
+        `row for "${row.studentEmail}" (${row.courseCode} ${row.sectionName}) is empty after trimming`,
+      );
       continue;
     }
     usable.push(row);
@@ -55,7 +59,10 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
 
   // Departments: create-only, keyed by first-seen code. A later row using a
   // different name for the same code is surfaced rather than silently ignored.
-  const departmentsToCreateMap = new Map<string, { code: string; name: string; firstRow?: RosterRow }>();
+  const departmentsToCreateMap = new Map<
+    string,
+    { code: string; name: string; firstRow?: RosterRow }
+  >();
   // Courses to create keyed by code; departmentCode/title from first occurrence.
   const coursesToCreateMap = new Map<
     string,
@@ -85,8 +92,7 @@ export function computeRosterDiff(rows: RosterRow[], snapshot: RosterCatalogSnap
       });
     } else {
       const seen =
-        departmentsByCode.get(row.departmentCode) ??
-        departmentsToCreateMap.get(row.departmentCode);
+        departmentsByCode.get(row.departmentCode) ?? departmentsToCreateMap.get(row.departmentCode);
       const seenName =
         seen !== undefined && "name" in seen && seen.name !== undefined ? seen.name : undefined;
       if (
