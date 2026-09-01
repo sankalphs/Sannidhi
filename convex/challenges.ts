@@ -124,8 +124,9 @@ async function loadActiveTemplate(
 }
 /**
  * Durable expired transition. spot_recheck misses flag the student immediately
- * (the whole point of the re-check); expired step-ups only flip status so the
- * board keeps showing challenged until faculty acts.
+ * (the whole point of the re-check); expired step-ups also flag — an abandoned
+ * challenge is a dodged verification, and letting it vanish would count the
+ * session as neither present nor absent.
  */
 async function expirePendingChallenge(
   ctx: MutationCtx,
@@ -133,13 +134,16 @@ async function expirePendingChallenge(
   now: number,
 ): Promise<void> {
   await ctx.db.patch(challenge._id, { status: "expired", resolvedAt: now });
-  if (challenge.kind !== "spot_recheck") return;
 
   const session = await ctx.db.get(challenge.sessionId);
   if (session === null) return;
   const decision = decide({
     signals: await sessionSignals(ctx, challenge.studentId, challenge.sessionId),
-    anomalies: { recentSecurityFailures: 0, missedSpotRecheck: true },
+    anomalies: {
+      recentSecurityFailures: 0,
+      missedSpotRecheck: challenge.kind === "spot_recheck",
+      reviewRequested: challenge.kind === "checkin_stepup",
+    },
     now,
     policy: await resolveSessionPolicy(ctx, session),
   });
@@ -150,16 +154,19 @@ async function expirePendingChallenge(
     sessionId: session._id,
     state: "flagged",
     decision,
-    note: "spot re-check missed",
+    note:
+      challenge.kind === "spot_recheck"
+        ? "spot re-check missed"
+        : "step-up challenge abandoned (expired)",
   });
   await ctx.runMutation(internal.ledger.appendLedgerEvent, {
     institutionId: session.institutionId,
     category: "attendance",
-    type: "attendance.spot_recheck_result",
+    type: COMPLETION_LEDGER_TYPES[challenge.kind],
     subjectUserId: challenge.studentId,
     payload: {
       challengeId: challenge._id,
-      outcome: "missed",
+      outcome: challenge.kind === "spot_recheck" ? "missed" : "expired",
       reasonCodes: decision.reasonCodes,
       decision,
     },

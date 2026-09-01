@@ -443,6 +443,40 @@ describe("faculty manual attestation override", () => {
     expect(decision.reasonCodes).toEqual([RISK_REASON_CODES.facultyManualOverride]);
   });
 
+  // Audit regression H11: an override must never silently absorb a failed
+  // person check — the spoof/mismatch reason code rides along on the accept.
+  it("keeps the spoof reason code when an override outranks a failed person check", () => {
+    const decision = decide(
+      cleanInput({
+        signals: [
+          ...manualAttestationSignals("visibly present"),
+          faceMatchSignal({ verdict: "spoof_suspected" }),
+        ],
+      }),
+    );
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([
+      RISK_REASON_CODES.facultyManualOverride,
+      RISK_REASON_CODES.personSpoofSuspected,
+    ]);
+  });
+
+  it("keeps the face-mismatch reason code when an override outranks it", () => {
+    const decision = decide(
+      cleanInput({
+        signals: [
+          ...manualAttestationSignals("visibly present"),
+          faceMatchSignal({ verdict: "mismatch", similarity: 0.1 }),
+        ],
+      }),
+    );
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([
+      RISK_REASON_CODES.facultyManualOverride,
+      RISK_REASON_CODES.personFaceMismatch,
+    ]);
+  });
+
   it("manual identity without manual presence falls back to normal rules", () => {
     const signals = [
       { category: "identity", source: "faculty_attestation", status: "verified", detail: "note" },

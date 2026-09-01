@@ -297,6 +297,9 @@ export const restart = mutation({
     if (session.status !== "paused" && session.status !== "closed") {
       throw new ConvexError("session_not_restartable");
     }
+    // A restart mints a live window, so the one-active-session-per-section
+    // invariant applies exactly as it does to a fresh start.
+    await assertNoActiveSession(ctx, session.sectionId);
     const now = Date.now();
     const windowEndsAt = now + (args.windowMinutes ?? DEFAULT_WINDOW_MINUTES) * 60_000;
     await ctx.db.patch(session._id, {
@@ -455,14 +458,19 @@ export const verifyManually = mutation({
     const trimmed = args.reason.trim();
     if (trimmed.length < 10) throw new ConvexError("reason_too_short");
 
+    // Manual verification is bound to the live window: a closed session or an
+    // expired window has no verifiable present to attest to.
+    const now = Date.now();
+    if (session.status !== "active" || now >= session.windowEndsAt) {
+      throw new ConvexError("session_not_active");
+    }
+
     const enrollment = await ctx.db
       .query("enrollments")
       .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
       .filter((q) => q.eq(q.field("sectionId"), session.sectionId))
       .first();
     if (enrollment === null) throw new ConvexError("student_not_enrolled");
-
-    const now = Date.now();
 
     // Idempotent only when the student's LATEST event is already verified; an
     // older verified event must not swallow overrides of newer flagged/rejected

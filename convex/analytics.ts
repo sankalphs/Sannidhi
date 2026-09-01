@@ -18,7 +18,6 @@ import { requireAnalyticsAuthority } from "./lib/actor";
 import { studentTrajectoryRecords } from "./lib/analytics_projection";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query, type QueryCtx } from "./_generated/server";
-
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export type AnalyticsOverview = {
@@ -320,18 +319,35 @@ export const reportRows = query({
     const sectionCache = new Map<Id<"sections">, { sectionName: string; courseCode: string }>();
     const userCache = new Map<Id<"users">, Doc<"users"> | null>();
 
+    // One row per (session, student): a session that emitted pending then
+    // flagged then verified events is one record, resolved to its latest.
+    const bySessionStudent = new Map<
+      string,
+      { event: Doc<"attendance_events">; sectionId: Id<"sections"> }
+    >();
+    for (const event of events) {
+      if (event.sessionId === undefined) continue;
+      const key = `${event.sessionId}:${event.studentId}`;
+      const existing = bySessionStudent.get(key);
+      if (existing === undefined || event.capturedAt >= existing.event.capturedAt) {
+        bySessionStudent.set(key, { event, sectionId: event.sectionId });
+      }
+    }
+
     const rows: ReportRow[] = [];
-    for (const event of [...events].sort((a, b) => a.capturedAt - b.capturedAt)) {
-      let section = sectionCache.get(event.sectionId);
+    for (const { event, sectionId } of [...bySessionStudent.values()].sort(
+      (a, b) => a.event.capturedAt - b.event.capturedAt,
+    )) {
+      let section = sectionCache.get(sectionId);
       if (section === undefined) {
-        const sectionDoc = await ctx.db.get(event.sectionId);
+        const sectionDoc = await ctx.db.get(sectionId);
         const course = sectionDoc !== null ? await ctx.db.get(sectionDoc.courseId) : null;
         if (sectionDoc !== null && course !== null) {
           section = { sectionName: sectionDoc.name, courseCode: course.code };
-          sectionCache.set(event.sectionId, section);
+          sectionCache.set(sectionId, section);
         } else {
           sectionCache.set(
-            event.sectionId,
+            sectionId,
             null as unknown as { sectionName: string; courseCode: string },
           );
           continue;

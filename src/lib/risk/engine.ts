@@ -64,9 +64,17 @@ export function decide(input: RiskInput): Decision {
   let outcome: Decision["outcome"];
   const reasonCodes: string[] = [];
 
+  const spoofed = failedPersonSignals.some((s) => s.detail?.startsWith("spoof_suspected"));
+  const mismatched = failedPersonSignals.some((s) => s.detail?.startsWith("mismatch"));
+
   if (hasManualIdentity && hasManualPresence) {
+    // A faculty override outranks weak evidence, but it must never silently
+    // absorb a failed person check: the spoof/mismatch reason codes ride
+    // along so the decision trail keeps the signal that was overridden.
     outcome = "accept";
     reasonCodes.push(RISK_REASON_CODES.facultyManualOverride);
+    if (spoofed) reasonCodes.push(RISK_REASON_CODES.personSpoofSuspected);
+    if (mismatched) reasonCodes.push(RISK_REASON_CODES.personFaceMismatch);
   } else if (!signals.some((s) => s.category === "identity" && s.status === "verified")) {
     outcome = "reject";
     reasonCodes.push(RISK_REASON_CODES.identityUnverified);
@@ -75,12 +83,8 @@ export function decide(input: RiskInput): Decision {
     reasonCodes.push(RISK_REASON_CODES.presenceUnverified);
   } else if (failedPersonSignals.length > 0) {
     outcome = "flag";
-    if (failedPersonSignals.some((s) => s.detail?.startsWith("spoof_suspected"))) {
-      reasonCodes.push(RISK_REASON_CODES.personSpoofSuspected);
-    }
-    if (failedPersonSignals.some((s) => s.detail?.startsWith("mismatch"))) {
-      reasonCodes.push(RISK_REASON_CODES.personFaceMismatch);
-    }
+    if (spoofed) reasonCodes.push(RISK_REASON_CODES.personSpoofSuspected);
+    if (mismatched) reasonCodes.push(RISK_REASON_CODES.personFaceMismatch);
   } else if (distrusted) {
     outcome = "flag";
     reasonCodes.push(

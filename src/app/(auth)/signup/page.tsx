@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 
 import { SignupForm } from "@/app/(auth)/signup/signup-form";
 
@@ -11,12 +12,14 @@ export default function SignupPage() {
         </p>
         <h1 className="font-display text-4xl tracking-tight">Create your account</h1>
         <p className="text-muted-foreground text-sm leading-relaxed">
-          Students can self-register with their USN and email. Ask your institution for its signup
-          code, then add a passkey any time from your devices page.
+          Signups are invite-gated: paste the token from your institution&apos;s invite link and
+          sign up with the email it was sent to.
         </p>
       </div>
 
-      <SignupForm />
+      <Suspense>
+        <SignupForm />
+      </Suspense>
 
       <Link
         href="/"

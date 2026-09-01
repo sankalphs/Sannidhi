@@ -10,6 +10,7 @@ import {
   geolocationSignal,
   identitySessionSignal,
   outcomeToAttendanceState,
+  type AttendanceState,
 } from "../src/lib/risk";
 import {
   classifyRedeem,
@@ -29,6 +30,7 @@ import {
   CHECKIN_RATE_LIMIT_WINDOW_MS,
   countRecentChallengeAnomalies,
   countRecentCheckinAttempts,
+  latestEventsByStudentSince,
   RATE_LIMIT_EVENT_TYPES,
 } from "./lib/attendance_event";
 import { requireActorUser } from "./lib/actor";
@@ -37,6 +39,13 @@ import { resolveSessionPolicy } from "./lib/policyContext";
 type FailureVerdict = Exclude<RedeemVerdict, "valid">;
 
 type SecurityEventType = (typeof RATE_LIMIT_EVENT_TYPES)[number];
+
+/** Terminal decision states: once landed, a session's outcome is settled. */
+const DECISION_EVENT_STATES = ["step_up", "verified", "flagged", "rejected"] as const;
+
+function isDecisionEventState(state: string): state is (typeof DECISION_EVENT_STATES)[number] {
+  return (DECISION_EVENT_STATES as readonly string[]).includes(state);
+}
 
 const FAILURE_EVENT_TYPES: Record<FailureVerdict, SecurityEventType> = {
   expired: "challenge_expired_use",
@@ -103,7 +112,7 @@ type RedeemResult =
   | ({
       kind: "ok";
       attendanceEventId: Id<"attendance_events">;
-      state: ReturnType<typeof outcomeToAttendanceState>;
+      state: AttendanceState;
       checkedInAt: number;
       courseCode: string;
       venueName: string;
@@ -136,22 +145,6 @@ export const redeemChallenge = mutation({
   handler: async (ctx, args): Promise<RedeemResult> => {
     const caller = await requireActorUser(ctx, args.actorToken);
     const now = Date.now();
-
-    const attempts = await countRecentCheckinAttempts(ctx, { studentId: caller._id, now });
-    if (attempts >= CHECKIN_RATE_LIMIT_MAX_ATTEMPTS) {
-      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
-        institutionId: caller.institutionId,
-        category: "attendance",
-        type: "checkin_rate_limited",
-        actorUserId: caller._id,
-        subjectUserId: caller._id,
-        payload: {
-          windowMs: CHECKIN_RATE_LIMIT_WINDOW_MS,
-          maxAttempts: CHECKIN_RATE_LIMIT_MAX_ATTEMPTS,
-        },
-      });
-      return { kind: "rate_limited", retryAfterSeconds: 60 };
-    }
 
     const fail = (failure: RedeemFailure): RedeemResult => failure;
 
@@ -211,6 +204,16 @@ export const redeemChallenge = mutation({
 
     const verified = await verifyChallengeToken(args.token);
     if (!verified.ok) {
+      // Authorization precedes every failure write: a non-student or a caller
+      // from another institution gets a silent verdict, never ledger rows in
+      // the victim institution's chain.
+      if (caller.role !== "student") {
+        return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["not_enrolled"] });
+      }
+      const attempts = await countRecentCheckinAttempts(ctx, { studentId: caller._id, now });
+      if (attempts >= CHECKIN_RATE_LIMIT_MAX_ATTEMPTS) {
+        return { kind: "rate_limited", retryAfterSeconds: 60 };
+      }
       const reasonCodes = [verified.reasonCode];
       await appendFailure("malformed", reasonCodes);
       return fail({ kind: "failed", verdict: "malformed", reasonCodes });
@@ -223,12 +226,52 @@ export const redeemChallenge = mutation({
       session = null;
     }
 
-    if (session === null || session.institutionId !== payload.iid) {
+    // Cross-tenant gate before any write: the caller's institution must match
+    // the token's institution. Foreign callers learn nothing and write nothing.
+    if (session === null || caller.institutionId !== session.institutionId) {
+      if (caller.role !== "student") {
+        return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["not_enrolled"] });
+      }
+      return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["session_mismatch"] });
+    }
+
+    if (caller.role !== "student") {
+      return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["not_enrolled"] });
+    }
+
+    const attempts = await countRecentCheckinAttempts(ctx, { studentId: caller._id, now });
+    if (attempts >= CHECKIN_RATE_LIMIT_MAX_ATTEMPTS) {
+      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+        institutionId: caller.institutionId,
+        category: "attendance",
+        type: "checkin_rate_limited",
+        actorUserId: caller._id,
+        subjectUserId: caller._id,
+        payload: {
+          windowMs: CHECKIN_RATE_LIMIT_WINDOW_MS,
+          maxAttempts: CHECKIN_RATE_LIMIT_MAX_ATTEMPTS,
+        },
+      });
+      return { kind: "rate_limited", retryAfterSeconds: 60 };
+    }
+
+    // Enrollment gate before any write: a same-institution student who is not
+    // enrolled in the session's section gets nothing appended either.
+    const enrollment = await ctx.db
+      .query("enrollments")
+      .withIndex("by_student", (q) => q.eq("studentId", caller._id))
+      .filter((q) => q.eq(q.field("sectionId"), session.sectionId))
+      .first();
+    if (enrollment === null) {
+      return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["not_enrolled"] });
+    }
+
+    if (session.institutionId !== payload.iid) {
       await appendFailure(
         "wrong_session",
         ["session_mismatch"],
         await nonceDigest(payload.n),
-        session?._id,
+        session._id,
       );
       return fail({
         kind: "failed",
@@ -243,6 +286,9 @@ export const redeemChallenge = mutation({
       .withIndex("by_nonceHash", (q) => q.eq("nonceHash", nonceHash))
       .first();
 
+    // Token verdicts outrank session idempotency: a replayed, expired, or
+    // malformed code still reports its own verdict even when the student is
+    // already settled in this session.
     const outcome = await classifyRedeem({
       verified,
       stored:
@@ -276,19 +322,45 @@ export const redeemChallenge = mutation({
       return fail({ kind: "failed", verdict: "replayed", reasonCodes: ["challenge_unknown"] });
     }
 
-    if (caller.role !== "student") {
-      await appendFailure("wrong_session", ["not_enrolled"], nonceHash, session._id);
-      return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["not_enrolled"] });
-    }
-
-    const enrollment = await ctx.db
-      .query("enrollments")
-      .withIndex("by_student", (q) => q.eq("studentId", caller._id))
-      .filter((q) => q.eq(q.field("sectionId"), session.sectionId))
-      .first();
-    if (enrollment === null) {
-      await appendFailure("wrong_session", ["not_enrolled"], nonceHash, session._id);
-      return fail({ kind: "failed", verdict: "wrong_session", reasonCodes: ["not_enrolled"] });
+    // (session, student) idempotency: once a decision state is settled for
+    // this student in this session, a fresh valid code cannot self-upgrade
+    // it. A flagged student re-scanning gets their flagged outcome echoed
+    // back, not a second shot at an accept.
+    const settled = (
+      await latestEventsByStudentSince(ctx, {
+        sectionId: session.sectionId,
+        sessionId: session._id,
+        sinceMs: session.startedAt,
+      })
+    ).get(caller._id);
+    if (settled !== undefined && isDecisionEventState(settled.state)) {
+      const course = await ctx.db.get(session.courseId);
+      const venue = await ctx.db.get(session.venueId);
+      if (settled.state === "step_up") {
+        // An unresolved step-up still lets the student finish that challenge;
+        // the challenge surface is the authority for its own completion.
+        return fail({
+          kind: "failed",
+          verdict: "wrong_session",
+          reasonCodes: ["already_checked_in"],
+        });
+      }
+      const settledState = settled.state as "verified" | "flagged" | "rejected";
+      const settledOutcome: Decision["outcome"] =
+        settledState === "verified" ? "accept" : settledState === "flagged" ? "flag" : "reject";
+      return {
+        kind: "ok" as const,
+        attendanceEventId: settled._id,
+        state: settledState,
+        checkedInAt: settled.capturedAt,
+        courseCode: course?.code ?? "",
+        venueName: venue?.name ?? "",
+        outcome: settledOutcome,
+        evidence: settled.decision?.evidence ?? { signals: [] },
+        reasonCodes: [...(settled.decision?.reasonCodes ?? []), "already_checked_in"],
+        policyVersion: settled.decision?.policyVersion ?? "unknown",
+        decidedAt: settled.capturedAt,
+      };
     }
 
     await ctx.db.patch(storedDoc._id, { consumedAt: now, consumedByUserId: caller._id });

@@ -20,7 +20,10 @@ type LedgerEvent = LedgerSnapshot["events"][number];
 
 type ChainWindow = FunctionReturnType<typeof api.ledger.verifyChain>;
 type ChainStatus =
-  { state: "valid"; count: number } | { state: "broken"; brokenAtSeq: number } | { state: "error" };
+  | { state: "valid"; count: number }
+  | { state: "truncated"; count: number }
+  | { state: "broken"; brokenAtSeq: number }
+  | { state: "error" };
 
 type FetchChainPage = (args: {
   actorToken: string;
@@ -28,7 +31,11 @@ type FetchChainPage = (args: {
   fromSeq?: number;
 }) => Promise<ChainWindow>;
 
-/** Walks a whole chain through its windowed verify query until it ends or breaks. */
+/**
+ * Walks a whole chain through its windowed verify query until it ends or
+ * breaks. Hitting the walk cap is a distinct "truncated" verdict: only a
+ * chain that actually reached its end may report as valid.
+ */
 async function walkChain(fetchPage: FetchChainPage, actorToken: string): Promise<ChainStatus> {
   let cursorSeq: number | undefined;
   let verifiedCount = 0;
@@ -48,7 +55,7 @@ async function walkChain(fetchPage: FetchChainPage, actorToken: string): Promise
       }
       cursorSeq = result.nextCursor;
     }
-    return { state: "valid", count: verifiedCount };
+    return { state: "truncated", count: verifiedCount };
   } catch {
     return { state: "error" };
   }
@@ -151,6 +158,16 @@ function ChainStatusBadge({
         className="border-verdict-accept/35 bg-verdict-accept/10 text-verdict-accept"
       >
         {label} valid · {status.count} events
+      </Badge>
+    );
+  }
+  if (status.state === "truncated") {
+    return (
+      <Badge
+        data-testid={testId}
+        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+      >
+        {label} partially verified · first {status.count} events valid, walk limit reached
       </Badge>
     );
   }

@@ -1,12 +1,14 @@
 import { TriangleAlert } from "lucide-react";
 
+import { isDemoLoginEnabled } from "@/lib/auth/dev-login";
+
 /**
- * Rendered only when the deployment explicitly opts into public demo mode
- * (ENABLE_DEMO_LOGIN=1): visitors get seeded personas carrying full role
- * authority, so every surface announces it.
+ * Rendered whenever demo personas are reachable (ENABLE_DEMO_LOGIN=1 or the
+ * dev/preview ENABLE_DEV_LOGIN gate): visitors get seeded personas carrying
+ * full role authority, so every surface announces it.
  */
 export function DemoBanner() {
-  if (process.env.ENABLE_DEMO_LOGIN !== "1") return null;
+  if (!isDemoLoginEnabled()) return null;
 
   return (
     <div

@@ -8,7 +8,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { FACE_EMBEDDING_VERSION } from "../src/lib/biometry";
-import { verifyActorToken } from "./lib/actor";
+import { requireActorUserWithActiveSession, resolveActorUser } from "./lib/actor";
 
 export const BIOMETRIC_CONSENT_VERSION = "biometric-consent-1";
 
@@ -19,34 +19,17 @@ export type MyEnrollmentStatus = EnrollmentGateResult & {
   institutionId: string | null;
 };
 
-async function requireActor(actorToken: string): Promise<ActorTokenClaims> {
-  try {
-    return await verifyActorToken(actorToken);
-  } catch {
-    throw new ConvexError("unauthorized");
-  }
-}
-
-async function resolveKnownUser(
+/**
+ * Claims for a live, stored user: token verified, session checked when the
+ * token carries one, and the role read from the user row — suspension and
+ * revocation take effect immediately on every biometric mutation.
+ */
+async function requireActor(
   ctx: MutationCtx | QueryCtx,
-  userId: string,
-): Promise<Doc<"users"> | null> {
-  try {
-    return await ctx.db.get(userId as Id<"users">);
-  } catch {
-    return null;
-  }
-}
-
-async function getUserOrThrow(ctx: MutationCtx, userId: string): Promise<Doc<"users">> {
-  let user: Doc<"users"> | null;
-  try {
-    user = await ctx.db.get(userId as Id<"users">);
-  } catch {
-    throw new ConvexError("actor identity must be a real institution account");
-  }
-  if (user === null) throw new ConvexError("user not found");
-  return user;
+  actorToken: string,
+): Promise<ActorTokenClaims & { user: Doc<"users"> }> {
+  const user = await requireActorUserWithActiveSession(ctx, actorToken);
+  return { userId: user._id, role: user.role, user };
 }
 
 function assertStudent(user: Doc<"users">): void {
@@ -110,9 +93,8 @@ async function appendIdentityEvent(
 export const getMyEnrollmentStatus = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args): Promise<MyEnrollmentStatus> => {
-    const claims = await requireActor(args.actorToken);
-
-    const user = await resolveKnownUser(ctx, claims.userId);
+    // Read-only status surface: tolerant of sid-less dev sessions on purpose.
+    const user = await resolveActorUser(ctx, args.actorToken);
     if (user === null) {
       return {
         ...evaluateEnrollmentGate({
@@ -162,9 +144,7 @@ export const getMyEnrollmentStatus = query({
 export const getMyBiometricRecord = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
-
-    const user = await resolveKnownUser(ctx, claims.userId);
+    const user = await resolveActorUser(ctx, args.actorToken);
     if (user === null) return null;
 
     const records = await listBiometricRecords(ctx, user._id);
@@ -176,8 +156,7 @@ export const getMyBiometricRecord = query({
 export const recordBiometricConsent = mutation({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
-    const user = await getUserOrThrow(ctx, claims.userId);
+    const { user } = await requireActor(ctx, args.actorToken);
     assertStudent(user);
 
     const now = Date.now();
@@ -211,9 +190,8 @@ export const recordBiometricConsent = mutation({
 export const enrollFaceTemplate = mutation({
   args: { actorToken: v.string(), embedding: v.array(v.number()) },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
-    const user = await resolveKnownUser(ctx, claims.userId);
-    if (user === null || user.role !== "student") {
+    const { user } = await requireActor(ctx, args.actorToken);
+    if (user.role !== "student") {
       throw new ConvexError("unauthorized");
     }
 
@@ -256,8 +234,7 @@ export const enrollFaceTemplate = mutation({
 export const withdrawBiometricConsent = mutation({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
-    const user = await getUserOrThrow(ctx, claims.userId);
+    const { user } = await requireActor(ctx, args.actorToken);
     assertStudent(user);
 
     const record = await findActiveBiometricRecord(ctx, user._id);

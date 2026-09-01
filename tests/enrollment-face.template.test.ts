@@ -40,6 +40,17 @@ describe("validateFaceEmbedding", () => {
     expect(validateFaceEmbedding("576 numbers")).toBe("invalid_embedding");
     expect(validateFaceEmbedding({ length: EMBEDDING_DIMS })).toBe("invalid_embedding");
   });
+
+  // Audit regression (L2/H7): a black-frame embedding — all zeros — and any
+  // other constant vector carry no face information and must never enroll.
+  it("rejects the all-zero black-frame embedding", () => {
+    expect(validateFaceEmbedding(new Array(EMBEDDING_DIMS).fill(0))).toBe("invalid_embedding");
+  });
+
+  it("rejects any constant vector, which normalizes to one shared direction", () => {
+    expect(validateFaceEmbedding(new Array(EMBEDDING_DIMS).fill(0.25))).toBe("invalid_embedding");
+    expect(validateFaceEmbedding(new Array(EMBEDDING_DIMS).fill(-1))).toBe("invalid_embedding");
+  });
 });
 
 describe("createFaceTemplateRef", () => {

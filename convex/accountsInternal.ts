@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import type { Role } from "../src/lib/auth/session";
+import { hashInviteToken } from "../src/lib/invites/token";
 import { internal } from "./_generated/api";
 import { internalMutation, internalQuery } from "./_generated/server";
 
@@ -148,6 +149,41 @@ export const clearPasswordLoginAttempts = internalMutation({
   },
 });
 
+/** Invite row for a raw token (hash lookup), or null when the token is unknown. */
+export const getInviteByToken = internalQuery({
+  args: { token: v.string() },
+  handler: async (ctx, args) => {
+    const tokenHash = await hashInviteToken(args.token.trim());
+    const invite = await ctx.db
+      .query("invites")
+      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
+      .unique();
+    if (invite === null) return null;
+    const { _id, institutionId, email, role, status, expiresAt } = invite;
+    return { _id, institutionId, email, role, status, expiresAt };
+  },
+});
+
+/** Pending, unexpired invite for an email within one institution, or null. */
+export const getPendingInviteByEmail = internalQuery({
+  args: { institutionId: v.id("institutions"), email: v.string() },
+  handler: async (ctx, args) => {
+    const invites = await ctx.db
+      .query("invites")
+      .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
+      .collect();
+    const pending = invites.find(
+      (invite) =>
+        invite.institutionId === args.institutionId &&
+        invite.status === "pending" &&
+        invite.expiresAt > Date.now(),
+    );
+    if (pending === undefined) return null;
+    const { _id, institutionId, email, role, status, expiresAt } = pending;
+    return { _id, institutionId, email, role, status, expiresAt };
+  },
+});
+
 export const countInstitutionSignupsSince = internalQuery({
   args: { institutionId: v.id("institutions"), cutoff: v.number() },
   handler: async (ctx, args) => {
@@ -166,6 +202,7 @@ export const createPasswordUser = internalMutation({
     name: v.string(),
     usn: v.string(),
     passwordHash: v.string(),
+    status: v.optional(v.union(v.literal("invited"), v.literal("active"))),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -204,7 +241,9 @@ export const createPasswordUser = internalMutation({
       name: args.name.trim(),
       usn: normalizedUsn,
       role: "student",
-      status: "active",
+      // Self-signup lands invited; the invite redemption (passkey enrollment
+      // or admin re-invite) is what proves the mailbox and activates.
+      status: args.status ?? "active",
       createdAt: now,
     });
     await ctx.db.insert("password_credentials", {

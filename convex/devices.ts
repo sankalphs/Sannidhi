@@ -19,7 +19,6 @@ import {
   requireActorUserWithActiveSession,
   requireAdminUser,
   requireFreshAuth,
-  verifyActorToken,
 } from "./lib/actor";
 
 const MAX_LABEL_LENGTH = 80;
@@ -28,18 +27,27 @@ const MAX_LISTED_DEVICES = 200;
 type DeviceDoc = Doc<"devices">;
 type ReplacementRequestDoc = Doc<"replacement_requests">;
 
-async function requireActor(actorToken: string): Promise<ActorTokenClaims> {
-  try {
-    return await verifyActorToken(actorToken);
-  } catch {
-    throw new ConvexError("unauthorized");
-  }
+/**
+ * Claims for a live, stored user: the token is verified, the session (when
+ * the token carries one) is checked, and the role comes from the user row —
+ * so suspension, revocation, and demotion all take effect immediately on
+ * every mutating device path.
+ */
+async function requireActor(
+  ctx: MutationCtx | QueryCtx,
+  actorToken: string,
+): Promise<ActorTokenClaims & { user: Doc<"users"> }> {
+  const user = await requireActorUserWithActiveSession(ctx, actorToken);
+  return { userId: user._id, role: user.role, user };
 }
 
-async function requireAdminActor(actorToken: string): Promise<ActorTokenClaims> {
-  const claims = await requireActor(actorToken);
-  if (claims.role !== "admin") throw new ConvexError("unauthorized");
-  return claims;
+async function requireAdminActor(
+  ctx: MutationCtx,
+  actorToken: string,
+): Promise<ActorTokenClaims & { user: Doc<"users"> }> {
+  const actor = await requireActor(ctx, actorToken);
+  if (actor.user.role !== "admin") throw new ConvexError("unauthorized");
+  return actor;
 }
 
 async function requireAdminInstitution(
@@ -82,17 +90,6 @@ async function appendDeviceEvent(
     deviceId: args.deviceId,
     payload: args.payload ?? {},
   });
-}
-
-async function getUserOrThrow(ctx: MutationCtx, userId: string): Promise<Doc<"users">> {
-  let user: Doc<"users"> | null;
-  try {
-    user = await ctx.db.get(userId as Id<"users">);
-  } catch {
-    throw new ConvexError("actor identity must be a real institution account");
-  }
-  if (user === null) throw new ConvexError("user not found");
-  return user;
 }
 
 async function resolveKnownUser(
@@ -161,10 +158,10 @@ async function findPendingRequestForDevice(
 export const registerDevice = mutation({
   args: { actorToken: v.string(), label: v.string(), platform: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
+    const claims = await requireActor(ctx, args.actorToken);
     if (claims.role !== "student") throw new ConvexError("only students register devices");
 
-    const user = await getUserOrThrow(ctx, claims.userId);
+    const user = claims.user;
     if (user.status === "suspended") throw new ConvexError("account suspended");
 
     const label = args.label.trim().slice(0, MAX_LABEL_LENGTH);
@@ -207,7 +204,7 @@ export const registerDevice = mutation({
 export const verifyPossession = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices"), code: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
+    const claims = await requireActor(ctx, args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertOwnerOrAdmin(claims, device);
 
@@ -287,7 +284,7 @@ export const verifySuccessorDevice = mutation({
 export const activateDevice = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices") },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
+    const claims = await requireActor(ctx, args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     if (claims.role === "admin") {
       assertSameInstitution(
@@ -358,7 +355,7 @@ export const activateDevice = mutation({
 export const suspendDevice = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices"), reason: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const claims = await requireAdminActor(args.actorToken);
+    const claims = await requireAdminActor(ctx, args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertSameInstitution(
       await requireAdminInstitution(ctx, args.actorToken),
@@ -389,7 +386,7 @@ export const suspendDevice = mutation({
 export const revokeDevice = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices"), reason: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    const claims = await requireAdminActor(args.actorToken);
+    const claims = await requireAdminActor(ctx, args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertSameInstitution(
       await requireAdminInstitution(ctx, args.actorToken),
@@ -420,7 +417,7 @@ export const revokeDevice = mutation({
 export const adminActivateDevice = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices") },
   handler: async (ctx, args) => {
-    const claims = await requireAdminActor(args.actorToken);
+    const claims = await requireAdminActor(ctx, args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertSameInstitution(
       await requireAdminInstitution(ctx, args.actorToken),
@@ -516,7 +513,7 @@ export const decideReplacement = mutation({
     decision: v.union(...REPLACEMENT_DECISIONS.map((decision) => v.literal(decision))),
   },
   handler: async (ctx, args) => {
-    const claims = await requireAdminActor(args.actorToken);
+    const claims = await requireAdminActor(ctx, args.actorToken);
     const request = await ctx.db.get(args.requestId);
     if (request === null) throw new ConvexError("replacement request not found");
     if (request.status !== "pending") throw new ConvexError("request already decided");
@@ -593,7 +590,7 @@ function evidenceOf(device: DeviceDoc) {
 export const listMyDevices = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
+    const claims = await requireActor(ctx, args.actorToken);
     if ((await resolveKnownUser(ctx, claims.userId)) === null) return [];
     const devices = await ctx.db
       .query("devices")
@@ -619,7 +616,7 @@ export const listMyDevices = query({
 export const listMyReplacementRequests = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
+    const claims = await requireActor(ctx, args.actorToken);
     const requests = await ctx.db
       .query("replacement_requests")
       .withIndex("by_student", (q) => q.eq("studentId", claims.userId as Id<"users">))
@@ -746,7 +743,7 @@ export const listAllReplacementRequests = query({
 export const getMyDeviceTrustEvidence = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    const claims = await requireActor(args.actorToken);
+    const claims = await requireActor(ctx, args.actorToken);
     if ((await resolveKnownUser(ctx, claims.userId)) === null) return [];
     const devices = await ctx.db
       .query("devices")

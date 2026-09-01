@@ -42,6 +42,26 @@ async function openFacultySession(): Promise<void> {
   await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 120_000 });
 }
 
+/**
+ * Closes the current session and opens a fresh guest session, so each
+ * scenario runs against a session with no settled (session, student)
+ * decision yet — re-redemption of the same session now echoes its settled
+ * outcome instead of re-challenging.
+ */
+async function rotateFacultySession(): Promise<void> {
+  await expect(facultyPage.getByTestId("close-session")).toBeVisible({ timeout: 15_000 });
+  await facultyPage.getByTestId("close-session").click();
+
+  await facultyPage.goto("/faculty/sessions");
+  await facultyPage.getByTestId("start-guest-session").click();
+  const create = facultyPage.getByTestId("create-guest-session");
+  await expect(create).toBeVisible({ timeout: 30_000 });
+  await expect(create).toBeEnabled({ timeout: 30_000 });
+  await create.click();
+  await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 120_000 });
+  await expect(facultyPage.getByTestId("close-session")).toBeVisible({ timeout: 30_000 });
+}
+
 async function nextFreshToken(): Promise<string> {
   const tokenEl = facultyPage.getByTestId("qr-token");
   await expect
@@ -165,6 +185,10 @@ test.afterAll(async () => {
 test("step-up: animated capture completes the challenge and verifies", async () => {
   test.setTimeout(180_000);
 
+  // Fresh session: the resume path may land on a session where an earlier
+  // spec already settled this student, and settled decisions are echoed.
+  await rotateFacultySession();
+
   const token = await nextFreshToken();
   await openScannerAt(studentContext, studentPage, FAR_COORDS);
   await submitCode(studentPage, token);
@@ -203,6 +227,10 @@ test("step-up: animated capture completes the challenge and verifies", async () 
 test("step-up: static presentation flags spoof and faculty overrides", async ({ browser }) => {
   test.setTimeout(180_000);
 
+  // Fresh session: the previous scenario left this student verified, and a
+  // settled decision is echoed (not re-challenged) on re-redemption.
+  await rotateFacultySession();
+
   staticContext = await browser.newContext();
   await staticContext.grantPermissions(["geolocation"]);
   await installStaticCamera(staticContext);
@@ -222,7 +250,8 @@ test("step-up: static presentation flags spoof and faculty overrides", async ({ 
   const rowId = await studentRowId();
   const row = facultyPage.getByTestId(`board-row-${rowId}`);
   await expect(row).toContainText(/flagged/i, { timeout: 30_000 });
-  await expect(row).toContainText(/person_spoof_suspected/i, { timeout: 30_000 });
+  // Reason codes render as friendly labels; the raw code rides in the title.
+  await expect(row).toContainText(/face spoof suspected/i, { timeout: 30_000 });
 
   await overrideViaDialog(rowId, "Verified in person after reviewing the spoof flag.");
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {
@@ -232,6 +261,9 @@ test("step-up: static presentation flags spoof and faculty overrides", async ({ 
 
 test("step-up: unavailable camera escalates to faculty review", async ({ browser }) => {
   test.setTimeout(180_000);
+
+  // Fresh session: the previous override settled this student as verified.
+  await rotateFacultySession();
 
   deniedContext = await browser.newContext();
   await deniedContext.grantPermissions(["geolocation"]);
@@ -268,6 +300,16 @@ test("step-up: unavailable camera escalates to faculty review", async ({ browser
 
 test("spot re-check: targeted and random requests reach the student", async () => {
   test.setTimeout(180_000);
+
+  // Fresh session: the previous override settled the previous session, so
+  // check in here first — a spot re-check targets a verified student.
+  await rotateFacultySession();
+  const token = await nextFreshToken();
+  await openScannerAt(studentContext, studentPage, LH1_COORDS);
+  await submitCode(studentPage, token);
+  await expect(studentPage.getByTestId("checkin-outcome")).toContainText(/checked in/i, {
+    timeout: 30_000,
+  });
 
   const rowId = await studentRowId();
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {

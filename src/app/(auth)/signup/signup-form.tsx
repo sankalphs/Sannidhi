@@ -2,7 +2,7 @@
 
 import { ArrowRight, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { FormField } from "@/app/(auth)/form-field";
@@ -20,6 +20,7 @@ type Status = "idle" | "submitting" | "success";
 
 export function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
 
@@ -65,6 +66,7 @@ export function SignupForm() {
           usn: normalizeUsn(value("usn")),
           password: value("password"),
           confirmPassword: value("confirmPassword"),
+          inviteToken: searchParams.get("invite") ?? value("inviteToken"),
           website: value("website"),
         }),
       });
@@ -161,6 +163,22 @@ export function SignupForm() {
           />
         </FormField>
       </div>
+
+      <FormField label="Invite token" htmlFor="inviteToken">
+        <Input
+          id="inviteToken"
+          name="inviteToken"
+          required
+          maxLength={128}
+          placeholder="Paste the token from your invite link"
+          autoComplete="off"
+          className="font-mono"
+        />
+      </FormField>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        Signups need an invite from your institution. Paste the token at the end of your invite link
+        (<code>/invite/…</code>), or ask your admin office for one.
+      </p>
 
       {/* Honeypot — hidden from humans, irresistible to bots */}
       <div className="hidden" aria-hidden="true">

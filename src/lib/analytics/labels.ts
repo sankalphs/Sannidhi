@@ -21,6 +21,7 @@ export const REASON_LABELS: Record<string, string> = {
   faculty_manual_override: "Faculty override",
   offline_capture: "Offline capture",
   attendance_below_threshold: "Attendance below threshold",
+  already_checked_in: "Already checked in",
 };
 
 const FACTOR_PREFIX_RULES: Array<{ prefix: string; format: (value: string) => string }> = [

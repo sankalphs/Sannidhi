@@ -12,6 +12,7 @@ import { VerdictStamp } from "@/components/marketing/verdict-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatReasonCode } from "@/lib/analytics/labels";
 
 import { ManualVerifyDialog } from "./manual-verify-dialog";
 
@@ -278,9 +279,10 @@ export function LiveBoard({
                             {row.reasonCodes.map((code) => (
                               <span
                                 key={code}
+                                title={code}
                                 className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-[11px]"
                               >
-                                {code}
+                                {formatReasonCode(code)}
                               </span>
                             ))}
                           </div>

@@ -8,6 +8,7 @@ import { RISK_POLICY_VERSION } from "../src/lib/risk/types";
 import type { Decision } from "../src/lib/decision";
 
 const DEMO_INVITE_TOKEN = "demo-invite-token";
+const DEMO_PASSWORD_INVITE_TOKEN = "demo-password-invite-token";
 
 const DEMO_TABLES = [
   "session_challenges",
@@ -311,14 +312,15 @@ export const seedDemoData = internalMutation({
         stateChangedAt: weekAgo,
       });
       deviceCount += 1;
+      // Only one active device per student — the same invariant the
+      // replacement flow enforces in production.
       await ctx.db.insert("devices", {
         institutionId,
         userId: studentId,
         label: `Demo laptop ${studentIndex + 1}`,
         platform: "web",
-        state: "active",
+        state: "enrolled",
         registeredAt: now,
-        activatedAt: now,
         stateChangedAt: now,
       });
       deviceCount += 1;
@@ -349,6 +351,19 @@ export const seedDemoData = internalMutation({
         expiresAt: now + 7 * 24 * 60 * 60 * 1000,
       });
       inviteCount = 1;
+      // Password-signup demo: a pending invite for an email with no user row,
+      // so the invite-gated signup flow can be exercised end-to-end.
+      await ctx.db.insert("invites", {
+        institutionId,
+        email: "password.signup.demo@sit.edu.in",
+        role: "student",
+        tokenHash: await hashInviteToken(DEMO_PASSWORD_INVITE_TOKEN),
+        status: "pending",
+        invitedByUserId: adminId,
+        createdAt: now,
+        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+      });
+      inviteCount = 2;
     }
 
     const backfill = await backfillTermHistory(ctx, {

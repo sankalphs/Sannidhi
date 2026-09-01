@@ -13,6 +13,13 @@ export function validateFaceEmbedding(embedding: unknown): "invalid_embedding" |
   if (embedding.some((value) => typeof value !== "number" || !Number.isFinite(value))) {
     return "invalid_embedding";
   }
+  // A degenerate vector — all zeros (black frame) or any constant — carries
+  // no face information: after L2 normalization every constant vector points
+  // the same direction, so it would match every other degenerate frame.
+  const first = embedding[0];
+  if (embedding.every((value) => value === first)) {
+    return "invalid_embedding";
+  }
   return null;
 }
 
