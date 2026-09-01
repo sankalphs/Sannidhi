@@ -234,7 +234,11 @@ export async function latestEventsByStudentSince(
   for (const event of events) {
     if (event.sessionId !== args.sessionId) continue;
     const current = latestByStudent.get(event.studentId);
-    if (current === undefined || event.capturedAt >= current.capturedAt) {
+    if (
+      current === undefined ||
+      event.capturedAt > current.capturedAt ||
+      (event.capturedAt === current.capturedAt && event.seq > current.seq)
+    ) {
       latestByStudent.set(event.studentId, event);
     }
   }

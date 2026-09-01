@@ -23,6 +23,9 @@ export function SignupForm() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<Status>("idle");
   const [error, setError] = useState<string | null>(null);
+  // The invite link can carry its token as ?invite=…; a manually pasted
+  // token is the fallback. One effective token, never an empty override.
+  const inviteFromUrl = searchParams.get("invite")?.trim() ?? "";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -66,7 +69,7 @@ export function SignupForm() {
           usn: normalizeUsn(value("usn")),
           password: value("password"),
           confirmPassword: value("confirmPassword"),
-          inviteToken: searchParams.get("invite") ?? value("inviteToken"),
+          inviteToken: inviteFromUrl || value("inviteToken").trim(),
           website: value("website"),
         }),
       });
@@ -168,11 +171,12 @@ export function SignupForm() {
         <Input
           id="inviteToken"
           name="inviteToken"
-          required
+          required={inviteFromUrl.length === 0}
           maxLength={128}
           placeholder="Paste the token from your invite link"
           autoComplete="off"
           className="font-mono"
+          defaultValue={inviteFromUrl}
         />
       </FormField>
       <p className="text-muted-foreground text-xs leading-relaxed">

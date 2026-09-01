@@ -53,12 +53,23 @@ describe("latestEventBySession", () => {
     expect(latest.get("sess2" as Id<"class_sessions">)?.state).toBe("flagged");
   });
 
-  it("prefers the later event on capturedAt ties (later append wins)", () => {
+  it("prefers the later event on capturedAt ties by seq (later chain append wins)", () => {
     const latest = latestEventBySession([
       event({ _id: "e1", sessionId: "sess1", state: "flagged", capturedAt: 500 }),
       event({ _id: "e2", sessionId: "sess1", state: "corrected", capturedAt: 500 }),
     ]);
     expect(latest.get("sess1" as Id<"class_sessions">)?._id).toBe("e2");
+  });
+
+  it("resolves deterministically regardless of collection order on capturedAt ties", () => {
+    const first = event({ _id: "e1", sessionId: "sess1", state: "flagged", capturedAt: 500 });
+    const second = event({ _id: "e2", sessionId: "sess1", state: "corrected", capturedAt: 500 });
+    expect(latestEventBySession([first, second]).get("sess1" as Id<"class_sessions">)?._id).toBe(
+      "e2",
+    );
+    expect(latestEventBySession([second, first]).get("sess1" as Id<"class_sessions">)?._id).toBe(
+      "e2",
+    );
   });
 
   it("ignores session-less events entirely", () => {

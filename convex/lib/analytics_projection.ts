@@ -7,7 +7,9 @@ import type { QueryCtx } from "../_generated/server";
  * Resolves one attendance record per (session, student): of all the events a
  * student generated for a session, only the latest counts. A check-in that
  * lands step_up then verified is one record, not two; a spot-recheck that
- * flips a verified record to flagged is still that same one record.
+ * flips a verified record to flagged is still that same one record. Ties on
+ * capturedAt break by seq — the per-institution chain counter — so the
+ * resolved record is deterministic regardless of collection order.
  */
 export function latestEventBySession(
   events: Array<Doc<"attendance_events">>,
@@ -16,7 +18,11 @@ export function latestEventBySession(
   for (const event of events) {
     if (event.sessionId === undefined) continue;
     const current = latest.get(event.sessionId);
-    if (current === undefined || event.capturedAt >= current.capturedAt) {
+    if (
+      current === undefined ||
+      event.capturedAt > current.capturedAt ||
+      (event.capturedAt === current.capturedAt && event.seq > current.seq)
+    ) {
       latest.set(event.sessionId, event);
     }
   }

@@ -156,6 +156,8 @@ export const signUpWithPassword = action({
     // The user stays "invited": the invite token they hold is redeemed by the
     // existing passkey-enrollment flow (or a re-invite), which activates the
     // account. Signup never mints a session for an unactivated identity.
+    // The invite's role — not a hardcoded default — is what the account
+    // carries into activation.
     await ctx.runMutation(internal.accountsInternal.createPasswordUser, {
       institutionId: institution._id,
       email: input.email,
@@ -163,6 +165,7 @@ export const signUpWithPassword = action({
       usn: input.usn,
       passwordHash,
       status: "invited",
+      role: invite.role,
     });
 
     return { pendingActivation: true };

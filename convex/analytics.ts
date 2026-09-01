@@ -321,6 +321,7 @@ export const reportRows = query({
 
     // One row per (session, student): a session that emitted pending then
     // flagged then verified events is one record, resolved to its latest.
+    // capturedAt ties break by seq so the choice is deterministic.
     const bySessionStudent = new Map<
       string,
       { event: Doc<"attendance_events">; sectionId: Id<"sections"> }
@@ -329,7 +330,11 @@ export const reportRows = query({
       if (event.sessionId === undefined) continue;
       const key = `${event.sessionId}:${event.studentId}`;
       const existing = bySessionStudent.get(key);
-      if (existing === undefined || event.capturedAt >= existing.event.capturedAt) {
+      if (
+        existing === undefined ||
+        event.capturedAt > existing.event.capturedAt ||
+        (event.capturedAt === existing.event.capturedAt && event.seq > existing.event.seq)
+      ) {
         bySessionStudent.set(key, { event, sectionId: event.sectionId });
       }
     }

@@ -203,6 +203,15 @@ export const createPasswordUser = internalMutation({
     usn: v.string(),
     passwordHash: v.string(),
     status: v.optional(v.union(v.literal("invited"), v.literal("active"))),
+    role: v.optional(
+      v.union(
+        v.literal("student"),
+        v.literal("faculty"),
+        v.literal("department_authority"),
+        v.literal("admin"),
+        v.literal("auditor"),
+      ),
+    ),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -240,7 +249,8 @@ export const createPasswordUser = internalMutation({
       email,
       name: args.name.trim(),
       usn: normalizedUsn,
-      role: "student",
+      // The invite's role is authoritative when signup is invite-gated.
+      role: args.role ?? "student",
       // Self-signup lands invited; the invite redemption (passkey enrollment
       // or admin re-invite) is what proves the mailbox and activates.
       status: args.status ?? "active",

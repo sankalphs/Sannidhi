@@ -41,7 +41,7 @@ type FailureVerdict = Exclude<RedeemVerdict, "valid">;
 type SecurityEventType = (typeof RATE_LIMIT_EVENT_TYPES)[number];
 
 /** Terminal decision states: once landed, a session's outcome is settled. */
-const DECISION_EVENT_STATES = ["step_up", "verified", "flagged", "rejected"] as const;
+const DECISION_EVENT_STATES = ["step_up", "verified", "flagged", "rejected", "corrected"] as const;
 
 function isDecisionEventState(state: string): state is (typeof DECISION_EVENT_STATES)[number] {
   return (DECISION_EVENT_STATES as readonly string[]).includes(state);
@@ -112,7 +112,7 @@ type RedeemResult =
   | ({
       kind: "ok";
       attendanceEventId: Id<"attendance_events">;
-      state: AttendanceState;
+      state: AttendanceState | "corrected";
       checkedInAt: number;
       courseCode: string;
       venueName: string;
@@ -345,9 +345,13 @@ export const redeemChallenge = mutation({
           reasonCodes: ["already_checked_in"],
         });
       }
-      const settledState = settled.state as "verified" | "flagged" | "rejected";
+      const settledState = settled.state as "verified" | "flagged" | "rejected" | "corrected";
       const settledOutcome: Decision["outcome"] =
-        settledState === "verified" ? "accept" : settledState === "flagged" ? "flag" : "reject";
+        settledState === "verified" || settledState === "corrected"
+          ? "accept"
+          : settledState === "flagged"
+            ? "flag"
+            : "reject";
       return {
         kind: "ok" as const,
         attendanceEventId: settled._id,

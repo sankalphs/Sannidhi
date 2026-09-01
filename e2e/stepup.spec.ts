@@ -49,8 +49,12 @@ async function openFacultySession(): Promise<void> {
  * outcome instead of re-challenging.
  */
 async function rotateFacultySession(): Promise<void> {
-  await expect(facultyPage.getByTestId("close-session")).toBeVisible({ timeout: 15_000 });
-  await facultyPage.getByTestId("close-session").click();
+  const close = facultyPage.getByTestId("close-session");
+  await expect(close).toBeVisible({ timeout: 15_000 });
+  await close.click();
+  // The close mutation is fired void; wait for the closed state (the restart
+  // control appearing) before a new guest session can start cleanly.
+  await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });
 
   await facultyPage.goto("/faculty/sessions");
   await facultyPage.getByTestId("start-guest-session").click();
