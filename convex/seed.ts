@@ -336,35 +336,32 @@ export const seedDemoData = internalMutation({
       createdAt: now,
     });
 
-    const demoInviteEnabled =
-      process.env.SEED_DEMO_INVITE === "1" || process.env.CONVEX_CLOUD_URL === undefined;
-    let inviteCount = 0;
-    if (demoInviteEnabled) {
-      await ctx.db.insert("invites", {
-        institutionId,
-        email: invitedEmail,
-        role: "student",
-        tokenHash: await hashInviteToken(DEMO_INVITE_TOKEN),
-        status: "pending",
-        invitedByUserId: adminId,
-        createdAt: now,
-        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-      });
-      inviteCount = 1;
-      // Password-signup demo: a pending invite for an email with no user row,
-      // so the invite-gated signup flow can be exercised end-to-end.
-      await ctx.db.insert("invites", {
-        institutionId,
-        email: "password.signup.demo@sit.edu.in",
-        role: "student",
-        tokenHash: await hashInviteToken(DEMO_PASSWORD_INVITE_TOKEN),
-        status: "pending",
-        invitedByUserId: adminId,
-        createdAt: now,
-        expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-      });
-      inviteCount = 2;
-    }
+    // Demo invites always seed in demo mode: the passkey-invite flow and the
+    // invite-gated password-signup e2e both depend on them, whether the
+    // demo runs on a cloud deployment or a local anonymous backend.
+    await ctx.db.insert("invites", {
+      institutionId,
+      email: invitedEmail,
+      role: "student",
+      tokenHash: await hashInviteToken(DEMO_INVITE_TOKEN),
+      status: "pending",
+      invitedByUserId: adminId,
+      createdAt: now,
+      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+    });
+    // Password-signup demo: a pending invite for an email with no user row,
+    // so the invite-gated signup flow can be exercised end-to-end.
+    await ctx.db.insert("invites", {
+      institutionId,
+      email: "password.signup.demo@sit.edu.in",
+      role: "student",
+      tokenHash: await hashInviteToken(DEMO_PASSWORD_INVITE_TOKEN),
+      status: "pending",
+      invitedByUserId: adminId,
+      createdAt: now,
+      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+    });
+    const inviteCount = 2;
 
     const backfill = await backfillTermHistory(ctx, {
       institutionId,
