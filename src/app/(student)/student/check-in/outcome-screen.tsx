@@ -116,6 +116,13 @@ function failureCopy(
           "You are not enrolled in this class section, so your attendance can't be recorded. Contact the admin office.",
       };
     }
+    if (reason === "already_checked_in") {
+      return {
+        headline: "Already checked in",
+        message:
+          "Your attendance for this class is already settled. Finish any pending verification from the dashboard prompt.",
+      };
+    }
     if (reason.endsWith("_mismatch")) return MISMATCH_COPY;
   }
   if (verdict === "expired") return EXPIRED_COPY;

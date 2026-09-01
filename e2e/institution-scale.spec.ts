@@ -317,15 +317,39 @@ test("strict venue policy escalates a far-away check-in to faculty review", asyn
   await expect(card.getByTestId("policy-card-badge").getByText(/Revision \d+/)).toBeVisible();
 
   await facultyPage.goto("/faculty/sessions");
-  const startSlot = facultyPage.getByTestId("start-slot").first();
-  const resumeLink = facultyPage.getByRole("link", { name: "Resume" }).first();
-  await expect(startSlot.or(resumeLink).first()).toBeVisible({ timeout: 120_000 });
-  if ((await resumeLink.count()) > 0) {
-    await resumeLink.click();
-  } else {
-    await startSlot.click();
+  // Fresh session so this redemption is the student's first — but pinned to
+  // CS101 + LH-1, the venue whose strict policy this test just enabled.
+  // (Guest-dialog defaults can shift after the roster-sync test creates
+  // new courses, so the selection is explicit.)
+  const resumeLinkEarly = facultyPage.getByRole("link", { name: "Resume" }).first();
+  if ((await resumeLinkEarly.count()) > 0) {
+    await resumeLinkEarly.click();
+    await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 120_000 });
+    const close = facultyPage.getByTestId("close-session");
+    await expect(close).toBeVisible({ timeout: 30_000 });
+    await close.click();
+    await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });
   }
+
+  await facultyPage.goto("/faculty/sessions");
+  await facultyPage.getByTestId("start-guest-session").click();
+  const courseSelect = facultyPage.getByTestId("guest-course");
+  await expect(courseSelect).toBeVisible({ timeout: 30_000 });
+  const cs101 = courseSelect.locator("option", { hasText: "CS101" });
+  await expect(cs101).toHaveCount(1, { timeout: 30_000 });
+  await courseSelect.selectOption({ label: (await cs101.textContent()) ?? "CS101" });
+  const sectionSelect = facultyPage.getByTestId("guest-section");
+  await expect(sectionSelect.locator("option").first()).toHaveCount(1, { timeout: 30_000 });
+  await sectionSelect.selectOption({ index: 0 });
+  const venueSelect = facultyPage.getByTestId("guest-venue");
+  const lh1 = venueSelect.locator("option", { hasText: "Lecture Hall LH-1" });
+  await expect(lh1).toHaveCount(1, { timeout: 30_000 });
+  await venueSelect.selectOption({ label: (await lh1.textContent()) ?? "Lecture Hall LH-1" });
+  const create = facultyPage.getByTestId("create-guest-session");
+  await expect(create).toBeEnabled({ timeout: 30_000 });
+  await create.click();
   await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 120_000 });
+  await expect(facultyPage.getByTestId("close-session")).toBeVisible({ timeout: 30_000 });
 
   const tokenEl = facultyPage.getByTestId("qr-token");
   await expect

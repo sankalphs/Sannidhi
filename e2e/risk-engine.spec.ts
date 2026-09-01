@@ -93,6 +93,29 @@ test.afterAll(async () => {
   reseedDemoData();
 });
 
+/**
+ * Closes the current session and opens a fresh guest session so the next
+ * scenario's redemption is the student's first for that session — a settled
+ * (session, student) decision is echoed, never re-challenged.
+ */
+async function rotateFacultySession(): Promise<void> {
+  const close = facultyPage.getByTestId("close-session");
+  await expect(close).toBeVisible({ timeout: 30_000 });
+  await close.click();
+  // The close mutation is fired void; wait for the closed state (the restart
+  // control appearing) before a new guest session can start cleanly.
+  await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });
+
+  await facultyPage.goto("/faculty/sessions");
+  await facultyPage.getByTestId("start-guest-session").click();
+  const create = facultyPage.getByTestId("create-guest-session");
+  await expect(create).toBeVisible({ timeout: 30_000 });
+  await expect(create).toBeEnabled({ timeout: 30_000 });
+  await create.click();
+  await facultyPage.waitForURL(/\/faculty\/sessions\/[^/]+$/, { timeout: 120_000 });
+  await expect(facultyPage.getByTestId("close-session")).toBeVisible({ timeout: 30_000 });
+}
+
 test("happy path: in-venue check-in is accepted", async () => {
   test.setTimeout(180_000);
 
@@ -113,6 +136,9 @@ test("happy path: in-venue check-in is accepted", async () => {
 test("step-up: far-away geolocation demands an extra check", async () => {
   test.setTimeout(180_000);
 
+  // Fresh session: the happy path just settled this student as verified.
+  await rotateFacultySession();
+
   const token = await nextFreshToken();
 
   await openScannerAt(FAR_COORDS);
@@ -128,6 +154,10 @@ test("step-up: far-away geolocation demands an extra check", async () => {
 
 test("replay: a consumed code reports already used", async () => {
   test.setTimeout(180_000);
+
+  // Fresh session: the previous scenario left this student mid-step-up; the
+  // replay verdict below must come from the consumed nonce, not that state.
+  await rotateFacultySession();
 
   const token = await nextFreshToken();
 

@@ -3,7 +3,7 @@
 import { api } from "../../../../../../convex/_generated/api";
 import type { Id } from "../../../../../../convex/_generated/dataModel";
 import type { FunctionReturnType } from "convex/server";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { ArrowLeft, Pause, Play, Square } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -28,6 +28,10 @@ const ERROR_TRANSLATIONS: ErrorTranslation = [
   {
     match: "session_window_closed",
     message: "The session window has closed. Restart to open a new one.",
+  },
+  {
+    match: "session_already_active",
+    message: "Another session is already active for this section.",
   },
   { match: "unauthorized", message: "You are not authorized to manage this session." },
 ];
@@ -58,7 +62,11 @@ export function SessionControl({
   const [pending, setPending] = useState<ControlAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const session = initialSnapshot.session;
+  // Live subscription keeps this tab truthful against co-taught and
+  // second-device transitions; the page-load snapshot is only the fallback
+  // until the first subscription frame arrives.
+  const board = useQuery(api.classSessions.getBoard, { actorToken, sessionId });
+  const session = (board ?? initialSnapshot).session;
 
   async function run(action: ControlAction) {
     if (pending !== null) return;

@@ -3,8 +3,6 @@ import { NextResponse } from "next/server";
 
 import { api } from "../../../../../convex/_generated/api";
 import { errorResponse, readJsonBody } from "@/lib/auth/http";
-import { setSessionCookie } from "@/lib/auth/server";
-import { ROLE_TO_HOME, signSession } from "@/lib/auth/session";
 import { getConvexClient } from "@/lib/convex/server-client";
 
 export async function POST(request: Request) {
@@ -26,25 +24,21 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await getConvexClient().action(api.accounts.signUpWithPassword, {
+    await getConvexClient().action(api.accounts.signUpWithPassword, {
       institutionCode: text("institutionCode"),
       name: text("name"),
       email: text("email"),
       usn: text("usn"),
       password: text("password"),
+      inviteToken: text("inviteToken"),
     });
 
-    const token = await signSession({
-      userId: result.userId,
-      role: result.role,
-      sid: result.sid,
-    });
-    await setSessionCookie(token);
+    // Account created but not activated: the invite link the student holds
+    // is the activation path (passkey enrollment), so no session is minted.
     return NextResponse.json({
       ok: true,
-      userId: result.userId,
-      role: result.role,
-      redirect: ROLE_TO_HOME[result.role],
+      pendingActivation: true,
+      redirect: "/signup/pending",
     });
   } catch (error) {
     if (error instanceof ConvexError && typeof error.data === "string") {
@@ -64,6 +58,15 @@ export async function POST(request: Request) {
         return NextResponse.json(
           { error: "Too many signups for this institution right now. Try again later." },
           { status: 429 },
+        );
+      }
+      if (error.data === "signup_requires_invite") {
+        return NextResponse.json(
+          {
+            error:
+              "Signups need an invite from your institution. Ask your admin office for an invite link, then sign up with the same email.",
+          },
+          { status: 403 },
         );
       }
       return NextResponse.json({ error: error.data }, { status: 400 });

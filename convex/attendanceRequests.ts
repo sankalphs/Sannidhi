@@ -6,7 +6,7 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { appendAttendanceEvent } from "./lib/attendance_event";
-import { requireActorUserWithActiveSession, resolveActorUser } from "./lib/actor";
+import { requireActorUserWithActiveSession } from "./lib/actor";
 
 const MAX_REASON_LENGTH = 1000;
 const MIN_REASON_LENGTH = 10;
@@ -45,8 +45,8 @@ async function requireReviewer(
   ctx: MutationCtx | QueryCtx,
   actorToken: string,
 ): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken).catch(() => null);
-  if (user === null || user.status === "suspended") throw new ConvexError("unauthorized");
+  const user = await requireActorUserWithActiveSession(ctx, actorToken).catch(() => null);
+  if (user === null) throw new ConvexError("unauthorized");
   if (user.role !== "faculty" && user.role !== "admin") throw new ConvexError("unauthorized");
   return user;
 }

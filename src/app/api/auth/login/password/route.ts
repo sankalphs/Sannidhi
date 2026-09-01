@@ -10,6 +10,9 @@ import { getConvexClient } from "@/lib/convex/server-client";
 const LOGIN_ERROR_COPY: Record<string, string> = {
   invalid_credentials: "Incorrect credentials. Check your details and try again.",
   rate_limited: "Too many failed attempts. Wait a minute and try again.",
+  account_not_active:
+    "This account has not been activated yet. Open your invite link and register a passkey to activate it.",
+  "account suspended": "This account is suspended. Contact your institution's admin office.",
 };
 
 export async function POST(request: Request) {

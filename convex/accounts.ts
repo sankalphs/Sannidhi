@@ -24,6 +24,9 @@ const NAME_MAX_LENGTH = 120;
 
 type SessionIssued = { userId: string; role: Role; sid: string; expiresAt: number };
 
+/** Signup never mints a session: the invite link activates the account. */
+type SignupIssued = { pendingActivation: true };
+
 /**
  * Verifying a throwaway password against a fixed hash when the account does
  * not exist equalizes scrypt work between the "unknown identifier" and "wrong
@@ -90,8 +93,9 @@ export const signUpWithPassword = action({
     email: v.string(),
     usn: v.string(),
     password: v.string(),
+    inviteToken: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<SessionIssued> => {
+  handler: async (ctx, args): Promise<SignupIssued> => {
     const input = assertValidSignupInput(args);
 
     const code = args.institutionCode.trim().toUpperCase();
@@ -103,6 +107,26 @@ export const signUpWithPassword = action({
     });
     if (institution === null) {
       throw new ConvexError("No institution matches that signup code.");
+    }
+
+    // Identity squatting gate: an unclaimed institutional email can only be
+    // registered against a pending invite for that exact email. The invite is
+    // the institution's act of vouching; without one, signup refuses.
+    const inviteToken = args.inviteToken?.trim() ?? "";
+    const invite =
+      inviteToken.length > 0
+        ? await ctx.runQuery(internal.accountsInternal.getInviteByToken, {
+            token: inviteToken,
+          })
+        : null;
+    const inviteMatches =
+      invite !== null &&
+      invite.status === "pending" &&
+      invite.institutionId === institution._id &&
+      invite.email === input.email &&
+      invite.expiresAt > Date.now();
+    if (!inviteMatches) {
+      throw new ConvexError("signup_requires_invite");
     }
 
     const recentSignups = await ctx.runQuery(
@@ -129,23 +153,22 @@ export const signUpWithPassword = action({
 
     const passwordHash = await hashPassword(input.password);
 
-    const created = await ctx.runMutation(internal.accountsInternal.createPasswordUser, {
+    // The user stays "invited": the invite token they hold is redeemed by the
+    // existing passkey-enrollment flow (or a re-invite), which activates the
+    // account. Signup never mints a session for an unactivated identity.
+    // The invite's role — not a hardcoded default — is what the account
+    // carries into activation.
+    await ctx.runMutation(internal.accountsInternal.createPasswordUser, {
       institutionId: institution._id,
       email: input.email,
       name: input.name,
       usn: input.usn,
       passwordHash,
+      status: "invited",
+      role: invite.role,
     });
 
-    const session = await ctx.runMutation(internal.sessions.createSession, {
-      userId: created.userId,
-    });
-    return {
-      userId: created.userId,
-      role: "student" as const,
-      sid: session.sid,
-      expiresAt: session.expiresAt,
-    };
+    return { pendingActivation: true };
   },
 });
 
@@ -196,6 +219,11 @@ export const loginWithPassword = action({
 
     if (user !== null && user.status === "suspended") {
       throw new ConvexError("account suspended");
+    }
+    // Password sign-in is for activated accounts only: an invited account has
+    // not yet redeemed its invite, so its password cannot mint a session.
+    if (user !== null && user.status !== "active") {
+      throw new ConvexError("account_not_active");
     }
 
     // Atomic reservation: every attempt — including unknown identifiers —

@@ -4,12 +4,38 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 
 /**
+ * Resolves one attendance record per (session, student): of all the events a
+ * student generated for a session, only the latest counts. A check-in that
+ * lands step_up then verified is one record, not two; a spot-recheck that
+ * flips a verified record to flagged is still that same one record. Ties on
+ * capturedAt break by seq — the per-institution chain counter — so the
+ * resolved record is deterministic regardless of collection order.
+ */
+export function latestEventBySession(
+  events: Array<Doc<"attendance_events">>,
+): Map<Id<"class_sessions">, Doc<"attendance_events">> {
+  const latest = new Map<Id<"class_sessions">, Doc<"attendance_events">>();
+  for (const event of events) {
+    if (event.sessionId === undefined) continue;
+    const current = latest.get(event.sessionId);
+    if (
+      current === undefined ||
+      event.capturedAt > current.capturedAt ||
+      (event.capturedAt === current.capturedAt && event.seq > current.seq)
+    ) {
+      latest.set(event.sessionId, event);
+    }
+  }
+  return latest;
+}
+
+/**
  * Single source of truth for trajectory records: a student's own attendance
- * events projected to record states, plus synthesized "absent" records for
- * closed sessions of enrolled sections where the student left no event.
- * Synthesis starts at each enrollment's own start — sessions before a student
- * joined a section never count as that student's absences — and open or
- * paused sessions never count; only settled classes do.
+ * events resolved to one record per session, plus synthesized "absent"
+ * records for closed sessions of enrolled sections where the student left
+ * no event. Synthesis starts at each enrollment's own start — sessions
+ * before a student joined a section never count as that student's absences —
+ * and open or paused sessions never count; only settled classes do.
  */
 export async function studentTrajectoryRecords(
   ctx: QueryCtx,
@@ -20,7 +46,7 @@ export async function studentTrajectoryRecords(
     .withIndex("by_student_section", (q) => q.eq("studentId", args.studentId))
     .collect();
 
-  const records: TrajectoryRecord[] = events.map((event) => ({
+  const records: TrajectoryRecord[] = [...latestEventBySession(events).values()].map((event) => ({
     state: projectAttendanceState(event.state),
     capturedAt: event.capturedAt,
   }));

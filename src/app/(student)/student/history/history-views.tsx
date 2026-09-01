@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { AttendanceRecordState, AttendanceSummary } from "@/lib/attendance/projection";
+import { institutionDateKey } from "@/lib/attendance/timezone";
 import { cn } from "@/lib/utils";
 
 /**
@@ -63,8 +64,6 @@ const STATE_LEGEND_LABELS: Record<HistoryRecordState, string> = {
   step_up: "Challenged",
 };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-
 function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
@@ -73,13 +72,16 @@ function toDateKey(year: number, monthIndex: number, day: number): string {
   return `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
 }
 
-function utcDateKeyFromMs(ms: number): string {
-  const date = new Date(ms);
-  return toDateKey(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+// The institution's calendar day (IST), matching the dateKey the history
+// query buckets records by — a 00:30 IST check-in rings today, not yesterday.
+function todayKey(): string {
+  return institutionDateKey(Date.now());
 }
 
-function utcTodayKey(): string {
-  return utcDateKeyFromMs(Date.now());
+/** Current IST year/month as the calendar's initial view. */
+function currentIstYearMonth(): { year: number; monthIndex: number } {
+  const parts = institutionDateKey(Date.now()).split("-");
+  return { year: Number(parts[0]), monthIndex: Number(parts[1]) - 1 };
 }
 
 function projectionSentence(summary: AttendanceSummary, thresholdPercent: number): string {
@@ -91,10 +93,7 @@ function projectionSentence(summary: AttendanceSummary, thresholdPercent: number
 }
 
 function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
-  const [view, setView] = useState(() => {
-    const now = new Date();
-    return { year: now.getUTCFullYear(), monthIndex: now.getUTCMonth() };
-  });
+  const [view, setView] = useState(currentIstYearMonth);
 
   const byDateKey = useMemo(() => {
     const map = new Map<string, HistoryViewRecord[]>();
@@ -106,21 +105,24 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
     return map;
   }, [records]);
 
-  const monthStartMs = Date.UTC(view.year, view.monthIndex, 1);
+  // Cell keys are plain calendar math on (year, month, day) integers — the
+  // same shape as the IST date keys the records carry — so no timezone
+  // conversion ever lands a cell on the wrong day.
   const daysInMonth = new Date(Date.UTC(view.year, view.monthIndex + 1, 0)).getUTCDate();
-  const firstWeekday = new Date(monthStartMs).getUTCDay();
+  const firstWeekday = new Date(Date.UTC(view.year, view.monthIndex, 1)).getUTCDay();
   const leadingDays = firstWeekday;
   const trailingDays = (7 - ((leadingDays + daysInMonth) % 7)) % 7;
   const totalCells = leadingDays + daysInMonth + trailingDays;
-  const firstCellMs = monthStartMs - leadingDays * DAY_MS;
-  const todayKey = utcTodayKey();
+  const today = todayKey();
 
   const cells: Array<{ dateKey: string; inMonth: boolean }> = [];
+  const firstCellDay = 1 - leadingDays;
   for (let index = 0; index < totalCells; index += 1) {
-    const current = new Date(firstCellMs + index * DAY_MS);
+    const cellDate = new Date(Date.UTC(view.year, view.monthIndex, firstCellDay + index));
     cells.push({
-      dateKey: utcDateKeyFromMs(current.getTime()),
-      inMonth: current.getUTCMonth() === view.monthIndex && current.getUTCFullYear() === view.year,
+      dateKey: toDateKey(cellDate.getUTCFullYear(), cellDate.getUTCMonth(), cellDate.getUTCDate()),
+      inMonth:
+        cellDate.getUTCMonth() === view.monthIndex && cellDate.getUTCFullYear() === view.year,
     });
   }
 
@@ -174,7 +176,7 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
               className={cn(
                 "flex min-h-16 flex-col items-stretch gap-1 rounded-md border p-1 text-left",
                 !cell.inMonth && "bg-muted/40 opacity-50",
-                cell.dateKey === todayKey && "ring-primary ring-2",
+                cell.dateKey === today && "ring-primary ring-2",
               )}
             >
               <span className={cn("text-xs font-medium", !cell.inMonth && "text-muted-foreground")}>

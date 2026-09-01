@@ -5,86 +5,82 @@ const USN = `1SI22CS${STAMP.slice(-4)}`;
 const EMAIL = `e2e-password-${STAMP}@sannidhi.test`;
 const PASSWORD = "Sunny-Campus42";
 
+/** Seeded demo invite (convex/seed.ts) for password signup, no user row exists for it. */
+const SIGNUP_INVITE_EMAIL = "password.signup.demo@sit.edu.in";
+const SIGNUP_INVITE_TOKEN = "demo-password-invite-token";
+
 async function openPasswordLogin(page: Page) {
   await page.goto("/login");
   await page.getByRole("tab", { name: /USN/i }).click();
   await expect(page.getByTestId("password-login-form")).toBeVisible();
 }
 
-/** First auth POST in a run pays dev-server route compilation; allow for it. */
-async function expectStudentDashboard(page: Page) {
-  await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"), {
-    timeout: 20_000,
-  });
-  await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
-}
-
 test.describe.serial("password signup and login", () => {
-  test("a student can self-register with institution code, USN, email and password", async ({
-    page,
-  }) => {
-    await page.goto("/login");
-    await page.getByRole("link", { name: "Sign up" }).click();
-    await expect(page).toHaveURL(/\/signup$/);
-
+  test("signup without an invite token is refused", async ({ page }) => {
+    await page.goto("/signup");
     const form = page.getByTestId("signup-form");
     await form.getByLabel("Institution code").fill("SIT");
-    await form.getByLabel("Full name").fill("E2E Password Student");
+    await form.getByLabel("Full name").fill("Squat Attempt");
     await form.getByLabel("USN").fill(USN);
     await form.getByLabel("Email").fill(EMAIL);
     await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await form.getByLabel("Confirm password").fill(PASSWORD);
+    await form.getByLabel("Invite token").fill("not-a-real-invite-token");
     await form.getByRole("button", { name: "Create account" }).click();
 
-    await expectStudentDashboard(page);
-
-    // Password-only account still shows required enrollment steps (device pending).
-    await expect(page.getByText("Enrollment checklist")).toBeVisible();
-    await expect(page.getByText("Device active")).toBeVisible();
-    // ...and marks the passkey as recommended rather than blocking.
-    await expect(page.getByText("recommended", { exact: true })).toBeVisible();
+    await expect(page.getByText("Signups need an invite from your institution.")).toBeVisible();
+    await expect(page).toHaveURL(/\/signup$/);
   });
 
-  test("duplicate email or USN signup is rejected with a friendly message", async ({ page }) => {
+  test("an invited email can sign up with the invite token and lands pending activation", async ({
+    page,
+  }) => {
+    await page.goto("/signup");
+    const form = page.getByTestId("signup-form");
+    await form.getByLabel("Institution code").fill("SIT");
+    await form.getByLabel("Full name").fill("Password Signup Demo");
+    await form.getByLabel("USN").fill(`1SI22CS${STAMP.slice(-4)}M`);
+    await form.getByLabel("Email").fill(SIGNUP_INVITE_EMAIL);
+    await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
+    await form.getByLabel("Confirm password").fill(PASSWORD);
+    await form.getByLabel("Invite token").fill(SIGNUP_INVITE_TOKEN);
+    await form.getByRole("button", { name: "Create account" }).click();
+
+    // No session is minted: the invite link (passkey enrollment) activates.
+    await expect(page).toHaveURL(/\/signup\/pending$/);
+    await expect(page.getByTestId("signup-pending-title")).toBeVisible();
+  });
+
+  test("the pending-activation account cannot sign in with its password yet", async ({ page }) => {
+    await openPasswordLogin(page);
+    const form = page.getByTestId("password-login-form");
+    await form.getByLabel("USN or email").fill(SIGNUP_INVITE_EMAIL);
+    await form.getByLabel("Password").fill(PASSWORD);
+    await form.getByRole("button", { name: "Sign in with password" }).click();
+
+    await expect(
+      page.getByText("This account has not been activated yet. Open your invite link"),
+    ).toBeVisible();
+    await expect(page).not.toHaveURL(/student/);
+  });
+
+  test("re-signing up an existing invited email is rejected with a friendly message", async ({
+    page,
+  }) => {
     await page.goto("/signup");
     const form = page.getByTestId("signup-form");
     await form.getByLabel("Institution code").fill("SIT");
     await form.getByLabel("Full name").fill("Duplicate Attempt");
     await form.getByLabel("USN").fill(`1SI22EC${STAMP.slice(-3)}9`);
-    await form.getByLabel("Email").fill(EMAIL);
+    await form.getByLabel("Email").fill(SIGNUP_INVITE_EMAIL);
     await form.getByLabel("Password", { exact: true }).fill(PASSWORD);
     await form.getByLabel("Confirm password").fill(PASSWORD);
+    await form.getByLabel("Invite token").fill(SIGNUP_INVITE_TOKEN);
     await form.getByRole("button", { name: "Create account" }).click();
 
     await expect(
       page.getByText("An account with this email already exists. Try signing in instead."),
     ).toBeVisible();
-  });
-
-  test("the new account can log in with email + password after signing out", async ({ page }) => {
-    await page.goto("/student"); // bounced to landing when unauthenticated
-    await expect(page).toHaveURL("http://localhost:3000/");
-    await page.goto("/login");
-    await openPasswordLogin(page);
-
-    const form = page.getByTestId("password-login-form");
-    await form.getByLabel("USN or email").fill(EMAIL);
-    await form.getByLabel("Password").fill(PASSWORD);
-    await form.getByRole("button", { name: "Sign in with password" }).click();
-
-    await expectStudentDashboard(page);
-  });
-
-  test("the same account can log in with USN + institution code", async ({ page }) => {
-    await openPasswordLogin(page);
-
-    const form = page.getByTestId("password-login-form");
-    await form.getByLabel("USN or email").fill(USN.toLowerCase());
-    await form.getByLabel(/Institution code/).fill("sit");
-    await form.getByLabel("Password").fill(PASSWORD);
-    await form.getByRole("button", { name: "Sign in with password" }).click();
-
-    await expectStudentDashboard(page);
   });
 
   test("a wrong password is rejected without revealing which part failed", async ({ page }) => {
