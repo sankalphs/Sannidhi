@@ -277,10 +277,21 @@ export const listReviewQueue = query({
       previousReasonCodes?: string[];
     }> = [];
 
+    // Several requests can come from the same student; one doc read each.
+    const students = new Map<Id<"users">, Doc<"users"> | null>();
+    const studentDoc = async (studentId: Id<"users">): Promise<Doc<"users"> | null> => {
+      let student = students.get(studentId);
+      if (student === undefined) {
+        student = await ctx.db.get(studentId);
+        students.set(studentId, student);
+      }
+      return student;
+    };
+
     for (const request of submitted) {
+      const student = await studentDoc(request.studentId);
+      if (student === null) continue;
       if (request.type !== "correction") {
-        const student = await ctx.db.get(request.studentId);
-        if (student === null) continue;
         rows.push({
           requestId: request._id,
           type: request.type,
@@ -292,12 +303,11 @@ export const listReviewQueue = query({
       }
       if (request.sessionId === undefined || request.eventId === undefined) continue;
 
-      const [session, event, student] = await Promise.all([
+      const [session, event] = await Promise.all([
         ctx.db.get(request.sessionId),
         ctx.db.get(request.eventId),
-        ctx.db.get(request.studentId),
       ]);
-      if (session === null || event === null || student === null) continue;
+      if (session === null || event === null) continue;
       if (caller.role === "faculty" && session.facultyId !== caller._id) continue;
 
       const section = await ctx.db.get(session.sectionId);

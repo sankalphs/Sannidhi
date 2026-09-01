@@ -245,6 +245,43 @@ export async function latestEventsByStudentSince(
   return latestByStudent;
 }
 
+/**
+ * One student's slice of latestEventsByStudentSince: their latest event in a
+ * session since a floor (usually that session's start). Reads only that
+ * student's rows via the (student, section) index, so single-caller paths —
+ * settled-outcome echoes, replay handling — don't scan the whole section.
+ */
+export async function latestEventForStudent(
+  ctx: MutationCtx | QueryCtx,
+  args: {
+    studentId: Id<"users">;
+    sectionId: Id<"sections">;
+    sessionId: Id<"class_sessions">;
+    sinceMs: number;
+  },
+): Promise<Doc<"attendance_events"> | undefined> {
+  const events = await ctx.db
+    .query("attendance_events")
+    .withIndex("by_student_section", (q) =>
+      q.eq("studentId", args.studentId).eq("sectionId", args.sectionId),
+    )
+    .collect();
+
+  let latest: Doc<"attendance_events"> | undefined;
+  for (const event of events) {
+    if (event.sessionId !== args.sessionId) continue;
+    if (event.capturedAt < args.sinceMs) continue;
+    if (
+      latest === undefined ||
+      event.capturedAt > latest.capturedAt ||
+      (event.capturedAt === latest.capturedAt && event.seq > latest.seq)
+    ) {
+      latest = event;
+    }
+  }
+  return latest;
+}
+
 /** TTL env vars fall back to their default unless they parse to a positive ms value. */
 export function parseTtlMs(raw: string | undefined, fallbackMs: number): number {
   if (raw === undefined) return fallbackMs;

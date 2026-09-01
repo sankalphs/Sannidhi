@@ -1,11 +1,13 @@
+import { ConvexError } from "convex/values";
 import { NextResponse } from "next/server";
 
 /**
- * Route handlers that proxy authored ConvexError messages to the UI: messages
- * authored with ConvexError (surfaced by the convex client in `error.data`)
- * pass through with 403/400 semantics, while infrastructure failures (network
- * faults degrade to a generic "Server Error", stray exceptions carry internal
- * text) collapse to a generic 500 so internal strings never reach the screen.
+ * Route handlers that proxy authored ConvexError messages to the UI: the
+ * convex client rethrows server-side ConvexError instances with the authored
+ * message in `error.data` (plain `Error` otherwise), so only those pass
+ * through — with 403/400 semantics. Infrastructure faults (network errors,
+ * stray exceptions, internal strings) collapse to a generic 500 and never
+ * reach the screen.
  */
 export function convexRouteErrorResponse(
   scope: string,
@@ -13,13 +15,9 @@ export function convexRouteErrorResponse(
   fallback: string,
 ): NextResponse {
   console.error(`[${scope}]`, error);
-  const authored =
-    typeof error === "object" && error !== null && "data" in error
-      ? (error as { data?: unknown }).data
-      : undefined;
-  if (typeof authored === "string" && authored.length > 0 && !/^server error$/i.test(authored)) {
-    const status = /unauthorized|forbidden|wrong role|suspended/i.test(authored) ? 403 : 400;
-    return NextResponse.json({ error: authored }, { status });
+  if (error instanceof ConvexError && typeof error.data === "string" && error.data.length > 0) {
+    const status = /unauthorized|forbidden|wrong role|suspended/i.test(error.data) ? 403 : 400;
+    return NextResponse.json({ error: error.data }, { status });
   }
   return NextResponse.json({ error: fallback }, { status: 500 });
 }
