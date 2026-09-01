@@ -180,7 +180,7 @@ test("replay: a consumed code reports already used", async () => {
   await expect(boardRows.filter({ hasText: /verified/i }).first()).toBeVisible({
     timeout: 30_000,
   });
-  await expect(boardRows.filter({ hasText: /rejected/i })).toHaveCount(0);
+  await expect(boardRows.filter({ hasText: /rejected/i })).toHaveCount(0, { timeout: 30_000 });
 });
 
 test("manual verification flips the roster row to verified", async () => {

@@ -21,7 +21,7 @@ test("a student dev session reaches the student shell but is redirected away fro
 
   await page.goto("/student");
   await expect(page.getByRole("heading", { name: "Student dashboard" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Attendance history" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Attendance history", exact: true })).toBeVisible();
 
   await page.goto("/admin");
   await expect(page).toHaveURL(new RegExp("http://localhost:3000/student/?$"));

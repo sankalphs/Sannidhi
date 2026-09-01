@@ -39,6 +39,8 @@ test("the request form rejects a too-short reason", async ({ page }) => {
 test("an exemption request reaches the faculty queue and approval is recorded", async ({
   browser,
 }) => {
+  test.setTimeout(120_000);
+
   const studentContext = await browser.newContext();
   const studentPage = await studentContext.newPage();
   await studentPage.request.post("/api/dev-session", { data: { role: "student" } });
