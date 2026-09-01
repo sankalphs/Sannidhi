@@ -50,7 +50,12 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ institutionId, invites }),
       });
-      const data = (await response.json()) as { invites?: CreatedInvite[]; error?: string };
+      // A proxy or error page can answer with non-JSON; treat it as a failure
+      // instead of letting the parse error become the visible message.
+      const data = (await response.json().catch(() => ({}))) as {
+        invites?: CreatedInvite[];
+        error?: string;
+      };
       if (!response.ok || !data.invites) {
         throw new Error(data.error ?? "Invite request failed");
       }

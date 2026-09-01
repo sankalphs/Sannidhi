@@ -43,6 +43,20 @@ const DIRECTORY: DirectoryCard[] = [
     cta: "Review devices",
   },
   {
+    icon: BookOpen,
+    title: "Courses & sections",
+    description: "Catalog, departments, and roster sync for timetables and sessions.",
+    href: "/admin/courses",
+    cta: "Manage courses",
+  },
+  {
+    icon: Landmark,
+    title: "Policies",
+    description: "Risk thresholds, step-up rules, and department policy scopes.",
+    href: "/admin/policies",
+    cta: "Edit policies",
+  },
+  {
     icon: ChartColumn,
     title: "Analytics",
     description: "Attendance trajectories, subject trends, and verification anomalies.",
@@ -62,20 +76,6 @@ const DIRECTORY: DirectoryCard[] = [
     description: "Rolling-window reports with CSV and PDF exports.",
     href: "/admin/reports",
     cta: "Open reports",
-  },
-];
-
-const UPCOMING = [
-  {
-    icon: BookOpen,
-    title: "Courses & sections",
-    description:
-      "Course and section management is on the roadmap — the seeded catalog already powers timetables and sessions.",
-  },
-  {
-    icon: Landmark,
-    title: "Policies",
-    description: "Attendance thresholds and step-up rules arrive in a later phase.",
   },
 ];
 
@@ -107,22 +107,6 @@ export default function AdminPage() {
                 <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
               </span>
             </Link>
-          ))}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">Arriving soon</h2>
-        <div className="grid gap-4 md:grid-cols-2">
-          {UPCOMING.map((card) => (
-            <div
-              key={card.title}
-              className="border-border flex flex-col gap-2 rounded-xl border border-dashed p-5"
-            >
-              <card.icon className="text-muted-foreground size-5" />
-              <span className="font-medium">{card.title}</span>
-              <span className="text-muted-foreground text-sm">{card.description}</span>
-            </div>
           ))}
         </div>
       </section>

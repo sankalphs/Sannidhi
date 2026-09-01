@@ -18,6 +18,12 @@ const PREVIOUS_STATE_BADGES: Record<string, "default" | "secondary" | "destructi
   rejected: "destructive",
 };
 
+const TYPE_LABELS: Record<string, string> = {
+  correction: "Correction",
+  exemption: "Exemption",
+  on_duty: "On-duty",
+};
+
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleString("en-IN", {
     dateStyle: "medium",
@@ -69,8 +75,8 @@ export function ReviewQueue({ actorToken }: { actorToken: string }) {
         {requests !== undefined ? ` (${requests.length})` : ""}
       </h2>
       <p className="text-muted-foreground -mt-2 text-sm">
-        Attendance disputes your sessions recorded. Approving appends a correction event — the
-        original record is preserved.
+        Attendance disputes your sessions recorded, plus exemption and on-duty filings. Approving a
+        correction appends a correction event — the original record is preserved.
       </p>
       {requests === undefined ? (
         <p className="text-muted-foreground text-sm">Loading disputes…</p>
@@ -78,7 +84,7 @@ export function ReviewQueue({ actorToken }: { actorToken: string }) {
         <EmptyState
           icon={ClipboardCheck}
           title="No disputes waiting"
-          description="When students dispute attendance your sessions recorded, the requests appear here for review."
+          description="When students dispute attendance or file exemptions, the requests appear here for review."
         />
       ) : (
         <ul className="flex flex-col gap-2">
@@ -91,18 +97,28 @@ export function ReviewQueue({ actorToken }: { actorToken: string }) {
               <div className="flex min-w-0 flex-col gap-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">{request.studentName}</span>
-                  <Badge variant="outline">
-                    {request.courseCode} · {request.sectionName}
-                  </Badge>
-                  <Badge variant={PREVIOUS_STATE_BADGES[request.previousState] ?? "outline"}>
-                    was {request.previousState}
-                  </Badge>
+                  {request.type !== "correction" ? (
+                    <Badge variant="outline">{TYPE_LABELS[request.type] ?? request.type}</Badge>
+                  ) : null}
+                  {request.courseCode !== undefined ? (
+                    <Badge variant="outline">
+                      {request.courseCode} · {request.sectionName}
+                    </Badge>
+                  ) : null}
+                  {request.previousState !== undefined ? (
+                    <Badge variant={PREVIOUS_STATE_BADGES[request.previousState] ?? "outline"}>
+                      was {request.previousState}
+                    </Badge>
+                  ) : null}
                 </div>
                 <p className="text-muted-foreground text-sm">{request.reason}</p>
                 <p className="text-muted-foreground text-xs">
-                  Session {formatDate(request.sessionStartedAt)} · Filed{" "}
-                  {formatDate(request.requestedAt)}
-                  {request.previousReasonCodes.length > 0
+                  {request.sessionStartedAt !== undefined
+                    ? `Session ${formatDate(request.sessionStartedAt)} · `
+                    : ""}
+                  Filed {formatDate(request.requestedAt)}
+                  {request.previousReasonCodes !== undefined &&
+                  request.previousReasonCodes.length > 0
                     ? ` · ${request.previousReasonCodes.join(", ")}`
                     : ""}
                 </p>

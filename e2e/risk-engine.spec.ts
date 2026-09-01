@@ -172,6 +172,15 @@ test("replay: a consumed code reports already used", async () => {
   await expect(studentPage.getByTestId("checkin-outcome")).toContainText(/already used/i, {
     timeout: 60_000,
   });
+
+  // The replayed scan reports its verdict, but it must not overturn the
+  // settled outcome: the board keeps the student's verified row and appends
+  // no rejection over it.
+  const boardRows = facultyPage.locator('[data-testid^="board-row-"]');
+  await expect(boardRows.filter({ hasText: /verified/i }).first()).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(boardRows.filter({ hasText: /rejected/i })).toHaveCount(0);
 });
 
 test("manual verification flips the roster row to verified", async () => {

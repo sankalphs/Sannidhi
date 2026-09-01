@@ -7,6 +7,7 @@ import { getActiveSession } from "@/lib/auth/server";
 import { verifySession, ROLES, type Role } from "@/lib/auth/session";
 import { getConvexClient } from "@/lib/convex/server-client";
 import { EMAIL_PATTERN } from "@/lib/invites/csv";
+import { convexRouteErrorResponse } from "@/lib/api/route-errors";
 
 type SessionPayload = NonNullable<Awaited<ReturnType<typeof verifySession>>>;
 
@@ -33,9 +34,11 @@ function parseInvites(value: unknown): { email: string; name: string; role: Role
 }
 
 function errorResponse(error: unknown) {
-  const message = error instanceof Error ? error.message : "Invite request failed";
-  const status = message.includes("unauthorized") ? 403 : 400;
-  return NextResponse.json({ error: message }, { status });
+  return convexRouteErrorResponse(
+    "admin-invites",
+    error,
+    "Invite request failed. Please try again.",
+  );
 }
 
 export async function POST(request: Request) {
@@ -63,7 +66,6 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-
   let ttlDays: number | undefined;
   if (body.ttlDays !== undefined) {
     if (typeof body.ttlDays !== "number") {

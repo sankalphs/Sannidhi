@@ -1,7 +1,6 @@
 import { Check, Circle, ClipboardList, Fingerprint, History } from "lucide-react";
 import Link from "next/link";
 
-import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -110,16 +109,37 @@ export default async function StudentPage() {
       {gate.locked ? <EnrollmentChecklist completedSteps={gate.completedSteps} /> : null}
       {isPasskeyRecommended(gate) ? <PasskeyRecommendation /> : null}
       <div className="grid gap-4 md:grid-cols-2">
-        <EmptyState
-          icon={History}
-          title="Attendance history"
-          description="Once sessions start being recorded, your attendance timeline will appear here."
-        />
-        <EmptyState
-          icon={ClipboardList}
-          title="Requests"
-          description="Correction and exemption requests you file will show up here."
-        />
+        <section className="border-border bg-card flex flex-col gap-2 rounded-xl border p-5">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <History className="text-muted-foreground size-4" />
+            Attendance history
+          </h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            Your calendar and subject-wise attendance, with threshold projections as the term
+            progresses.
+          </p>
+          <Link
+            href="/student/history"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "w-fit" })}
+          >
+            View attendance history
+          </Link>
+        </section>
+        <section className="border-border bg-card flex flex-col gap-2 rounded-xl border p-5">
+          <h2 className="flex items-center gap-2 text-lg font-semibold">
+            <ClipboardList className="text-muted-foreground size-4" />
+            Requests
+          </h2>
+          <p className="text-muted-foreground text-sm leading-relaxed">
+            File corrections, exemptions, and on-duty requests, and follow their review status.
+          </p>
+          <Link
+            href="/student/requests"
+            className={buttonVariants({ variant: "outline", size: "sm", className: "w-fit" })}
+          >
+            Manage requests
+          </Link>
+        </section>
       </div>
     </div>
   );

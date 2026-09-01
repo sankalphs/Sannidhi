@@ -1,9 +1,8 @@
 import { ConvexError, v } from "convex/values";
 
-import type { ActorTokenClaims } from "../src/lib/auth/actor-token";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { verifyActorToken } from "./lib/actor";
+import { requireAdminUser } from "./lib/actor";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_LISTED_REQUESTS = 100;
@@ -18,16 +17,6 @@ const requestedRoleValidator = v.union(
   v.literal("department_authority"),
   v.literal("other"),
 );
-
-async function requireAdminActor(actorToken: string): Promise<ActorTokenClaims> {
-  try {
-    const claims = await verifyActorToken(actorToken);
-    if (claims.role !== "admin") throw new Error("wrong role");
-    return claims;
-  } catch {
-    throw new ConvexError("unauthorized");
-  }
-}
 
 export const submit = mutation({
   args: {
@@ -135,7 +124,7 @@ export const list = query({
     }),
   ),
   handler: async (ctx, args) => {
-    await requireAdminActor(args.actorToken);
+    await requireAdminUser(ctx, args.actorToken);
     const requests = await ctx.db
       .query("access_requests")
       .withIndex("by_status_submitted", (q) => q.eq("status", "new"))
@@ -175,7 +164,7 @@ export const markReviewed = mutation({
   args: { actorToken: v.string(), requestId: v.id("access_requests") },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
-    await requireAdminActor(args.actorToken);
+    await requireAdminUser(ctx, args.actorToken);
     const request = await ctx.db.get(args.requestId);
     if (request === null) throw new ConvexError("Request not found");
     if (request.status === "reviewed") return { ok: true };

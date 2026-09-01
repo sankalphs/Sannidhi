@@ -62,7 +62,9 @@ export function DeviceManager({
   }
 
   async function verify(deviceId: string) {
+    if (busyDeviceId !== null) return;
     setError(null);
+    setBusyDeviceId(deviceId);
     try {
       await postJson("/api/devices", { action: "verify", deviceId, code });
       setPendingCode(null);
@@ -71,6 +73,8 @@ export function DeviceManager({
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Verification failed");
+    } finally {
+      setBusyDeviceId(null);
     }
   }
 
@@ -314,7 +318,7 @@ export function DeviceManager({
             />
             <Button
               size="sm"
-              disabled={code.length !== 6}
+              disabled={code.length !== 6 || busyDeviceId !== null}
               onClick={() => verify(pendingCode.deviceId)}
             >
               Verify

@@ -176,6 +176,18 @@ export const redeemChallenge = mutation({
 
     const recordRejectedDecision = async (verdict: FailureVerdict): Promise<void> => {
       if (session === null) return;
+      // A settled decision outranks the failure verdict: a verified or
+      // flagged student re-scanning a dead code keeps their recorded
+      // outcome — the ledger still logs the replay, but no new rejection
+      // event may overturn the settled state.
+      const settled = (
+        await latestEventsByStudentSince(ctx, {
+          sectionId: session.sectionId,
+          sessionId: session._id,
+          sinceMs: session.startedAt,
+        })
+      ).get(caller._id);
+      if (settled !== undefined && isDecisionEventState(settled.state)) return;
       const device = await bestDeviceForStudent(ctx, caller._id);
       const recentSecurityFailures = await countRecentChallengeAnomalies(ctx, {
         studentId: caller._id,
