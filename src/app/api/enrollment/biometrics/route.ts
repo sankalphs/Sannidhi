@@ -5,6 +5,7 @@ import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
 import { validateFaceEmbedding } from "@/lib/enrollment/face-template";
+import { convexRouteErrorResponse } from "@/lib/api/route-errors";
 
 export async function POST(request: Request) {
   const session = await getActiveSession();
@@ -57,10 +58,10 @@ export async function POST(request: Request) {
     const record = await client.query(api.enrollment.getMyBiometricRecord, { actorToken });
     return NextResponse.json({ ok: true, record });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Biometric action failed";
-    return NextResponse.json(
-      { error: message },
-      { status: message.includes("unauthorized") ? 403 : 400 },
+    return convexRouteErrorResponse(
+      "biometrics",
+      error,
+      "Biometric action failed. Please try again.",
     );
   }
 }

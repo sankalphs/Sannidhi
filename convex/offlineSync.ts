@@ -149,6 +149,10 @@ export const syncOfflineBatch = mutation({
 
     // Batch records may span sessions; each session's policy resolves once.
     const policies = new Map<Id<"class_sessions">, ResolvedRiskPolicy>();
+    // So does each session's enrolled-student set: a signed record for a
+    // student who is not enrolled in the section is a claim the session's
+    // key cannot vouch for.
+    const enrolledStudents = new Map<Id<"class_sessions">, Set<Id<"users">>>();
 
     for (const record of args.records) {
       const session = sessions.get(record.sessionId);
@@ -156,9 +160,22 @@ export const syncOfflineBatch = mutation({
 
       // Structurally inconsistent records fail closed as invalid_signature:
       // the signature may be genuine but the claim is not about this session.
+      let enrolled = enrolledStudents.get(record.sessionId);
+      if (enrolled === undefined) {
+        enrolled = new Set(
+          (
+            await ctx.db
+              .query("enrollments")
+              .withIndex("by_section", (q) => q.eq("sectionId", session.sectionId))
+              .collect()
+          ).map((enrollment) => enrollment.studentId),
+        );
+        enrolledStudents.set(record.sessionId, enrolled);
+      }
       const valid =
         record.sectionId === session.sectionId &&
         session.offlineKey !== undefined &&
+        enrolled.has(record.studentId) &&
         (await verifySignature(session.offlineKey, record));
       if (!valid) {
         results.push({ studentId: record.studentId, status: "invalid_signature" });

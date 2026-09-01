@@ -206,7 +206,14 @@ export const verifyPossession = mutation({
   handler: async (ctx, args) => {
     const claims = await requireActor(ctx, args.actorToken);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
-    assertOwnerOrAdmin(claims, device);
+    if (claims.role === "admin") {
+      assertSameInstitution(
+        await requireAdminInstitution(ctx, args.actorToken),
+        device.institutionId,
+      );
+    } else {
+      assertOwnerOrAdmin(claims, device);
+    }
 
     const verification = await findLatestVerification(ctx, device._id);
     if (verification === null) throw new ConvexError("no verification pending for this device");
@@ -469,7 +476,9 @@ export const requestReplacement = mutation({
     const caller = await requireActorUserWithActiveSession(ctx, args.actorToken);
 
     const device = await getDeviceOrThrow(ctx, args.oldDeviceId);
-    if (caller.role !== "admin" && caller._id !== device.userId) {
+    if (caller.role === "admin") {
+      assertSameInstitution(caller.institutionId, device.institutionId);
+    } else if (caller._id !== device.userId) {
       throw new ConvexError("unauthorized");
     }
 

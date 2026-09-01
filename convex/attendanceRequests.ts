@@ -226,26 +226,30 @@ export const listMyCorrectionableEvents = query({
 });
 
 /**
- * Correction disputes waiting for review. Faculty see requests routed to them
- * via the recording session's facultyId; admins see everything in their
- * institution. Each row carries the disputed event's current verdict so the
- * reviewer sees the previous state without leaving the queue.
+ * Correction disputes waiting for review, plus exemption / on-duty filings.
+ * Faculty see correction requests routed to them via the recording session's
+ * facultyId; session-less requests (exemption / on-duty) have no recording
+ * session, so any faculty of the institution may act on them. Admins see
+ * everything in their institution. Correction rows carry the disputed event's
+ * current verdict so the reviewer sees the previous state without leaving the
+ * queue.
  */
 export const listReviewQueue = query({
   args: { actorToken: v.string() },
   returns: v.array(
     v.object({
       requestId: v.id("attendance_requests"),
+      type: requestTypeValidator,
       studentName: v.string(),
       reason: v.string(),
       requestedAt: v.number(),
-      sessionId: v.id("class_sessions"),
-      courseCode: v.string(),
-      sectionName: v.string(),
-      sessionStartedAt: v.number(),
-      eventId: v.id("attendance_events"),
-      previousState: v.string(),
-      previousReasonCodes: v.array(v.string()),
+      sessionId: v.optional(v.id("class_sessions")),
+      courseCode: v.optional(v.string()),
+      sectionName: v.optional(v.string()),
+      sessionStartedAt: v.optional(v.number()),
+      eventId: v.optional(v.id("attendance_events")),
+      previousState: v.optional(v.string()),
+      previousReasonCodes: v.optional(v.array(v.string())),
     }),
   ),
   handler: async (ctx, args) => {
@@ -260,28 +264,50 @@ export const listReviewQueue = query({
 
     const rows: Array<{
       requestId: Id<"attendance_requests">;
+      type: "correction" | "exemption" | "on_duty";
       studentName: string;
       reason: string;
       requestedAt: number;
-      sessionId: Id<"class_sessions">;
-      courseCode: string;
-      sectionName: string;
-      sessionStartedAt: number;
-      eventId: Id<"attendance_events">;
-      previousState: string;
-      previousReasonCodes: string[];
+      sessionId?: Id<"class_sessions">;
+      courseCode?: string;
+      sectionName?: string;
+      sessionStartedAt?: number;
+      eventId?: Id<"attendance_events">;
+      previousState?: string;
+      previousReasonCodes?: string[];
     }> = [];
 
+    // Several requests can come from the same student; one doc read each.
+    const students = new Map<Id<"users">, Doc<"users"> | null>();
+    const studentDoc = async (studentId: Id<"users">): Promise<Doc<"users"> | null> => {
+      let student = students.get(studentId);
+      if (student === undefined) {
+        student = await ctx.db.get(studentId);
+        students.set(studentId, student);
+      }
+      return student;
+    };
+
     for (const request of submitted) {
-      if (request.type !== "correction") continue;
+      const student = await studentDoc(request.studentId);
+      if (student === null) continue;
+      if (request.type !== "correction") {
+        rows.push({
+          requestId: request._id,
+          type: request.type,
+          studentName: student.name,
+          reason: request.reason,
+          requestedAt: request.requestedAt,
+        });
+        continue;
+      }
       if (request.sessionId === undefined || request.eventId === undefined) continue;
 
-      const [session, event, student] = await Promise.all([
+      const [session, event] = await Promise.all([
         ctx.db.get(request.sessionId),
         ctx.db.get(request.eventId),
-        ctx.db.get(request.studentId),
       ]);
-      if (session === null || event === null || student === null) continue;
+      if (session === null || event === null) continue;
       if (caller.role === "faculty" && session.facultyId !== caller._id) continue;
 
       const section = await ctx.db.get(session.sectionId);
@@ -289,6 +315,7 @@ export const listReviewQueue = query({
 
       rows.push({
         requestId: request._id,
+        type: request.type,
         studentName: student.name,
         reason: request.reason,
         requestedAt: request.requestedAt,
@@ -330,10 +357,13 @@ export const reviewRequest = mutation({
     if (request.status !== "submitted") throw new ConvexError("request_already_reviewed");
 
     if (reviewer.role === "faculty") {
-      if (request.sessionId === undefined) throw new ConvexError("unauthorized");
-      const session = await ctx.db.get(request.sessionId);
-      if (session === null || session.facultyId !== reviewer._id) {
-        throw new ConvexError("unauthorized");
+      // Session-less requests (exemption / on-duty) have no recording session
+      // to route by, so any faculty of the institution may review them.
+      if (request.sessionId !== undefined) {
+        const session = await ctx.db.get(request.sessionId);
+        if (session === null || session.facultyId !== reviewer._id) {
+          throw new ConvexError("unauthorized");
+        }
       }
     }
 
@@ -364,7 +394,23 @@ export const reviewRequest = mutation({
     }
 
     if (request.eventId === undefined || request.sessionId === undefined) {
-      throw new ConvexError("request_missing_event_link");
+      // Exemption / on-duty requests carry no attendance record, so approval
+      // acknowledges the filing — there is no event to correct.
+      await ctx.db.patch(request._id, {
+        status: "approved",
+        reviewedAt,
+        reviewedByUserId: reviewer._id,
+        decision: "approved",
+      });
+      await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+        institutionId: request.institutionId,
+        category: "attendance",
+        type: "attendance_request_reviewed",
+        actorUserId: reviewer._id,
+        subjectUserId: request.studentId,
+        payload: { requestId: request._id, decision: "approved", requestType: request.type },
+      });
+      return { ok: true };
     }
     const eventId = request.eventId;
     const event = await ctx.db.get(eventId);

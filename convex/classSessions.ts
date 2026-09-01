@@ -19,6 +19,12 @@ import { resolveSessionPolicy } from "./lib/policyContext";
 
 const DEFAULT_WINDOW_MINUTES = 45;
 
+/** Sessions run in minutes, not seconds or hours — clamp hostile/nonsense input. */
+function resolveWindowMinutes(raw: number | undefined): number {
+  if (raw === undefined || !Number.isFinite(raw)) return DEFAULT_WINDOW_MINUTES;
+  return Math.min(Math.max(Math.round(raw), 1), 240);
+}
+
 const RECENT_SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 type BoardRowState = "pending" | "challenged" | "verified" | "flagged" | "rejected";
@@ -201,7 +207,7 @@ export const startFromSlot = mutation({
       timetableSlotId: slot._id,
       status: "active",
       startedAt: now,
-      windowEndsAt: now + (args.windowMinutes ?? DEFAULT_WINDOW_MINUTES) * 60_000,
+      windowEndsAt: now + resolveWindowMinutes(args.windowMinutes) * 60_000,
     });
 
     if (slot.facultyId === undefined) {
@@ -247,7 +253,7 @@ export const startGuest = mutation({
       kind: "guest",
       status: "active",
       startedAt: now,
-      windowEndsAt: now + (args.windowMinutes ?? DEFAULT_WINDOW_MINUTES) * 60_000,
+      windowEndsAt: now + resolveWindowMinutes(args.windowMinutes) * 60_000,
     });
 
     return { sessionId };
@@ -301,7 +307,7 @@ export const restart = mutation({
     // invariant applies exactly as it does to a fresh start.
     await assertNoActiveSession(ctx, session.sectionId);
     const now = Date.now();
-    const windowEndsAt = now + (args.windowMinutes ?? DEFAULT_WINDOW_MINUTES) * 60_000;
+    const windowEndsAt = now + resolveWindowMinutes(args.windowMinutes) * 60_000;
     await ctx.db.patch(session._id, {
       status: "active",
       windowEndsAt,

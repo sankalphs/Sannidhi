@@ -61,45 +61,58 @@ export function DeviceManager({
     }
   }
 
-  async function verify(deviceId: string) {
+  /**
+   * Serializes device operations: one pending request at a time, and the busy
+   * marker clears only for the operation that owns it, so a slow verify can
+   * neither block a later op's cleanup nor be trampled by it.
+   */
+  async function runDeviceOp(deviceId: string, run: () => Promise<void>) {
+    if (busyDeviceId !== null) return;
     setError(null);
+    setBusyDeviceId(deviceId);
     try {
-      await postJson("/api/devices", { action: "verify", deviceId, code });
-      setPendingCode(null);
-      setCode("");
-      setPhase("idle");
-      router.refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Verification failed");
+      await run();
+    } finally {
+      setBusyDeviceId((current) => (current === deviceId ? null : current));
     }
+  }
+
+  async function verify(deviceId: string) {
+    await runDeviceOp(deviceId, async () => {
+      try {
+        await postJson("/api/devices", { action: "verify", deviceId, code });
+        setPendingCode(null);
+        setCode("");
+        setPhase("idle");
+        router.refresh();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Verification failed");
+      }
+    });
   }
 
   async function activate(deviceId: string) {
-    setError(null);
-    setBusyDeviceId(deviceId);
-    try {
-      await postJson("/api/devices", { action: "activate", deviceId });
-      router.refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Activation failed");
-    } finally {
-      setBusyDeviceId(null);
-    }
+    await runDeviceOp(deviceId, async () => {
+      try {
+        await postJson("/api/devices", { action: "activate", deviceId });
+        router.refresh();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Activation failed");
+      }
+    });
   }
 
   async function activateSuccessor(deviceId: string) {
-    setError(null);
-    setBusyDeviceId(deviceId);
-    try {
-      await runStepUp();
-      await postJson("/api/devices", { action: "verify-successor", deviceId });
-      await postJson("/api/devices", { action: "activate", deviceId });
-      router.refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Replacement verification failed");
-    } finally {
-      setBusyDeviceId(null);
-    }
+    await runDeviceOp(deviceId, async () => {
+      try {
+        await runStepUp();
+        await postJson("/api/devices", { action: "verify-successor", deviceId });
+        await postJson("/api/devices", { action: "activate", deviceId });
+        router.refresh();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Replacement verification failed");
+      }
+    });
   }
 
   async function runStepUp(): Promise<boolean> {
@@ -116,23 +129,21 @@ export function DeviceManager({
   }
 
   async function requestReplacement(deviceId: string) {
-    setError(null);
-    setBusyDeviceId(deviceId);
-    try {
-      if (!stepUpDone) {
-        await runStepUp();
-        setStepUpDone(true);
+    await runDeviceOp(deviceId, async () => {
+      try {
+        if (!stepUpDone) {
+          await runStepUp();
+          setStepUpDone(true);
+        }
+        await postJson("/api/devices/replacement", { deviceId, reason });
+        setReplacementFor(null);
+        setReason("");
+        setStepUpDone(false);
+        router.refresh();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Replacement request failed");
       }
-      await postJson("/api/devices/replacement", { deviceId, reason });
-      setReplacementFor(null);
-      setReason("");
-      setStepUpDone(false);
-      router.refresh();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Replacement request failed");
-    } finally {
-      setBusyDeviceId(null);
-    }
+    });
   }
 
   return (
@@ -314,7 +325,7 @@ export function DeviceManager({
             />
             <Button
               size="sm"
-              disabled={code.length !== 6}
+              disabled={code.length !== 6 || busyDeviceId !== null}
               onClick={() => verify(pendingCode.deviceId)}
             >
               Verify

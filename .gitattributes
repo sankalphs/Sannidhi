@@ -1,0 +1,16 @@
+# Normalize line endings: the repo stores LF, and prettier's format:check
+# expects LF in the working tree on every platform (Windows checkouts included).
+* text=auto eol=lf
+
+# Windows scripts keep CRLF where tooling requires it.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary

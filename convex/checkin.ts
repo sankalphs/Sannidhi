@@ -30,7 +30,7 @@ import {
   CHECKIN_RATE_LIMIT_WINDOW_MS,
   countRecentChallengeAnomalies,
   countRecentCheckinAttempts,
-  latestEventsByStudentSince,
+  latestEventForStudent,
   RATE_LIMIT_EVENT_TYPES,
 } from "./lib/attendance_event";
 import { requireActorUser } from "./lib/actor";
@@ -176,6 +176,17 @@ export const redeemChallenge = mutation({
 
     const recordRejectedDecision = async (verdict: FailureVerdict): Promise<void> => {
       if (session === null) return;
+      // A settled decision outranks the failure verdict: a verified or
+      // flagged student re-scanning a dead code keeps their recorded
+      // outcome — the ledger still logs the replay, but no new rejection
+      // event may overturn the settled state.
+      const settled = await latestEventForStudent(ctx, {
+        studentId: caller._id,
+        sectionId: session.sectionId,
+        sessionId: session._id,
+        sinceMs: session.startedAt,
+      });
+      if (settled !== undefined && isDecisionEventState(settled.state)) return;
       const device = await bestDeviceForStudent(ctx, caller._id);
       const recentSecurityFailures = await countRecentChallengeAnomalies(ctx, {
         studentId: caller._id,
@@ -326,13 +337,12 @@ export const redeemChallenge = mutation({
     // this student in this session, a fresh valid code cannot self-upgrade
     // it. A flagged student re-scanning gets their flagged outcome echoed
     // back, not a second shot at an accept.
-    const settled = (
-      await latestEventsByStudentSince(ctx, {
-        sectionId: session.sectionId,
-        sessionId: session._id,
-        sinceMs: session.startedAt,
-      })
-    ).get(caller._id);
+    const settled = await latestEventForStudent(ctx, {
+      studentId: caller._id,
+      sectionId: session.sectionId,
+      sessionId: session._id,
+      sinceMs: session.startedAt,
+    });
     if (settled !== undefined && isDecisionEventState(settled.state)) {
       const course = await ctx.db.get(session.courseId);
       const venue = await ctx.db.get(session.venueId);
