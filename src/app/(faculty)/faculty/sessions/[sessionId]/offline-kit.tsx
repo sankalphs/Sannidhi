@@ -161,7 +161,7 @@ export function OfflineKit({
   }
 
   async function handleAttest(row: BoardRow) {
-    if (queue === null || busyStudentId !== null) return;
+    if (queue === null || busyStudentId !== null || syncing) return;
     setBusyStudentId(row.studentId);
     setError(null);
     try {
@@ -178,7 +178,7 @@ export function OfflineKit({
   }
 
   function handleRemove(studentId: string) {
-    if (queue === null) return;
+    if (queue === null || syncing) return;
     setQueue(removeFromQueue(queue, studentId));
   }
 
@@ -333,7 +333,7 @@ export function OfflineKit({
                         size="xs"
                         data-testid={`offline-attest-${row.studentId}`}
                         onClick={() => void handleAttest(row)}
-                        disabled={busyStudentId !== null}
+                        disabled={busyStudentId !== null || syncing}
                       >
                         {busyStudentId === row.studentId ? "Signing…" : "Mark present"}
                       </Button>
@@ -363,6 +363,7 @@ export function OfflineKit({
                         size="icon-xs"
                         aria-label={`Remove ${record.studentName} from queue`}
                         onClick={() => handleRemove(record.studentId)}
+                        disabled={syncing}
                       >
                         <Trash2 className="text-muted-foreground" />
                       </Button>
