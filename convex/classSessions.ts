@@ -438,6 +438,7 @@ export const getBoard = query({
         sessionId: session._id,
         status: session.status,
         kind: session.kind,
+        sectionId: session.sectionId,
         courseCode: course?.code ?? "",
         courseTitle: course?.title ?? "",
         sectionName: section?.name ?? "",
