@@ -178,12 +178,12 @@ export function OfflineKit({
   }
 
   function handleRemove(studentId: string) {
-    if (queue === null || syncing) return;
+    if (queue === null || syncing || busyStudentId !== null) return;
     setQueue(removeFromQueue(queue, studentId));
   }
 
   async function handleSync() {
-    if (queue === null || queue.queued.length === 0 || syncing) return;
+    if (queue === null || queue.queued.length === 0 || syncing || busyStudentId !== null) return;
     setSyncing(true);
     setError(null);
     setOutcomes(null);
@@ -304,7 +304,7 @@ export function OfflineKit({
                   size="xs"
                   data-testid="offline-sync"
                   onClick={() => void handleSync()}
-                  disabled={syncing}
+                  disabled={syncing || busyStudentId !== null}
                   className="ml-auto"
                 >
                   {syncing ? <RefreshCw className="animate-spin" /> : <UploadCloud />}
@@ -363,7 +363,7 @@ export function OfflineKit({
                         size="icon-xs"
                         aria-label={`Remove ${record.studentName} from queue`}
                         onClick={() => handleRemove(record.studentId)}
-                        disabled={syncing}
+                        disabled={syncing || busyStudentId !== null}
                       >
                         <Trash2 className="text-muted-foreground" />
                       </Button>
