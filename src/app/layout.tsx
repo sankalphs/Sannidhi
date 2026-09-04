@@ -29,6 +29,9 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   title: TITLE,
   description: DESCRIPTION,
+  icons: {
+    icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  },
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,

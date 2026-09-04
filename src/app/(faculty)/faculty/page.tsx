@@ -21,17 +21,18 @@ export default async function FacultyPage() {
         title="Faculty dashboard"
         description="Run and review your class sessions."
       />
-      <EmptyState
-        icon={Presentation}
-        title="No active session"
-        description="Start one from your timetable when class begins — the rotating QR and live verification board take over from there."
-        action={
-          <Link href="/faculty/sessions" className={buttonVariants({ size: "sm" })}>
-            Open class sessions
-          </Link>
-        }
-      />
-      {session !== null ? (
+      {session === null ? (
+        <EmptyState
+          icon={Presentation}
+          title="No active session"
+          description="Start one from your timetable when class begins — the rotating QR and live verification board take over from there."
+          action={
+            <Link href="/faculty/sessions" className={buttonVariants({ size: "sm" })}>
+              Open class sessions
+            </Link>
+          }
+        />
+      ) : (
         <ReviewQueue
           actorToken={await mintActorToken({
             userId: session.userId,
@@ -39,7 +40,7 @@ export default async function FacultyPage() {
             ...(session.sid !== undefined ? { sid: session.sid } : {}),
           })}
         />
-      ) : null}
+      )}
     </div>
   );
 }
