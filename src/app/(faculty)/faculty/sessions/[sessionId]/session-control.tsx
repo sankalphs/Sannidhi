@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 import { LiveBoard } from "./live-board";
+import { OfflineKit } from "./offline-kit";
 import { QrPanel } from "./qr-panel";
 
 export type BoardSnapshot = FunctionReturnType<typeof api.classSessions.getBoard>;
@@ -66,7 +67,8 @@ export function SessionControl({
   // second-device transitions; the page-load snapshot is only the fallback
   // until the first subscription frame arrives.
   const board = useQuery(api.classSessions.getBoard, { actorToken, sessionId });
-  const session = (board ?? initialSnapshot).session;
+  const snapshot = board ?? initialSnapshot;
+  const session = snapshot.session;
 
   async function run(action: ControlAction) {
     if (pending !== null) return;
@@ -111,6 +113,13 @@ export function SessionControl({
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <OfflineKit
+            actorToken={actorToken}
+            sessionId={sessionId}
+            sessionStatus={session.status}
+            sectionId={session.sectionId}
+            rows={snapshot.rows}
+          />
           {session.status === "active" ? (
             <Button
               variant="outline"
