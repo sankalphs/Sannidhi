@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { clearQueue } from "@/lib/client/offline-queue";
 import { cn } from "@/lib/utils";
 
 export function SignOutButton({
@@ -21,6 +22,13 @@ export function SignOutButton({
     setPending(true);
     try {
       await fetch("/api/auth/session", { method: "DELETE" });
+      // Signed offline records carry student names; leaving them behind on a
+      // shared classroom device would leak them past this session.
+      try {
+        clearQueue();
+      } catch {
+        // Storage can be unavailable (private mode); sign-out must still finish.
+      }
       router.push("/");
       router.refresh();
     } finally {

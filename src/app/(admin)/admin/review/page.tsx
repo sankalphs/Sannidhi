@@ -18,7 +18,7 @@ export default async function AdminReviewPage() {
       <EmptyState
         icon={Users}
         title="Administrator access required"
-        description="Analytics are visible to administrators and department authority."
+        description="The review inbox is visible to administrators and department authority."
       />
     );
   }

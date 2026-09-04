@@ -5,10 +5,12 @@ import {
   clearQueue,
   dropSynced,
   enqueueStudent,
+  hasForeignUnsyncedQueue,
   readQueue,
   rememberBundle,
   removeFromQueue,
   settledStudentIds,
+  type OfflineQueueState,
 } from "@/lib/client/offline-queue";
 
 const BUNDLE = { sessionId: "session_1", key: "a".repeat(64) };
@@ -46,6 +48,85 @@ describe("rememberBundle / readQueue", () => {
   it("returns null when the stored shape is wrong", () => {
     window.localStorage.setItem("sannidhi.offline-queue", JSON.stringify({ bundle: null }));
     expect(readQueue("session_1")).toBeNull();
+  });
+
+  it("drops malformed queued records instead of failing the whole queue", async () => {
+    let state = rememberBundle("session_1", BUNDLE);
+    state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
+    // Simulate schema drift / tampering on one record: the other survives.
+    const tampered = {
+      bundle: state.bundle,
+      queued: [...state.queued, { studentId: 42, nonce: "garbage" }],
+    };
+    window.localStorage.setItem("sannidhi.offline-queue", JSON.stringify(tampered));
+    const loaded = readQueue("session_1");
+    expect(loaded).not.toBeNull();
+    expect(loaded?.queued).toHaveLength(1);
+    expect(loaded?.queued[0]?.studentId).toBe("student_1");
+  });
+});
+
+describe("hasForeignUnsyncedQueue", () => {
+  it("reports another session's unsynced records", async () => {
+    await enqueueStudent(
+      rememberBundle("session_1", BUNDLE),
+      { id: "student_1", name: "A" },
+      "section_1",
+      "n",
+    );
+    expect(hasForeignUnsyncedQueue("session_2")).toBe(true);
+  });
+
+  it("ignores the same session's queue", async () => {
+    await enqueueStudent(
+      rememberBundle("session_1", BUNDLE),
+      { id: "student_1", name: "A" },
+      "section_1",
+      "n",
+    );
+    expect(hasForeignUnsyncedQueue("session_1")).toBe(false);
+  });
+
+  it("ignores an empty or absent queue", () => {
+    rememberBundle("session_1", BUNDLE);
+    expect(hasForeignUnsyncedQueue("session_2")).toBe(false);
+    expect(hasForeignUnsyncedQueue("session_3")).toBe(false);
+  });
+});
+
+describe("cross-tab merge", () => {
+  it("preserves another tab's queued record when this tab enqueues", async () => {
+    // Tab A queues a student and holds its state in memory.
+    const tabA = await enqueueStudent(
+      rememberBundle("session_1", BUNDLE),
+      { id: "student_1", name: "A" },
+      "section_1",
+      "n1",
+    );
+    // Tab B never re-minted (that would rotate the key); it just holds a
+    // stale in-memory copy from before tab A's attestation.
+    const staleTabB: OfflineQueueState = { bundle: BUNDLE, queued: [] };
+    const tabB = await enqueueStudent(staleTabB, { id: "student_2", name: "B" }, "section_1", "n2");
+    // Tab B's write re-read storage, so it sees and keeps tab A's record.
+    expect(tabB.queued).toHaveLength(2);
+    expect(tabA.queued).toHaveLength(1);
+    // Storage holds both tabs' records — neither silently erased the other.
+    const stored = readQueue("session_1");
+    expect(stored?.queued.map((record) => record.studentId).sort()).toEqual([
+      "student_1",
+      "student_2",
+    ]);
+  });
+
+  it("removal deletes only the removed student across tabs", async () => {
+    let state = rememberBundle("session_1", BUNDLE);
+    state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
+    state = await enqueueStudent(state, { id: "student_2", name: "B" }, "section_1", "n2");
+    // A stale tab removes student_1; storage (with both records) is the truth.
+    const staleTab: OfflineQueueState = { bundle: BUNDLE, queued: state.queued.slice(0, 1) };
+    const next = removeFromQueue(staleTab, "student_1");
+    expect(next?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
+    expect(readQueue("session_1")?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
   });
 });
 

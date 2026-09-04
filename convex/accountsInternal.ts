@@ -86,7 +86,10 @@ export const reservePasswordLoginAttempt = internalMutation({
 
     if (row !== null && now - row.windowStartAt < LOGIN_ATTEMPT_WINDOW_MS) {
       if (row.attempts >= LOGIN_MAX_ATTEMPTS_PER_WINDOW) {
-        if (args.institutionId !== undefined) {
+        // Ledger bloat guard: spam past the cap logs once at the cap, not
+        // one row per further attempt — an unauthenticated caller must not
+        // grow the institution's hash chain.
+        if (args.institutionId !== undefined && row.attempts === LOGIN_MAX_ATTEMPTS_PER_WINDOW) {
           await ctx.runMutation(internal.ledger.appendLedgerEvent, {
             institutionId: args.institutionId,
             category: "identity",
@@ -160,26 +163,6 @@ export const getInviteByToken = internalQuery({
       .unique();
     if (invite === null) return null;
     const { _id, institutionId, email, role, status, expiresAt } = invite;
-    return { _id, institutionId, email, role, status, expiresAt };
-  },
-});
-
-/** Pending, unexpired invite for an email within one institution, or null. */
-export const getPendingInviteByEmail = internalQuery({
-  args: { institutionId: v.id("institutions"), email: v.string() },
-  handler: async (ctx, args) => {
-    const invites = await ctx.db
-      .query("invites")
-      .withIndex("by_email", (q) => q.eq("email", args.email.trim().toLowerCase()))
-      .collect();
-    const pending = invites.find(
-      (invite) =>
-        invite.institutionId === args.institutionId &&
-        invite.status === "pending" &&
-        invite.expiresAt > Date.now(),
-    );
-    if (pending === undefined) return null;
-    const { _id, institutionId, email, role, status, expiresAt } = pending;
     return { _id, institutionId, email, role, status, expiresAt };
   },
 });

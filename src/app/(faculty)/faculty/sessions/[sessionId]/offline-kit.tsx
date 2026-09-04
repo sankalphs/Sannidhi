@@ -13,18 +13,19 @@ import { describeConvexError, type ErrorTranslation } from "@/lib/client/describ
 import {
   dropSynced,
   enqueueStudent,
+  hasForeignUnsyncedQueue,
   readQueue,
   rememberBundle,
   removeFromQueue,
   settledStudentIds,
   type OfflineQueueState,
+  type SyncResultStatus,
 } from "@/lib/client/offline-queue";
 
 export type BoardSnapshot = FunctionReturnType<typeof api.classSessions.getBoard>;
 type BoardRow = BoardSnapshot["rows"][number];
 
-type SyncStatus =
-  "accepted" | "step_up" | "flagged" | "rejected" | "duplicate" | "invalid_signature";
+type SyncStatus = SyncResultStatus;
 
 type SyncOutcome = { studentName: string; status: SyncStatus };
 
@@ -42,8 +43,15 @@ const SYNC_ERROR_TRANSLATIONS: ErrorTranslation = [
     match: "batch_too_large",
     message: "The queue is too large for one sync. Sync in smaller batches.",
   },
+  {
+    match: "session_window_ended",
+    message: "This session's window has ended — offline records can no longer be added to it.",
+  },
   { match: "unauthorized", message: "You are not authorized to sync records for this session." },
 ];
+
+/** Server cap on syncOfflineBatch records; the client syncs in chunks of this size. */
+const SYNC_CHUNK_SIZE = 200;
 
 const STATUS_COPY: Record<SyncStatus, string> = {
   accepted: "Verified",
@@ -142,6 +150,14 @@ export function OfflineKit({
 
   async function handleMint() {
     if (minting) return;
+    // Minting overwrites the device queue, which holds one live class window:
+    // another session's still-unsynced records must not be silently destroyed.
+    if (hasForeignUnsyncedQueue(sessionId)) {
+      setError(
+        "Another session still has unsynced records on this device. Sync them (open that session) before authorizing this one.",
+      );
+      return;
+    }
     setMinting(true);
     setError(null);
     try {
@@ -172,6 +188,11 @@ export function OfflineKit({
         `${row.studentName} — present in class`,
       );
       setQueue(next);
+    } catch {
+      // Signing or storage can fail (private-mode quota, missing crypto
+      // surface); the record was never persisted, so say so instead of
+      // vanishing into an unhandled rejection.
+      setError("Could not queue this attestation on the device. Please try again.");
     } finally {
       setBusyStudentId(null);
     }
@@ -199,19 +220,32 @@ export function OfflineKit({
         ...(record.note !== undefined ? { note: record.note } : {}),
         signature: record.signature,
       }));
-      const result = await syncOfflineBatch({ actorToken, records });
-      const nameOf = (studentId: Id<"users">) => byStudent.get(studentId) ?? "Student";
-      setOutcomes(
-        result.results.map(({ studentId, status }) => ({
-          studentName: nameOf(studentId),
-          status,
-        })),
-      );
+      // The server caps one batch at SYNC_CHUNK_SIZE records; a bigger queue
+      // drains in sequential chunks, with settled students dropped between
+      // chunks so a mid-sync failure never resubmits settled records.
+      const allOutcomes: SyncOutcome[] = [];
+      let remaining = records;
+      let currentQueue = queue;
+      while (remaining.length > 0) {
+        const chunk = remaining.slice(0, SYNC_CHUNK_SIZE);
+        remaining = remaining.slice(chunk.length);
+        const result = await syncOfflineBatch({ actorToken, records: chunk });
+        const nameOf = (studentId: Id<"users">) => byStudent.get(studentId) ?? "Student";
+        allOutcomes.push(
+          ...result.results.map(({ studentId, status }) => ({
+            studentName: nameOf(studentId),
+            status,
+          })),
+        );
+        const settled = settledStudentIds(result.results);
+        currentQueue = dropSynced(currentQueue, settled) ?? { bundle: queue.bundle, queued: [] };
+      }
+      setOutcomes(allOutcomes);
       // Every per-record status is a settlement: accepted entries are recorded,
       // duplicates were already recorded by an earlier sync, and
       // rejected/invalid-signature claims are verdicts, not retries. The queue
       // drops them all so nothing is endlessly resubmitted.
-      setQueue(dropSynced(queue, settledStudentIds(result.results)));
+      setQueue(currentQueue);
     } catch (cause) {
       setError(
         describeConvexError(
@@ -374,7 +408,12 @@ export function OfflineKit({
             ) : (
               <p className="text-muted-foreground text-sm" data-testid="offline-empty-queue">
                 {outcomes !== null
-                  ? "Queue empty — every record synced. Mark more students or close this dialog."
+                  ? outcomes.every(
+                      (outcome) =>
+                        outcome.status === "rejected" || outcome.status === "invalid_signature",
+                    )
+                    ? "Queue empty — no record could be added to the session. Review the sync results below."
+                    : "Queue empty — every record synced. Mark more students or close this dialog."
                   : "No records queued yet — mark attending students to build the offline roster."}
               </p>
             )}

@@ -1,6 +1,6 @@
 import { ConvexError, v } from "convex/values";
 
-import type { Doc, Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { assertSameInstitution, requireAdminUser, requireAnalyticsAuthority } from "./lib/actor";
@@ -51,14 +51,6 @@ export const listCoursesWithDepartments = query({
     return rows.sort((a, b) => a.code.localeCompare(b.code));
   },
 });
-
-export type DepartmentMemberRow = {
-  userId: Id<"users">;
-  name: string;
-  email: string;
-  role: Doc<"users">["role"];
-  usn: string | null;
-};
 
 /** Department directory for the caller's institution with per-department course counts. */
 export const listDepartments = query({
@@ -163,120 +155,5 @@ export const renameDepartment = mutation({
       payload: { departmentId: args.departmentId, name },
     });
     return { ok: true as const };
-  },
-});
-
-/**
- * Full-replace department membership for a user; an empty list unassigns them
- * from every department. Duplicates in the input are collapsed.
- */
-export const assignUserToDepartments = mutation({
-  args: {
-    actorToken: v.string(),
-    userId: v.id("users"),
-    departmentIds: v.array(v.id("departments")),
-  },
-  handler: async (ctx, args) => {
-    const caller = await requireAdminUser(ctx, args.actorToken);
-
-    const user = await ctx.db.get(args.userId);
-    if (user === null) throw new ConvexError("User not found");
-    assertSameInstitution(caller.institutionId, user.institutionId);
-
-    const departmentIds = [...new Set(args.departmentIds)];
-    for (const departmentId of departmentIds) {
-      const department = await ctx.db.get(departmentId);
-      if (department === null) throw new ConvexError("Department not found");
-      assertSameInstitution(caller.institutionId, department.institutionId);
-    }
-
-    await ctx.db.patch(args.userId, {
-      ...(departmentIds.length > 0 ? { departmentIds } : { departmentIds: undefined }),
-    });
-
-    await ctx.runMutation(internal.ledger.appendLedgerEvent, {
-      institutionId: caller.institutionId,
-      category: "identity",
-      type: "policy.user_departments_assigned",
-      actorUserId: caller._id,
-      subjectUserId: args.userId,
-      payload: { userId: args.userId, departmentIds },
-    });
-    return { ok: true as const };
-  },
-});
-
-/** Assign (or with departmentId: null, unassign) a course from a department. */
-export const assignCourseToDepartment = mutation({
-  args: {
-    actorToken: v.string(),
-    courseId: v.id("courses"),
-    departmentId: v.union(v.id("departments"), v.null()),
-  },
-  handler: async (ctx, args) => {
-    const caller = await requireAdminUser(ctx, args.actorToken);
-
-    const course = await ctx.db.get(args.courseId);
-    if (course === null) throw new ConvexError("Course not found");
-    assertSameInstitution(caller.institutionId, course.institutionId);
-
-    if (args.departmentId !== null) {
-      const department = await ctx.db.get(args.departmentId);
-      if (department === null) throw new ConvexError("Department not found");
-      assertSameInstitution(caller.institutionId, department.institutionId);
-    }
-
-    await ctx.db.patch(args.courseId, {
-      ...(args.departmentId !== null
-        ? { departmentId: args.departmentId }
-        : { departmentId: undefined }),
-    });
-
-    await ctx.runMutation(internal.ledger.appendLedgerEvent, {
-      institutionId: caller.institutionId,
-      category: "identity",
-      type: "policy.course_department_assigned",
-      actorUserId: caller._id,
-      payload: { courseId: args.courseId, departmentId: args.departmentId },
-    });
-    return { ok: true as const };
-  },
-});
-
-/** Roster of one department; department authorities see only their own departments. */
-export const listDepartmentMembers = query({
-  args: {
-    actorToken: v.string(),
-    departmentId: v.id("departments"),
-  },
-  handler: async (ctx, args): Promise<DepartmentMemberRow[]> => {
-    const caller = await requireAnalyticsAuthority(ctx, args.actorToken);
-
-    const department = await ctx.db.get(args.departmentId);
-    if (department === null) throw new ConvexError("Department not found");
-    assertSameInstitution(caller.institutionId, department.institutionId);
-
-    if (caller.role === "department_authority") {
-      const ownDepartmentIds = caller.departmentIds ?? [];
-      if (!ownDepartmentIds.includes(args.departmentId)) {
-        throw new ConvexError("Not your department");
-      }
-    }
-
-    const users = await ctx.db
-      .query("users")
-      .withIndex("by_institution", (q) => q.eq("institutionId", caller.institutionId))
-      .collect();
-
-    return users
-      .filter((user) => (user.departmentIds ?? []).includes(args.departmentId))
-      .map((user) => ({
-        userId: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        usn: user.usn ?? null,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
   },
 });

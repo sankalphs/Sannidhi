@@ -1,6 +1,7 @@
 import { api } from "../../../../../convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import { Users } from "lucide-react";
+import { headers } from "next/headers";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
@@ -54,6 +55,7 @@ export default async function AdminUsersPage() {
     );
   }
 
+  const hostFromRequest = (await headers()).get("host");
   const client = getConvexClient();
   const actorToken = await mintActorToken({
     userId: session.userId,
@@ -80,7 +82,16 @@ export default async function AdminUsersPage() {
     client.query(api.invites.listInvites, { actorToken }),
   ]);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  // No hardcoded localhost fallback: an unset NEXT_PUBLIC_APP_URL in a real
+  // deployment would mint invite links pointing at the wrong origin, so fall
+  // back to the request's own host instead.
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ??
+    (() => {
+      if (hostFromRequest === null) return "http://localhost:3000";
+      const isLocal = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(hostFromRequest);
+      return `${isLocal ? "http" : "https"}://${hostFromRequest}`;
+    })();
   const pendingInvites = invites.filter((invite) => invite.status === "pending");
 
   return (

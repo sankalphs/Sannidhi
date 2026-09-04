@@ -27,10 +27,10 @@ describe("convex/seed.ts", () => {
   });
 
   it("computes today's weekday and brackets the current time for a live slot", () => {
-    expect(source).toMatch(/const todayDayOfWeek = seedMoment\.getDay\(\)/);
-    expect(source).toMatch(
-      /const currentMinutes = seedMoment\.getHours\(\) \* 60 \+ seedMoment\.getMinutes\(\)/,
-    );
+    // The "live today" slot must use the institution timezone (IST), not the
+    // server's zone — seed-time and read-time day math must agree.
+    expect(source).toMatch(/const todayDayOfWeek = institutionDayOfWeek\(now\)/);
+    expect(source).toMatch(/const istOffsetMinutes = institutionOffsetMinutes\(now\)/);
     expect(source).toMatch(/dayOfWeek: todayDayOfWeek/);
     expect(source).toMatch(/startMinutes: liveStartMinutes/);
     expect(source).toMatch(/endMinutes: liveEndMinutes/);

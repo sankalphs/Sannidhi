@@ -10,6 +10,11 @@ import { signRecord, type OfflineBundle, type SignedOfflineRecord } from "@/lib/
  * re-verifies and dedupes them later. The queue is deliberately plain —
  * structured clone in localStorage is enough for one live class window, and a
  * stale queue simply fails HMAC verification after a re-mint rotates the key.
+ *
+ * Multiple tabs share one storage key, so every write re-reads the stored
+ * state first and every read validates the queued items: a malformed record
+ * (tampered storage, schema drift) is dropped instead of bricking the queue,
+ * and one tab's edit cannot silently erase another tab's queued records.
  */
 
 const STORAGE_KEY = "sannidhi.offline-queue";
@@ -21,6 +26,21 @@ export type OfflineQueueState = {
   queued: QueuedRecord[];
 };
 
+function isQueuedRecord(value: unknown): value is QueuedRecord {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.sessionId === "string" &&
+    typeof record.sectionId === "string" &&
+    typeof record.studentId === "string" &&
+    typeof record.capturedAt === "number" &&
+    typeof record.nonce === "string" &&
+    typeof record.signature === "string" &&
+    typeof record.studentName === "string" &&
+    (record.note === undefined || typeof record.note === "string")
+  );
+}
+
 function loadState(sessionId: string): OfflineQueueState | null {
   if (typeof window === "undefined") return null;
   try {
@@ -30,16 +50,21 @@ function loadState(sessionId: string): OfflineQueueState | null {
     if (
       parsed === null ||
       parsed.bundle?.sessionId !== sessionId ||
+      typeof parsed.bundle.key !== "string" ||
       !Array.isArray(parsed.queued)
     ) {
       return null;
     }
-    return { bundle: parsed.bundle, queued: parsed.queued };
+    // Malformed records are dropped, not fatal: one tampered row must not
+    // brick the whole queue's sync loop.
+    const queued = parsed.queued.filter(isQueuedRecord);
+    return { bundle: parsed.bundle, queued };
   } catch {
     return null;
   }
 }
 
+/** Writes a fresh state, dropping any records another tab queued since our last read. */
 function saveState(state: OfflineQueueState): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
@@ -53,10 +78,37 @@ export function readQueue(sessionId: string): OfflineQueueState | null {
   return loadState(sessionId);
 }
 
+/** Whether another session still holds unsynced records — minting now would destroy them. */
+export function hasForeignUnsyncedQueue(sessionId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return false;
+    const parsed = JSON.parse(raw) as Partial<OfflineQueueState> | null;
+    if (parsed === null || typeof parsed.bundle?.sessionId !== "string") return false;
+    if (parsed.bundle.sessionId === sessionId) return false;
+    return Array.isArray(parsed.queued) && parsed.queued.some(isQueuedRecord);
+  } catch {
+    return false;
+  }
+}
+
 export function rememberBundle(sessionId: string, bundle: OfflineBundle): OfflineQueueState {
   const state: OfflineQueueState = { bundle, queued: [] };
   saveState(state);
   return state;
+}
+
+/**
+ * Re-reads storage before writing so another tab's concurrently-queued
+ * records survive; the returned state reflects that merged reality.
+ */
+function mergeWithStored(state: OfflineQueueState): OfflineQueueState {
+  const stored = loadState(state.bundle.sessionId);
+  if (stored === null) return state;
+  const ours = new Set(state.queued.map((record) => record.studentId));
+  const preserved = stored.queued.filter((record) => !ours.has(record.studentId));
+  return preserved.length > 0 ? { ...state, queued: [...state.queued, ...preserved] } : state;
 }
 
 /** Signs and appends one attestation; each record gets a fresh nonce so replays dedupe server-side. */
@@ -74,12 +126,14 @@ export async function enqueueStudent(
     nonce: crypto.randomUUID(),
     ...(note.trim().length > 0 ? { note: note.trim() } : {}),
   });
+  const queued = state.queued.filter((item) => item.studentId !== student.id);
   const next: OfflineQueueState = {
-    ...state,
-    queued: [...state.queued, { ...record, studentName: student.name }],
+    bundle: state.bundle,
+    queued: [...queued, { ...record, studentName: student.name }],
   };
-  saveState(next);
-  return next;
+  const merged = mergeWithStored(next);
+  saveState(merged);
+  return merged;
 }
 
 /** Removes one queued record (by student) and persists the result; a fully emptied queue is wiped. */
@@ -87,12 +141,14 @@ export function removeFromQueue(
   state: OfflineQueueState,
   studentId: string,
 ): OfflineQueueState | null {
-  const queued = state.queued.filter((record) => record.studentId !== studentId);
+  const stored = loadState(state.bundle.sessionId);
+  const current = stored ?? state;
+  const queued = current.queued.filter((record) => record.studentId !== studentId);
   if (queued.length === 0) {
     clearQueue();
     return null;
   }
-  const next: OfflineQueueState = { ...state, queued };
+  const next: OfflineQueueState = { bundle: current.bundle, queued };
   saveState(next);
   return next;
 }
@@ -101,12 +157,14 @@ export function dropSynced(
   state: OfflineQueueState,
   syncedStudentIds: ReadonlySet<string>,
 ): OfflineQueueState | null {
-  const queued = state.queued.filter((record) => !syncedStudentIds.has(record.studentId));
+  const stored = loadState(state.bundle.sessionId);
+  const current = stored ?? state;
+  const queued = current.queued.filter((record) => !syncedStudentIds.has(record.studentId));
   if (queued.length === 0) {
     clearQueue();
     return null;
   }
-  const next: OfflineQueueState = { ...state, queued };
+  const next: OfflineQueueState = { bundle: current.bundle, queued };
   saveState(next);
   return next;
 }

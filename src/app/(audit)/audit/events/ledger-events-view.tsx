@@ -4,7 +4,7 @@ import { api } from "../../../../../convex/_generated/api";
 import { useConvex, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { ChevronDown, ChevronRight, Loader2, ScrollText, ShieldCheck } from "lucide-react";
-import { Component, type ReactNode, useEffect, useState, Fragment } from "react";
+import { Component, type ReactNode, useEffect, useRef, useState, Fragment } from "react";
 
 import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { EmptyState } from "@/components/shell/empty-state";
@@ -190,13 +190,19 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   const [verifyingAttendanceChain, setVerifyingAttendanceChain] = useState(false);
   const [attendanceChainStatus, setAttendanceChainStatus] = useState<ChainStatus | null>(null);
 
+  // Page 1 is live: every check-in pushes a new row into it. The older-pages
+  // walk only needs to re-run when the page boundary (cursor) actually moves,
+  // so live updates never flicker older rows away. Stale overlap is harmless:
+  // seenSeqs dedupes and the sort is by seq.
+  const olderCursor = eventsResult?.nextCursor;
+  const olderEventsRef = useRef<{ cursor: number | undefined; events: LedgerEvent[] } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    setOlderEvents([]);
     async function loadOlder() {
-      if (eventsResult === undefined || eventsResult.nextCursor === undefined) return;
+      if (olderCursor === undefined) return;
+      if (olderEventsRef.current?.cursor === olderCursor) return;
       const collected: LedgerEvent[] = [];
-      let cursorSeq: number | undefined = eventsResult.nextCursor;
+      let cursorSeq: number | undefined = olderCursor;
       try {
         for (let page = 0; page < MAX_LEDGER_PAGES && cursorSeq !== undefined; page += 1) {
           const result: LedgerSnapshot = await convex.query(api.ledger.listLedgerEvents, {
@@ -210,13 +216,16 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
       } catch {
         return;
       }
-      if (!cancelled) setOlderEvents(collected);
+      if (!cancelled) {
+        olderEventsRef.current = { cursor: olderCursor, events: collected };
+        setOlderEvents(collected);
+      }
     }
     void loadOlder();
     return () => {
       cancelled = true;
     };
-  }, [convex, actorToken, eventsResult]);
+  }, [convex, actorToken, olderCursor]);
 
   const seenSeqs = new Set<number>();
   const events = [...(eventsResult?.events ?? []), ...olderEvents]

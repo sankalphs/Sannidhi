@@ -748,16 +748,3 @@ export const listAllReplacementRequests = query({
     return rows;
   },
 });
-
-export const getMyDeviceTrustEvidence = query({
-  args: { actorToken: v.string() },
-  handler: async (ctx, args) => {
-    const claims = await requireActor(ctx, args.actorToken);
-    if ((await resolveKnownUser(ctx, claims.userId)) === null) return [];
-    const devices = await ctx.db
-      .query("devices")
-      .withIndex("by_user", (q) => q.eq("userId", claims.userId as Id<"users">))
-      .collect();
-    return devices.map((device) => evidenceOf(device));
-  },
-});
