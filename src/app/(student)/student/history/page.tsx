@@ -28,17 +28,17 @@ type StudentHistoryRow = {
   reasonCodes: string[];
 };
 
-type HistoryLoadResult =
-  { kind: "signed-out" } | { kind: "error" } | { kind: "rows"; rows: StudentHistoryRow[] };
+type HistoryLoadResult = { kind: "error" } | { kind: "rows"; rows: StudentHistoryRow[] };
 
+/** The page guarantees a session before calling; only backend failures land here. */
 async function loadStudentHistory(): Promise<HistoryLoadResult> {
   try {
-    const session = await getActiveSession();
-    if (session === null) return { kind: "signed-out" };
+    const activeSession = await getActiveSession();
+    if (activeSession === null) return { kind: "error" };
     const actorToken = await mintActorToken({
-      userId: session.userId,
-      role: session.role,
-      ...(session.sid !== undefined ? { sid: session.sid } : {}),
+      userId: activeSession.userId,
+      role: activeSession.role,
+      ...(activeSession.sid !== undefined ? { sid: activeSession.sid } : {}),
     });
     const rows = await getConvexClient().query(api.history.studentHistory, { actorToken });
     return { kind: "rows", rows };
@@ -49,6 +49,27 @@ async function loadStudentHistory(): Promise<HistoryLoadResult> {
 }
 
 export default async function StudentHistoryPage() {
+  // Authentication first: the enrollment gate reads as fully-locked when
+  // signed out, which would mask the sign-in state with enrollment steps.
+  const session = await getActiveSession();
+
+  if (session === null) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          eyebrow="Student panel"
+          title="Attendance history"
+          description="Calendar and subject-wise views."
+        />
+        <EmptyState
+          icon={BookOpen}
+          title="Sign in required"
+          description="Sign in to view your attendance calendar and subject breakdown."
+        />
+      </div>
+    );
+  }
+
   const missingSteps = await loadMissingEnrollmentSteps();
 
   if (missingSteps.length > 0) {
@@ -67,7 +88,6 @@ export default async function StudentHistoryPage() {
   const history = await loadStudentHistory();
 
   if (history.kind !== "rows") {
-    const failed = history.kind === "error";
     return (
       <div className="flex flex-col gap-6">
         <PageHeader
@@ -77,12 +97,8 @@ export default async function StudentHistoryPage() {
         />
         <EmptyState
           icon={BookOpen}
-          title={failed ? "Could not load your history" : "Sign in required"}
-          description={
-            failed
-              ? "Something went wrong while loading your attendance. Please refresh the page and try again."
-              : "Sign in to view your attendance calendar and subject breakdown."
-          }
+          title="Could not load your history"
+          description="Something went wrong while loading your attendance. Please refresh the page and try again."
         />
       </div>
     );

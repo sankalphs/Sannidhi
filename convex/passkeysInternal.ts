@@ -153,10 +153,18 @@ export const completeRegistration = internalMutation({
       throw new Error("challenge invalid or expired");
     }
 
-    const existing = await ctx.db
+    // Collect every row for this credentialId: legacy data can hold more
+    // than one (revoked + active from a pre-dedup bug). Any live duplicate
+    // fails the registration closed rather than arbitrarily reactivating
+    // one row while .unique()-based auth lookups stay broken.
+    const existingRows = await ctx.db
       .query("passkey_credentials")
       .withIndex("by_credentialId", (q) => q.eq("credentialId", args.credentialId))
-      .first();
+      .collect();
+    const existing = existingRows[0];
+    if (existingRows.length > 1) {
+      throw new Error("duplicate credential records");
+    }
 
     await ctx.db.patch(challengeRow._id, { consumedAt: now });
 

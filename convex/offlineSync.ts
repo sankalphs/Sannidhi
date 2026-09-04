@@ -169,8 +169,10 @@ export const syncOfflineBatch = mutation({
     // key cannot vouch for.
     const enrolledStudents = new Map<Id<"class_sessions">, Set<Id<"users">>>();
     // Same-batch dedupe: two tabs can queue the same student twice with
-    // different nonces; only the first record may append.
-    const settledInBatch = new Set<Id<"users">>();
+    // different nonces; only the first record may append. Keyed by session
+    // and student — settlement is per-session, so the same student synced
+    // for two different sessions in one batch is two legitimate appends.
+    const settledInBatch = new Set<string>();
 
     for (const record of args.records) {
       const session = sessions.get(record.sessionId);
@@ -229,7 +231,8 @@ export const syncOfflineBatch = mutation({
         sessionId: session._id,
         sinceMs: session.startedAt,
       });
-      const inBatchDuplicate = settledInBatch.has(record.studentId);
+      const settledKey = `${record.sessionId}:${record.studentId}`;
+      const inBatchDuplicate = settledInBatch.has(settledKey);
       if (settled !== undefined && isDecisionEventState(settled.state)) {
         await ctx.runMutation(internal.ledger.appendLedgerEvent, {
           institutionId: session.institutionId,
@@ -251,7 +254,7 @@ export const syncOfflineBatch = mutation({
         results.push({ studentId: record.studentId, status: "duplicate" });
         continue;
       }
-      settledInBatch.add(record.studentId);
+      settledInBatch.add(settledKey);
 
       // Mirror verifyManually's signal building, plus a marker that presence
       // was attested offline; the claimed capture time rides along as detail.

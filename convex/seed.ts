@@ -3,7 +3,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { hashInviteToken } from "../src/lib/invites/token";
 import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
-import { institutionDayOfWeek, institutionOffsetMinutes } from "../src/lib/attendance/timezone";
+import { institutionDayOfWeek, institutionMinutesOfDay } from "../src/lib/attendance/timezone";
 import { computeEventHash } from "../src/lib/ledger/hash";
 import { RISK_POLICY_VERSION } from "../src/lib/risk/types";
 import type { Decision } from "../src/lib/decision";
@@ -240,14 +240,12 @@ export const seedDemoData = internalMutation({
     // The "live today" slot must land on the institution's calendar day (IST),
     // not the server's zone — seed-time day math and read-time day math
     // (listMySchedule) must agree.
-    const seedMoment = new Date(now);
     const todayDayOfWeek = institutionDayOfWeek(now);
     const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
-    // IST minutes-of-day, computed from the offset the formatter reports so
-    // the slot's start/end fall inside the day faculty actually see.
-    const istOffsetMinutes = institutionOffsetMinutes(now);
-    const istMinutesOfDay =
-      (seedMoment.getUTCHours() * 60 + seedMoment.getUTCMinutes() - istOffsetMinutes + 1440) % 1440;
+    // IST minutes-of-day: local wall clock is UTC plus the east-of-UTC
+    // offset, wrapped by day, so the slot's start/end fall inside the day
+    // faculty actually see.
+    const istMinutesOfDay = institutionMinutesOfDay(now);
     const liveStartMinutes = Math.max(0, istMinutesOfDay - 15);
     const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
 

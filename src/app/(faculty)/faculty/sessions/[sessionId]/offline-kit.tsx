@@ -13,11 +13,12 @@ import { describeConvexError, type ErrorTranslation } from "@/lib/client/describ
 import {
   dropSynced,
   enqueueStudent,
-  hasForeignUnsyncedQueue,
+  hasAnyUnsyncedRecords,
   readQueue,
   rememberBundle,
   removeFromQueue,
   settledStudentIds,
+  subscribeQueueCleared,
   type OfflineQueueState,
   type SyncResultStatus,
 } from "@/lib/client/offline-queue";
@@ -119,13 +120,16 @@ export function OfflineKit({
   const [outcomes, setOutcomes] = useState<SyncOutcome[] | null>(null);
 
   // The queue lives on the faculty device, so it is read on mount/dialog open —
-  // never during SSR.
+  // never during SSR. A wipe broadcast (sign-out in another tab) drops the
+  // in-memory copy so student names cannot be written back into storage.
   useEffect(() => {
     if (!open) return;
     setQueue(readQueue(sessionId));
     setError(null);
     setOutcomes(null);
   }, [open, sessionId]);
+
+  useEffect(() => subscribeQueueCleared(() => setQueue(null)), []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -150,11 +154,11 @@ export function OfflineKit({
 
   async function handleMint() {
     if (minting) return;
-    // Minting overwrites the device queue, which holds one live class window:
-    // another session's still-unsynced records must not be silently destroyed.
-    if (hasForeignUnsyncedQueue(sessionId)) {
+    // Minting replaces the device queue and rotates the server key, so ANY
+    // still-unsynced record — this session's or another's — blocks it.
+    if (hasAnyUnsyncedRecords()) {
       setError(
-        "Another session still has unsynced records on this device. Sync them (open that session) before authorizing this one.",
+        "This device still has unsynced offline records. Sync them (open that session) before authorizing again.",
       );
       return;
     }
@@ -162,7 +166,13 @@ export function OfflineKit({
     setError(null);
     try {
       const bundle = await mintOfflineBundle({ actorToken, sessionId });
-      setQueue(rememberBundle(sessionId, { sessionId: bundle.sessionId, key: bundle.key }));
+      // Re-check under the queue lock: a concurrently-queued record must not
+      // be silently destroyed by the bundle overwrite.
+      const state = await rememberBundle(sessionId, {
+        sessionId: bundle.sessionId,
+        key: bundle.key,
+      });
+      setQueue(state);
     } catch (cause) {
       setError(
         describeConvexError(
@@ -198,9 +208,9 @@ export function OfflineKit({
     }
   }
 
-  function handleRemove(studentId: string) {
+  async function handleRemove(studentId: string) {
     if (queue === null || syncing || busyStudentId !== null) return;
-    setQueue(removeFromQueue(queue, studentId));
+    setQueue(await removeFromQueue(queue, studentId));
   }
 
   async function handleSync() {
@@ -221,11 +231,11 @@ export function OfflineKit({
         signature: record.signature,
       }));
       // The server caps one batch at SYNC_CHUNK_SIZE records; a bigger queue
-      // drains in sequential chunks, with settled students dropped between
-      // chunks so a mid-sync failure never resubmits settled records.
+      // drains in sequential chunks. Settled students are dropped after every
+      // chunk — and React state updated immediately — so a mid-sync failure
+      // never resubmits already-settled chunks.
       const allOutcomes: SyncOutcome[] = [];
       let remaining = records;
-      let currentQueue = queue;
       while (remaining.length > 0) {
         const chunk = remaining.slice(0, SYNC_CHUNK_SIZE);
         remaining = remaining.slice(chunk.length);
@@ -238,14 +248,10 @@ export function OfflineKit({
           })),
         );
         const settled = settledStudentIds(result.results);
-        currentQueue = dropSynced(currentQueue, settled) ?? { bundle: queue.bundle, queued: [] };
+        const nextQueue = await dropSynced(queue, settled);
+        setQueue(nextQueue);
       }
       setOutcomes(allOutcomes);
-      // Every per-record status is a settlement: accepted entries are recorded,
-      // duplicates were already recorded by an earlier sync, and
-      // rejected/invalid-signature claims are verdicts, not retries. The queue
-      // drops them all so nothing is endlessly resubmitted.
-      setQueue(currentQueue);
     } catch (cause) {
       setError(
         describeConvexError(

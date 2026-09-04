@@ -47,3 +47,13 @@ export function institutionOffsetMinutes(timestamp: number): number {
   const minutes = match[3] !== undefined ? Number.parseInt(match[3], 10) : 0;
   return sign * (hours * 60 + minutes);
 }
+
+/**
+ * Wall-clock minutes-of-day (0..1439) in the institution timezone for a UTC
+ * instant — local time is UTC plus the east-of-UTC offset, wrapped by day.
+ */
+export function institutionMinutesOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+  return (utcMinutes + institutionOffsetMinutes(timestamp) + 1440) % 1440;
+}

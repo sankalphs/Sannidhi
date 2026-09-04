@@ -193,13 +193,23 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   // Page 1 is live: every check-in pushes a new row into it. The older-pages
   // walk only needs to re-run when the page boundary (cursor) actually moves,
   // so live updates never flicker older rows away. Stale overlap is harmless:
-  // seenSeqs dedupes and the sort is by seq.
+  // seenSeqs dedupes and the sort is by seq. The cache is keyed by the caller:
+  // rows fetched for one actor/institution must never render for another.
   const olderCursor = eventsResult?.nextCursor;
-  const olderEventsRef = useRef<{ cursor: number | undefined; events: LedgerEvent[] } | null>(null);
+  const olderEventsRef = useRef<{
+    actorToken: string;
+    cursor: number | undefined;
+    events: LedgerEvent[];
+  } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    async function loadOlder() {
+    // No older pages (or a fresh caller): show nothing stale.
+    if (olderCursor === undefined || olderEventsRef.current?.actorToken !== actorToken) {
+      olderEventsRef.current = null;
+      setOlderEvents([]);
       if (olderCursor === undefined) return;
+    }
+    async function loadOlder() {
       if (olderEventsRef.current?.cursor === olderCursor) return;
       const collected: LedgerEvent[] = [];
       let cursorSeq: number | undefined = olderCursor;
@@ -217,7 +227,7 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
         return;
       }
       if (!cancelled) {
-        olderEventsRef.current = { cursor: olderCursor, events: collected };
+        olderEventsRef.current = { actorToken, cursor: olderCursor, events: collected };
         setOlderEvents(collected);
       }
     }

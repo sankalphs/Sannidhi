@@ -11,13 +11,18 @@ import { signRecord, type OfflineBundle, type SignedOfflineRecord } from "@/lib/
  * structured clone in localStorage is enough for one live class window, and a
  * stale queue simply fails HMAC verification after a re-mint rotates the key.
  *
- * Multiple tabs share one storage key, so every write re-reads the stored
- * state first and every read validates the queued items: a malformed record
- * (tampered storage, schema drift) is dropped instead of bricking the queue,
- * and one tab's edit cannot silently erase another tab's queued records.
+ * Multiple tabs share one storage key, so every mutation runs under the Web
+ * Locks API (navigator.locks) when available: the read-modify-write cycle is
+ * serialized across tabs, so one tab's edit can never silently erase
+ * another tab's queued records. Reads validate every queued item: a malformed
+ * record (tampered storage, schema drift) is dropped instead of bricking
+ * the queue.
  */
 
 const STORAGE_KEY = "sannidhi.offline-queue";
+const QUEUE_LOCK_NAME = "sannidhi.offline-queue.lock";
+/** BroadcastChannel announcing a queue wipe so live tabs drop their in-memory copies. */
+const QUEUE_CLEARED_CHANNEL = "sannidhi.offline-queue.cleared";
 
 export type QueuedRecord = SignedOfflineRecord & { studentName: string };
 
@@ -64,13 +69,30 @@ function loadState(sessionId: string): OfflineQueueState | null {
   }
 }
 
-/** Writes a fresh state, dropping any records another tab queued since our last read. */
 function saveState(state: OfflineQueueState): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+/**
+ * Runs a mutation under a cross-tab lock when the browser supports Web Locks
+ * (all modern ones do); without it we fall back to best-effort merge, same
+ * as before the lock existed.
+ */
+async function withQueueLock<T>(action: () => T | Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (locks === undefined) return action();
+  return locks.request(QUEUE_LOCK_NAME, { mode: "exclusive" }, () => action());
+}
+
 export function clearQueue(): void {
   window.localStorage.removeItem(STORAGE_KEY);
+  // Tell live tabs to drop their in-memory copies so a stale OfflineKit
+  // cannot write queued student names back into storage after sign-out.
+  try {
+    new BroadcastChannel(QUEUE_CLEARED_CHANNEL).postMessage("cleared");
+  } catch {
+    // BroadcastChannel can be unavailable; the wipe itself already happened.
+  }
 }
 
 /** Loads the queue for one session; other sessions' queues are discarded (one live class window). */
@@ -78,37 +100,35 @@ export function readQueue(sessionId: string): OfflineQueueState | null {
   return loadState(sessionId);
 }
 
-/** Whether another session still holds unsynced records — minting now would destroy them. */
-export function hasForeignUnsyncedQueue(sessionId: string): boolean {
+/**
+ * Whether the stored queue holds any valid unsynced record at all — same
+ * session or another one. Minting overwrites (and the server mint rotates
+ * the key for) whatever is stored, so any queued record blocks it.
+ */
+export function hasAnyUnsyncedRecords(): boolean {
   if (typeof window === "undefined") return false;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw === null) return false;
     const parsed = JSON.parse(raw) as Partial<OfflineQueueState> | null;
     if (parsed === null || typeof parsed.bundle?.sessionId !== "string") return false;
-    if (parsed.bundle.sessionId === sessionId) return false;
     return Array.isArray(parsed.queued) && parsed.queued.some(isQueuedRecord);
   } catch {
     return false;
   }
 }
 
-export function rememberBundle(sessionId: string, bundle: OfflineBundle): OfflineQueueState {
-  const state: OfflineQueueState = { bundle, queued: [] };
-  saveState(state);
-  return state;
-}
-
 /**
- * Re-reads storage before writing so another tab's concurrently-queued
- * records survive; the returned state reflects that merged reality.
+ * Replaces the stored queue with a fresh bundle — must run under the queue
+ * lock so it cannot race another tab's enqueue mid-flight.
  */
-function mergeWithStored(state: OfflineQueueState): OfflineQueueState {
-  const stored = loadState(state.bundle.sessionId);
-  if (stored === null) return state;
-  const ours = new Set(state.queued.map((record) => record.studentId));
-  const preserved = stored.queued.filter((record) => !ours.has(record.studentId));
-  return preserved.length > 0 ? { ...state, queued: [...state.queued, ...preserved] } : state;
+export async function rememberBundle(
+  sessionId: string,
+  bundle: OfflineBundle,
+): Promise<OfflineQueueState> {
+  const state: OfflineQueueState = { bundle, queued: [] };
+  await withQueueLock(() => saveState(state));
+  return state;
 }
 
 /** Signs and appends one attestation; each record gets a fresh nonce so replays dedupe server-side. */
@@ -126,47 +146,67 @@ export async function enqueueStudent(
     nonce: crypto.randomUUID(),
     ...(note.trim().length > 0 ? { note: note.trim() } : {}),
   });
-  const queued = state.queued.filter((item) => item.studentId !== student.id);
-  const next: OfflineQueueState = {
-    bundle: state.bundle,
-    queued: [...queued, { ...record, studentName: student.name }],
-  };
-  const merged = mergeWithStored(next);
-  saveState(merged);
-  return merged;
+  return withQueueLock(() => {
+    // Re-read under the lock so a concurrently-queued record from another
+    // tab survives this write, and return the merged reality.
+    const stored = loadState(state.bundle.sessionId);
+    const queued = (stored ?? state).queued.filter((item) => item.studentId !== student.id);
+    const next: OfflineQueueState = {
+      bundle: state.bundle,
+      queued: [...queued, { ...record, studentName: student.name }],
+    };
+    saveState(next);
+    return next;
+  });
 }
 
 /** Removes one queued record (by student) and persists the result; a fully emptied queue is wiped. */
-export function removeFromQueue(
+export async function removeFromQueue(
   state: OfflineQueueState,
   studentId: string,
-): OfflineQueueState | null {
-  const stored = loadState(state.bundle.sessionId);
-  const current = stored ?? state;
-  const queued = current.queued.filter((record) => record.studentId !== studentId);
-  if (queued.length === 0) {
-    clearQueue();
-    return null;
-  }
-  const next: OfflineQueueState = { bundle: current.bundle, queued };
-  saveState(next);
-  return next;
+): Promise<OfflineQueueState | null> {
+  return withQueueLock(() => {
+    const stored = loadState(state.bundle.sessionId);
+    const current = stored ?? state;
+    const queued = current.queued.filter((record) => record.studentId !== studentId);
+    if (queued.length === 0) {
+      clearQueue();
+      return null;
+    }
+    const next: OfflineQueueState = { bundle: current.bundle, queued };
+    saveState(next);
+    return next;
+  });
 }
+
 /** Drops synced records (by student) from the queue, keeping unsynced ones intact. */
-export function dropSynced(
+export async function dropSynced(
   state: OfflineQueueState,
   syncedStudentIds: ReadonlySet<string>,
-): OfflineQueueState | null {
-  const stored = loadState(state.bundle.sessionId);
-  const current = stored ?? state;
-  const queued = current.queued.filter((record) => !syncedStudentIds.has(record.studentId));
-  if (queued.length === 0) {
-    clearQueue();
-    return null;
+): Promise<OfflineQueueState | null> {
+  return withQueueLock(() => {
+    const stored = loadState(state.bundle.sessionId);
+    const current = stored ?? state;
+    const queued = current.queued.filter((record) => !syncedStudentIds.has(record.studentId));
+    if (queued.length === 0) {
+      clearQueue();
+      return null;
+    }
+    const next: OfflineQueueState = { bundle: current.bundle, queued };
+    saveState(next);
+    return next;
+  });
+}
+
+/** Subscribes to queue wipes (sign-out in another tab); returns an unsubscribe. */
+export function subscribeQueueCleared(listener: () => void): () => void {
+  try {
+    const channel = new BroadcastChannel(QUEUE_CLEARED_CHANNEL);
+    channel.addEventListener("message", listener);
+    return () => channel.close();
+  } catch {
+    return () => {};
   }
-  const next: OfflineQueueState = { bundle: current.bundle, queued };
-  saveState(next);
-  return next;
 }
 
 export type SyncResultStatus =

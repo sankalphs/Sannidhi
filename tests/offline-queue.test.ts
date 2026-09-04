@@ -5,15 +5,20 @@ import {
   clearQueue,
   dropSynced,
   enqueueStudent,
-  hasForeignUnsyncedQueue,
+  hasAnyUnsyncedRecords,
   readQueue,
   rememberBundle,
   removeFromQueue,
   settledStudentIds,
+  subscribeQueueCleared,
   type OfflineQueueState,
 } from "@/lib/client/offline-queue";
 
 const BUNDLE = { sessionId: "session_1", key: "a".repeat(64) };
+
+async function freshQueue(): Promise<OfflineQueueState> {
+  return rememberBundle("session_1", BUNDLE);
+}
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -21,8 +26,8 @@ beforeEach(() => {
 });
 
 describe("rememberBundle / readQueue", () => {
-  it("round-trips a fresh bundle with an empty queue", () => {
-    const state = rememberBundle("session_1", BUNDLE);
+  it("round-trips a fresh bundle with an empty queue", async () => {
+    const state = await freshQueue();
     expect(state.queued).toEqual([]);
     const loaded = readQueue("session_1");
     expect(loaded).not.toBeNull();
@@ -34,8 +39,8 @@ describe("rememberBundle / readQueue", () => {
     expect(readQueue("session_1")).toBeNull();
   });
 
-  it("returns null for a different session's queue — one live class window", () => {
-    rememberBundle("session_1", BUNDLE);
+  it("returns null for a different session's queue — one live class window", async () => {
+    await freshQueue();
     expect(readQueue("session_2")).toBeNull();
     expect(readQueue("session_1")).not.toBeNull();
   });
@@ -51,7 +56,7 @@ describe("rememberBundle / readQueue", () => {
   });
 
   it("drops malformed queued records instead of failing the whole queue", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
     // Simulate schema drift / tampering on one record: the other survives.
     const tampered = {
@@ -66,31 +71,17 @@ describe("rememberBundle / readQueue", () => {
   });
 });
 
-describe("hasForeignUnsyncedQueue", () => {
-  it("reports another session's unsynced records", async () => {
-    await enqueueStudent(
-      rememberBundle("session_1", BUNDLE),
-      { id: "student_1", name: "A" },
-      "section_1",
-      "n",
-    );
-    expect(hasForeignUnsyncedQueue("session_2")).toBe(true);
+describe("hasAnyUnsyncedRecords", () => {
+  it("reports any unsynced record — same session or another", async () => {
+    await enqueueStudent(await freshQueue(), { id: "student_1", name: "A" }, "section_1", "n");
+    // Minting overwrites the queue and rotates the key: any queued record
+    // blocks it, regardless of which session queued it.
+    expect(hasAnyUnsyncedRecords()).toBe(true);
   });
 
-  it("ignores the same session's queue", async () => {
-    await enqueueStudent(
-      rememberBundle("session_1", BUNDLE),
-      { id: "student_1", name: "A" },
-      "section_1",
-      "n",
-    );
-    expect(hasForeignUnsyncedQueue("session_1")).toBe(false);
-  });
-
-  it("ignores an empty or absent queue", () => {
-    rememberBundle("session_1", BUNDLE);
-    expect(hasForeignUnsyncedQueue("session_2")).toBe(false);
-    expect(hasForeignUnsyncedQueue("session_3")).toBe(false);
+  it("ignores an empty or absent queue", async () => {
+    await freshQueue();
+    expect(hasAnyUnsyncedRecords()).toBe(false);
   });
 });
 
@@ -98,7 +89,7 @@ describe("cross-tab merge", () => {
   it("preserves another tab's queued record when this tab enqueues", async () => {
     // Tab A queues a student and holds its state in memory.
     const tabA = await enqueueStudent(
-      rememberBundle("session_1", BUNDLE),
+      await freshQueue(),
       { id: "student_1", name: "A" },
       "section_1",
       "n1",
@@ -119,12 +110,12 @@ describe("cross-tab merge", () => {
   });
 
   it("removal deletes only the removed student across tabs", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
     state = await enqueueStudent(state, { id: "student_2", name: "B" }, "section_1", "n2");
     // A stale tab removes student_1; storage (with both records) is the truth.
     const staleTab: OfflineQueueState = { bundle: BUNDLE, queued: state.queued.slice(0, 1) };
-    const next = removeFromQueue(staleTab, "student_1");
+    const next = await removeFromQueue(staleTab, "student_1");
     expect(next?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
     expect(readQueue("session_1")?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
   });
@@ -132,7 +123,7 @@ describe("cross-tab merge", () => {
 
 describe("enqueueStudent", () => {
   it("signs and persists one record per attested student", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(
       state,
       { id: "student_1", name: "Aarav Patel" },
@@ -147,7 +138,7 @@ describe("enqueueStudent", () => {
   });
 
   it("uses a fresh nonce per record so replays dedupe server-side", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "");
     state = await enqueueStudent(state, { id: "student_2", name: "B" }, "section_1", "");
     const nonces = state.queued.map((record) => record.nonce);
@@ -155,7 +146,7 @@ describe("enqueueStudent", () => {
   });
 
   it("omits an empty note from the signed payload instead of signing a blank", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "   ");
     expect("note" in state.queued[0]).toBe(false);
   });
@@ -163,31 +154,31 @@ describe("enqueueStudent", () => {
 
 describe("dropSynced", () => {
   it("removes only the synced students and keeps the rest", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
     state = await enqueueStudent(state, { id: "student_2", name: "B" }, "section_1", "n2");
-    const next = dropSynced(state, new Set(["student_1"]));
+    const next = await dropSynced(state, new Set(["student_1"]));
     expect(next).not.toBeNull();
     expect(next?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
     expect(readQueue("session_1")?.queued).toHaveLength(1);
   });
 
   it("clears storage entirely once nothing is left", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
-    expect(dropSynced(state, new Set(["student_1"]))).toBeNull();
+    expect(await dropSynced(state, new Set(["student_1"]))).toBeNull();
     expect(window.localStorage.getItem("sannidhi.offline-queue")).toBeNull();
   });
 
   it("drops a duplicate sync result so it is never resubmitted", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
     // The server already recorded this nonce on an earlier sync; the batch
     // reports duplicate and settledStudentIds must still include the student
     // so dropSynced removes the record instead of queueing it forever.
     const settled = settledStudentIds([{ studentId: "student_1", status: "duplicate" }]);
     expect(settled.has("student_1")).toBe(true);
-    expect(dropSynced(state, settled)).toBeNull();
+    expect(await dropSynced(state, settled)).toBeNull();
     expect(readQueue("session_1")).toBeNull();
   });
 });
@@ -208,19 +199,19 @@ describe("settledStudentIds", () => {
 
 describe("removeFromQueue", () => {
   it("persists the removal so the record stays gone after a dialog reopen", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
     state = await enqueueStudent(state, { id: "student_2", name: "B" }, "section_1", "n2");
-    const next = removeFromQueue(state, "student_1");
+    const next = await removeFromQueue(state, "student_1");
     expect(next).not.toBeNull();
     expect(next?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
     expect(readQueue("session_1")?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
   });
 
   it("wipes storage when the last record is removed", async () => {
-    let state = rememberBundle("session_1", BUNDLE);
+    let state = await freshQueue();
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
-    expect(removeFromQueue(state, "student_1")).toBeNull();
+    expect(await removeFromQueue(state, "student_1")).toBeNull();
     expect(window.localStorage.getItem("sannidhi.offline-queue")).toBeNull();
   });
 });
@@ -228,7 +219,7 @@ describe("removeFromQueue", () => {
 describe("clearQueue", () => {
   it("wipes any stored queue", async () => {
     const state = await enqueueStudent(
-      rememberBundle("session_1", BUNDLE),
+      await freshQueue(),
       { id: "student_1", name: "A" },
       "section_1",
       "n",
@@ -236,5 +227,15 @@ describe("clearQueue", () => {
     expect(state.queued).toHaveLength(1);
     clearQueue();
     expect(readQueue("session_1")).toBeNull();
+  });
+
+  it("broadcasts the wipe so live tabs can drop their in-memory copies", async () => {
+    await enqueueStudent(await freshQueue(), { id: "student_1", name: "A" }, "section_1", "n");
+    const seen: string[] = [];
+    const unsubscribe = subscribeQueueCleared(() => seen.push("cleared"));
+    clearQueue();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(seen).toEqual(["cleared"]);
+    unsubscribe();
   });
 });
