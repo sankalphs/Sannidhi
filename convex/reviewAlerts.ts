@@ -197,7 +197,9 @@ export const listReviewAlerts = query({
     const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 100)), MAX_ALERTS_PER_LIST);
 
     // Three small index scans (one per status) so the inbox gets open alerts
-    // plus resolved history without a cross-status index range read.
+    // plus resolved history without a cross-status index range read. Each
+    // scan is bounded by the display limit so a huge backlog cannot be
+    // walked (and user-joined) just to be sliced away.
     const statuses: Array<Doc<"review_alerts">["status"]> = ["open", "acknowledged", "dismissed"];
     const rows: Array<Doc<"review_alerts">> = [];
     for (const status of statuses) {
@@ -207,7 +209,9 @@ export const listReviewAlerts = query({
         .withIndex("by_institution_status_detected", (q) =>
           q.eq("institutionId", caller.institutionId).eq("status", status),
         )
-        .collect();
+        // Detected-newest first: the inbox shows latest alerts at the top.
+        .order("desc")
+        .take(limit);
       rows.push(...batch);
     }
 

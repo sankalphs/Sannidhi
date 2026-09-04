@@ -147,16 +147,20 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
         ) : null}
       </div>
 
-      <textarea
-        value={csvText}
-        onChange={(event) => setCsvText(event.target.value)}
-        rows={6}
-        spellCheck={false}
-        placeholder={
-          "department_code,department_name,course_code,course_title,section_name,term,student_email,student_name,usn"
-        }
-        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
-      />
+      <label className="flex flex-col gap-1">
+        <span className="text-sm font-medium">Roster CSV</span>
+        <textarea
+          value={csvText}
+          onChange={(event) => setCsvText(event.target.value)}
+          rows={6}
+          spellCheck={false}
+          aria-label="Roster CSV"
+          placeholder={
+            "department_code,department_name,course_code,course_title,section_name,term,student_email,student_name,usn"
+          }
+          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
+        />
+      </label>
 
       {parsed.issues.length > 0 ? (
         <ul className="text-destructive flex list-disc flex-col gap-1 pl-5 text-xs">

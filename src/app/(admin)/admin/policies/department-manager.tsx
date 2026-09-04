@@ -25,8 +25,7 @@ function describeError(cause: unknown): string {
 
 /**
  * Admin-side department administration: create, rename, and scope
- * department authorities and courses into departments. Membership edits use
- * full-replace semantics through assignUserToDepartments.
+ * department courses through roster sync.
  */
 export function DepartmentManager({
   departments,
@@ -91,8 +90,8 @@ export function DepartmentManager({
       <div>
         <h2 className="text-lg font-semibold">Departments</h2>
         <p className="text-muted-foreground text-sm">
-          Multi-department administration — create departments and link policy scopes. Assign
-          members and courses from the directory below.
+          Multi-department administration — create departments and link policy scopes. Courses land
+          in departments through roster sync.
         </p>
       </div>
 

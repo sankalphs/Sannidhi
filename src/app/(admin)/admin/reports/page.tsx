@@ -84,7 +84,7 @@ export default async function AdminReportsPage({
       <EmptyState
         icon={Users}
         title="Administrator access required"
-        description="Analytics are visible to administrators and department authority."
+        description="Reports are visible to administrators and department authority."
       />
     );
   }

@@ -107,14 +107,18 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               }}
             />
           </label>
-          <textarea
-            value={csvText}
-            onChange={(event) => setCsvText(event.target.value)}
-            rows={6}
-            spellCheck={false}
-            placeholder={"email,name,role\nstudent@sit.edu.in,Student Name,student"}
-            className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">CSV</span>
+            <textarea
+              value={csvText}
+              onChange={(event) => setCsvText(event.target.value)}
+              rows={6}
+              spellCheck={false}
+              aria-label="Invite CSV"
+              placeholder={"email,name,role\nstudent@sit.edu.in,Student Name,student"}
+              className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
+            />
+          </label>
           {csvText.trim().length > 0 && parsed.errors.length > 0 ? (
             <ul className="text-destructive flex list-disc flex-col gap-1 pl-5 text-xs">
               {parsed.errors.map((parseError) => (
@@ -160,17 +164,21 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
             value={singleName}
             onChange={(event) => setSingleName(event.target.value)}
           />
-          <select
-            value={singleRole}
-            onChange={(event) => setSingleRole(event.target.value as Role)}
-            className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
-          >
-            {ROLES.map((role) => (
-              <option key={role} value={role}>
-                {role.replace("_", " ")}
-              </option>
-            ))}
-          </select>
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Role</span>
+            <select
+              value={singleRole}
+              onChange={(event) => setSingleRole(event.target.value as Role)}
+              aria-label="Invite role"
+              className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
+            >
+              {ROLES.map((role) => (
+                <option key={role} value={role}>
+                  {role.replace("_", " ")}
+                </option>
+              ))}
+            </select>
+          </label>
           <Button
             size="sm"
             className="w-fit"

@@ -83,28 +83,6 @@ async function touchByTokenHash(
   return expiresAt;
 }
 
-export const touch = internalMutation({
-  args: { tokenHash: v.string(), slidingTtlMs: v.optional(v.number()) },
-  handler: async (ctx, args) => {
-    const expiresAt = await touchByTokenHash(
-      ctx,
-      args.tokenHash,
-      args.slidingTtlMs ?? SESSION_TTL_MS,
-    );
-    if (expiresAt === null) throw new Error("session not active");
-    return { expiresAt };
-  },
-});
-
-export const touchBySid = internalMutation({
-  args: { sid: v.string() },
-  handler: async (ctx, args) => {
-    const tokenHash = await hashSessionSid(args.sid);
-    await touchByTokenHash(ctx, tokenHash, SESSION_TTL_MS);
-    return { ok: true as const };
-  },
-});
-
 export const markStepUp = internalMutation({
   args: { sid: v.string() },
   handler: async (ctx, args) => {
@@ -129,53 +107,6 @@ export const getSessionStepUpStatus = query({
       .unique();
     if (row === null || !isActiveSession(row, Date.now())) return { lastStepUpAt: null };
     return { lastStepUpAt: row.lastStepUpAt ?? null };
-  },
-});
-
-export const revokeBySid = internalMutation({
-  args: { sid: v.string() },
-  handler: async (ctx, args) => {
-    const tokenHash = await hashSessionSid(args.sid);
-    const row = await getActiveRow(ctx, tokenHash);
-    if (row === null) return { revoked: false };
-    await ctx.db.patch(row._id, { revokedAt: Date.now() });
-    return { revoked: true };
-  },
-});
-
-export const revokeAllForCredential = internalMutation({
-  args: { userId: v.id("users"), credentialId: v.string() },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    let count = 0;
-    for (const session of sessions) {
-      if (session.credentialId !== args.credentialId || !isActiveSession(session, now)) continue;
-      await ctx.db.patch(session._id, { revokedAt: now });
-      count += 1;
-    }
-    return count;
-  },
-});
-
-export const revokeAllForUser = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const sessions = await ctx.db
-      .query("sessions")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .collect();
-    let count = 0;
-    for (const session of sessions) {
-      if (!isActiveSession(session, now)) continue;
-      await ctx.db.patch(session._id, { revokedAt: now });
-      count += 1;
-    }
-    return count;
   },
 });
 
@@ -216,21 +147,6 @@ export const getSessionFreshAuthBySid = internalQuery({
       now - row.lastStepUpAt <= args.maxAgeMs;
     if (!fresh) throw new Error("identity re-verification required");
     return { fresh: true as const };
-  },
-});
-
-export const getSessionFreshAuth = query({
-  args: { actorToken: v.string() },
-  handler: async (ctx, args) => {
-    const claims = await verifyActorToken(args.actorToken);
-    if (claims.sid === undefined) return { lastSeenAt: null };
-    const tokenHash = await hashSessionSid(claims.sid);
-    const row = await ctx.db
-      .query("sessions")
-      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
-      .unique();
-    if (row === null || !isActiveSession(row, Date.now())) return { lastSeenAt: null };
-    return { lastSeenAt: row.lastSeenAt ?? null };
   },
 });
 

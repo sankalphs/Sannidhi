@@ -128,13 +128,25 @@ export const listMySchedule = query({
     const now = Date.now();
     const today = institutionDayOfWeek(now);
 
-    const slots = await ctx.db.query("timetable_slots").collect();
+    // Index reads instead of a cross-institution table scan: this faculty's
+    // slots for today, plus faculty-less slots any faculty member may run.
+    // Sorting keeps the merged list deterministic for the render below.
+    const [assigned, shared] = await Promise.all([
+      ctx.db
+        .query("timetable_slots")
+        .withIndex("by_faculty_day", (q) => q.eq("facultyId", caller._id).eq("dayOfWeek", today))
+        .collect(),
+      ctx.db
+        .query("timetable_slots")
+        .withIndex("by_faculty_day", (q) => q.eq("facultyId", undefined).eq("dayOfWeek", today))
+        .collect(),
+    ]);
+    const slots = [...assigned, ...shared].sort(
+      (a, b) => a.startMinutes - b.startMinutes || a._id.localeCompare(b._id),
+    );
     const rows: ScheduleRow[] = [];
 
     for (const slot of slots) {
-      if (slot.dayOfWeek !== today) continue;
-      if (slot.facultyId !== undefined && slot.facultyId !== caller._id) continue;
-
       const section = await ctx.db.get(slot.sectionId);
       if (section === null) continue;
       const course = await ctx.db.get(section.courseId);
@@ -282,7 +294,13 @@ export const close = mutation({
     if (session.status !== "active" && session.status !== "paused") {
       throw new ConvexError("session_already_closed");
     }
-    await ctx.db.patch(session._id, { status: "closed", closedAt: Date.now() });
+    // Closing ends offline capture too: the bundle key dies with the window
+    // so a stale device copy can no longer append attendance rows.
+    await ctx.db.patch(session._id, {
+      status: "closed",
+      closedAt: Date.now(),
+      offlineKey: undefined,
+    });
     await appendSessionLedgerEvent(ctx, {
       session,
       type: "session.closed",
@@ -313,6 +331,9 @@ export const restart = mutation({
       windowEndsAt,
       pausedAt: undefined,
       closedAt: undefined,
+      // A restarted window must re-authorize offline capture; the old key
+      // cannot vouch for the new window.
+      offlineKey: undefined,
     });
     await appendSessionLedgerEvent(ctx, {
       session,

@@ -28,3 +28,32 @@ const DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
 export function institutionDateKey(timestamp: number): string {
   return DATE_KEY_FORMATTER.format(timestamp);
 }
+
+/**
+ * Minutes the institution timezone is offset from UTC at the given instant —
+ * positive east of UTC. Lets callers compute IST wall-clock time from a UTC
+ * clock without dragging in a full date library.
+ */
+export function institutionOffsetMinutes(timestamp: number): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: INSTITUTION_TIME_ZONE,
+    timeZoneName: "shortOffset",
+  }).formatToParts(timestamp);
+  const name = parts.find((part) => part.type === "timeZoneName")?.value ?? "GMT+5:30";
+  const match = /GMT([+-])(\d{1,2})(?::(\d{2}))?/.exec(name);
+  if (match === null) return 330;
+  const sign = match[1] === "-" ? -1 : 1;
+  const hours = Number.parseInt(match[2], 10);
+  const minutes = match[3] !== undefined ? Number.parseInt(match[3], 10) : 0;
+  return sign * (hours * 60 + minutes);
+}
+
+/**
+ * Wall-clock minutes-of-day (0..1439) in the institution timezone for a UTC
+ * instant — local time is UTC plus the east-of-UTC offset, wrapped by day.
+ */
+export function institutionMinutesOfDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  const utcMinutes = date.getUTCHours() * 60 + date.getUTCMinutes();
+  return (utcMinutes + institutionOffsetMinutes(timestamp) + 1440) % 1440;
+}

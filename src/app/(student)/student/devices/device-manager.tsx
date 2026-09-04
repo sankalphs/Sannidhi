@@ -278,12 +278,16 @@ export function DeviceManager({
               <span className="text-muted-foreground">Passkey assertion accepted.</span>
             </p>
           )}
-          <textarea
-            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-            placeholder="Why does this device need replacement?"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Reason</span>
+            <textarea
+              className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+              placeholder="Why does this device need replacement?"
+              aria-label="Replacement reason"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
           <div className="flex gap-2">
             <Button
               size="sm"

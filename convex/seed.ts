@@ -3,6 +3,7 @@ import type { MutationCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { hashInviteToken } from "../src/lib/invites/token";
 import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
+import { institutionDayOfWeek, institutionMinutesOfDay } from "../src/lib/attendance/timezone";
 import { computeEventHash } from "../src/lib/ledger/hash";
 import { RISK_POLICY_VERSION } from "../src/lib/risk/types";
 import type { Decision } from "../src/lib/decision";
@@ -236,11 +237,16 @@ export const seedDemoData = internalMutation({
       slotCount += 1;
     }
 
-    const seedMoment = new Date(now);
-    const todayDayOfWeek = seedMoment.getDay();
+    // The "live today" slot must land on the institution's calendar day (IST),
+    // not the server's zone — seed-time day math and read-time day math
+    // (listMySchedule) must agree.
+    const todayDayOfWeek = institutionDayOfWeek(now);
     const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
-    const currentMinutes = seedMoment.getHours() * 60 + seedMoment.getMinutes();
-    const liveStartMinutes = Math.max(0, currentMinutes - 15);
+    // IST minutes-of-day: local wall clock is UTC plus the east-of-UTC
+    // offset, wrapped by day, so the slot's start/end fall inside the day
+    // faculty actually see.
+    const istMinutesOfDay = institutionMinutesOfDay(now);
+    const liveStartMinutes = Math.max(0, istMinutesOfDay - 15);
     const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
 
     await ctx.db.insert("timetable_slots", {

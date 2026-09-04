@@ -46,7 +46,13 @@ export const expireStaleChallenges = internalMutation({
         .take(Math.min(BATCH_SIZE, MAX_SESSION_AUTOCLOSES_PER_RUN - autoClosedSessions));
       if (batch.length === 0) break;
       for (const session of batch) {
-        await ctx.db.patch(session._id, { status: "closed", closedAt: now });
+        await ctx.db.patch(session._id, {
+          status: "closed",
+          closedAt: now,
+          // Auto-close ends offline capture too: the bundle key dies with
+          // the window so a stale device copy can no longer append rows.
+          offlineKey: undefined,
+        });
         // Auto-close has no actor; every faculty-driven transition carries one.
         await ctx.runMutation(internal.ledger.appendLedgerEvent, {
           institutionId: session.institutionId,

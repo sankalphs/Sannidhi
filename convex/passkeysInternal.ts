@@ -153,24 +153,47 @@ export const completeRegistration = internalMutation({
       throw new Error("challenge invalid or expired");
     }
 
-    const existing = await ctx.db
+    // Collect every row for this credentialId: legacy data can hold more
+    // than one (revoked + active from a pre-dedup bug). Any live duplicate
+    // fails the registration closed rather than arbitrarily reactivating
+    // one row while .unique()-based auth lookups stay broken.
+    const existingRows = await ctx.db
       .query("passkey_credentials")
       .withIndex("by_credentialId", (q) => q.eq("credentialId", args.credentialId))
-      .unique();
-    if (existing !== null && existing.revokedAt === undefined) {
-      throw new Error("credential already registered");
+      .collect();
+    const existing = existingRows[0];
+    if (existingRows.length > 1) {
+      throw new Error("duplicate credential records");
     }
 
     await ctx.db.patch(challengeRow._id, { consumedAt: now });
 
-    await ctx.db.insert("passkey_credentials", {
-      userId: args.userId,
-      credentialId: args.credentialId,
-      publicKey: args.publicKey,
-      counter: args.counter,
-      transports: args.transports,
-      createdAt: now,
-    });
+    if (existing !== null) {
+      // A re-registered credentialId reactivates its row instead of inserting
+      // a duplicate — by_credentialId lookups stay unique-able.
+      if (existing.revokedAt === undefined) {
+        throw new Error("credential already registered");
+      }
+      await ctx.db.patch(existing._id, {
+        userId: args.userId,
+        publicKey: args.publicKey,
+        counter: args.counter,
+        ...(args.transports.length > 0
+          ? { transports: args.transports }
+          : { transports: undefined }),
+        createdAt: now,
+        revokedAt: undefined,
+      });
+    } else {
+      await ctx.db.insert("passkey_credentials", {
+        userId: args.userId,
+        credentialId: args.credentialId,
+        publicKey: args.publicKey,
+        counter: args.counter,
+        transports: args.transports,
+        createdAt: now,
+      });
+    }
 
     const user = await ctx.db.get(args.userId);
     if (user === null) throw new Error("user not found");

@@ -10,10 +10,11 @@ import { institutionDateKey } from "@/lib/attendance/timezone";
 import { cn } from "@/lib/utils";
 
 /**
- * Calendar rows carry the projected attendance state plus the raw "step_up"
- * state, which surfaces as "Challenged" until a follow-up event settles it.
+ * Calendar rows carry the projected attendance state. A raw "step_up" state
+ * never reaches this view: the history query projects it to "pending" until a
+ * follow-up event settles it.
  */
-export type HistoryRecordState = AttendanceRecordState | "step_up";
+export type HistoryRecordState = AttendanceRecordState;
 
 export type HistoryViewRecord = {
   dateKey: string;
@@ -52,7 +53,6 @@ const STATE_CHIP_CLASSES: Record<HistoryRecordState, string> = {
   pending: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-400",
   rejected: "border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-400",
   corrected: "border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-400",
-  step_up: "border-verdict-stepup/40 bg-verdict-stepup/15 text-verdict-stepup",
 };
 
 const STATE_LEGEND_LABELS: Record<HistoryRecordState, string> = {
@@ -61,7 +61,6 @@ const STATE_LEGEND_LABELS: Record<HistoryRecordState, string> = {
   pending: "Pending",
   rejected: "Rejected",
   corrected: "Corrected",
-  step_up: "Challenged",
 };
 
 function pad(value: number): string {

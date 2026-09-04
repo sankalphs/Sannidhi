@@ -14,7 +14,11 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, type MutationCtx } from "./_generated/server";
 import { requireActorUserWithActiveSession } from "./lib/actor";
-import { appendAttendanceEvent, bestDeviceForStudent } from "./lib/attendance_event";
+import {
+  appendAttendanceEvent,
+  bestDeviceForStudent,
+  latestEventForStudent,
+} from "./lib/attendance_event";
 import { resolveSessionPolicy } from "./lib/policyContext";
 
 /**
@@ -33,6 +37,13 @@ import { resolveSessionPolicy } from "./lib/policyContext";
  */
 
 const MAX_SYNC_BATCH = 200;
+
+/** Terminal decision states: once landed for a student in a session, the outcome is settled. */
+const DECISION_EVENT_STATES = ["step_up", "verified", "flagged", "rejected", "corrected"] as const;
+
+function isDecisionEventState(state: string): state is (typeof DECISION_EVENT_STATES)[number] {
+  return (DECISION_EVENT_STATES as readonly string[]).includes(state);
+}
 
 type SyncStatus =
   "accepted" | "step_up" | "flagged" | "rejected" | "duplicate" | "invalid_signature";
@@ -131,6 +142,7 @@ export const syncOfflineBatch = mutation({
     // Session authorization is batch-level and fails closed: every record's
     // trust anchors in the caller owning that session's bundle key, and the
     // per-item status vocabulary has no slot for authorization failures.
+    const now = Date.now();
     const sessions = new Map<Id<"class_sessions">, Doc<"class_sessions">>();
     for (const record of args.records) {
       if (sessions.has(record.sessionId)) continue;
@@ -142,6 +154,9 @@ export const syncOfflineBatch = mutation({
       ) {
         throw new ConvexError("unauthorized");
       }
+      // The bundle pre-authorizes capture within the session window only:
+      // once the window has passed, stale keys can no longer append rows.
+      if (session.windowEndsAt <= now) throw new ConvexError("session_window_ended");
       sessions.set(record.sessionId, session);
     }
 
@@ -153,6 +168,11 @@ export const syncOfflineBatch = mutation({
     // student who is not enrolled in the section is a claim the session's
     // key cannot vouch for.
     const enrolledStudents = new Map<Id<"class_sessions">, Set<Id<"users">>>();
+    // Same-batch dedupe: two tabs can queue the same student twice with
+    // different nonces; only the first record may append. Keyed by session
+    // and student — settlement is per-session, so the same student synced
+    // for two different sessions in one batch is two legitimate appends.
+    const settledInBatch = new Set<string>();
 
     for (const record of args.records) {
       const session = sessions.get(record.sessionId);
@@ -200,6 +220,41 @@ export const syncOfflineBatch = mutation({
         results.push({ studentId: record.studentId, status: "duplicate" });
         continue;
       }
+
+      // Session-settled idempotency, mirroring online check-in: once a
+      // decision state is landed for this student in this session, a stale
+      // queued record echoes the settled outcome instead of appending a
+      // second decision event that could flip it.
+      const settled = await latestEventForStudent(ctx, {
+        studentId: record.studentId,
+        sectionId: session.sectionId,
+        sessionId: session._id,
+        sinceMs: session.startedAt,
+      });
+      const settledKey = `${record.sessionId}:${record.studentId}`;
+      const inBatchDuplicate = settledInBatch.has(settledKey);
+      if (settled !== undefined && isDecisionEventState(settled.state)) {
+        await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+          institutionId: session.institutionId,
+          category: "attendance",
+          type: "attendance.offline_duplicate",
+          actorUserId: faculty._id,
+          subjectUserId: record.studentId,
+          payload: {
+            sessionId: session._id,
+            studentId: record.studentId,
+            nonceHash: digest,
+            settledState: settled.state,
+          },
+        });
+        results.push({ studentId: record.studentId, status: "duplicate" });
+        continue;
+      }
+      if (inBatchDuplicate) {
+        results.push({ studentId: record.studentId, status: "duplicate" });
+        continue;
+      }
+      settledInBatch.add(settledKey);
 
       // Mirror verifyManually's signal building, plus a marker that presence
       // was attested offline; the claimed capture time rides along as detail.

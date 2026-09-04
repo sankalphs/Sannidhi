@@ -142,7 +142,7 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
           {error}
         </p>
       ) : null}
-      {record !== null && record.consentedAt !== null ? (
+      {record !== null && record.consentedAt !== null && record.withdrawnAt === null ? (
         <p className="text-muted-foreground text-xs">
           Consent version <span className="font-mono">{record.consentVersion}</span>
         </p>

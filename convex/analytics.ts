@@ -223,14 +223,11 @@ export const anomalyDashboard = query({
     const flaggedEvents = (
       await ctx.db
         .query("attendance_events")
-        .withIndex("by_capturedAt", (q) => q.gte("capturedAt", sinceMs))
+        .withIndex("by_institution_capturedAt", (q) =>
+          q.eq("institutionId", caller.institutionId).gte("capturedAt", sinceMs),
+        )
         .collect()
-    ).filter(
-      (event) =>
-        event.institutionId === caller.institutionId &&
-        event.state === "flagged" &&
-        event.decision !== undefined,
-    );
+    ).filter((event) => event.state === "flagged" && event.decision !== undefined);
 
     const proxyRows = summarizeProxyAttempts(
       flaggedEvents.map((event) => ({
@@ -250,13 +247,11 @@ export const anomalyDashboard = query({
     const ledgerRows = (
       await ctx.db
         .query("event_ledger")
-        .withIndex("by_createdAt", (q) => q.gte("createdAt", sinceMs))
+        .withIndex("by_institution_createdAt", (q) =>
+          q.eq("institutionId", caller.institutionId).gte("createdAt", sinceMs),
+        )
         .collect()
-    ).filter(
-      (row) =>
-        row.institutionId === caller.institutionId &&
-        (VERIFICATION_ANOMALY_TYPES as readonly string[]).includes(row.type),
-    );
+    ).filter((row) => (VERIFICATION_ANOMALY_TYPES as readonly string[]).includes(row.type));
 
     return {
       sinceMs,
@@ -310,11 +305,11 @@ export const reportRows = query({
     const events = (
       await ctx.db
         .query("attendance_events")
-        .withIndex("by_capturedAt", (q) => q.gte("capturedAt", window.startMs))
+        .withIndex("by_institution_capturedAt", (q) =>
+          q.eq("institutionId", caller.institutionId).gte("capturedAt", window.startMs),
+        )
         .collect()
-    ).filter(
-      (event) => event.capturedAt < window.endMs && event.institutionId === caller.institutionId,
-    );
+    ).filter((event) => event.capturedAt < window.endMs);
 
     const sectionCache = new Map<Id<"sections">, { sectionName: string; courseCode: string }>();
     const userCache = new Map<Id<"users">, Doc<"users"> | null>();
