@@ -7,6 +7,8 @@ import {
   enqueueStudent,
   readQueue,
   rememberBundle,
+  removeFromQueue,
+  settledStudentIds,
 } from "@/lib/client/offline-queue";
 
 const BUNDLE = { sessionId: "session_1", key: "a".repeat(64) };
@@ -93,6 +95,51 @@ describe("dropSynced", () => {
     let state = rememberBundle("session_1", BUNDLE);
     state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
     expect(dropSynced(state, new Set(["student_1"]))).toBeNull();
+    expect(window.localStorage.getItem("sannidhi.offline-queue")).toBeNull();
+  });
+
+  it("drops a duplicate sync result so it is never resubmitted", async () => {
+    let state = rememberBundle("session_1", BUNDLE);
+    state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
+    // The server already recorded this nonce on an earlier sync; the batch
+    // reports duplicate and settledStudentIds must still include the student
+    // so dropSynced removes the record instead of queueing it forever.
+    const settled = settledStudentIds([{ studentId: "student_1", status: "duplicate" }]);
+    expect(settled.has("student_1")).toBe(true);
+    expect(dropSynced(state, settled)).toBeNull();
+    expect(readQueue("session_1")).toBeNull();
+  });
+});
+
+describe("settledStudentIds", () => {
+  it("settles every per-record status — no status is a retry", () => {
+    const settled = settledStudentIds([
+      { studentId: "s1", status: "accepted" },
+      { studentId: "s2", status: "step_up" },
+      { studentId: "s3", status: "flagged" },
+      { studentId: "s4", status: "rejected" },
+      { studentId: "s5", status: "duplicate" },
+      { studentId: "s6", status: "invalid_signature" },
+    ]);
+    expect(settled.size).toBe(6);
+  });
+});
+
+describe("removeFromQueue", () => {
+  it("persists the removal so the record stays gone after a dialog reopen", async () => {
+    let state = rememberBundle("session_1", BUNDLE);
+    state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n1");
+    state = await enqueueStudent(state, { id: "student_2", name: "B" }, "section_1", "n2");
+    const next = removeFromQueue(state, "student_1");
+    expect(next).not.toBeNull();
+    expect(next?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
+    expect(readQueue("session_1")?.queued.map((record) => record.studentId)).toEqual(["student_2"]);
+  });
+
+  it("wipes storage when the last record is removed", async () => {
+    let state = rememberBundle("session_1", BUNDLE);
+    state = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
+    expect(removeFromQueue(state, "student_1")).toBeNull();
     expect(window.localStorage.getItem("sannidhi.offline-queue")).toBeNull();
   });
 });

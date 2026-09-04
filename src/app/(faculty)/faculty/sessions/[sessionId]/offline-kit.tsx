@@ -11,11 +11,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 import {
-  clearQueue,
   dropSynced,
   enqueueStudent,
   readQueue,
   rememberBundle,
+  removeFromQueue,
+  settledStudentIds,
   type OfflineQueueState,
 } from "@/lib/client/offline-queue";
 
@@ -178,13 +179,7 @@ export function OfflineKit({
 
   function handleRemove(studentId: string) {
     if (queue === null) return;
-    const queued = queue.queued.filter((record) => record.studentId !== studentId);
-    if (queued.length === 0) {
-      clearQueue();
-      setQueue(null);
-      return;
-    }
-    setQueue({ ...queue, queued });
+    setQueue(removeFromQueue(queue, studentId));
   }
 
   async function handleSync() {
@@ -212,15 +207,11 @@ export function OfflineKit({
           status,
         })),
       );
-      // Signatures that failed HMAC (stale key) and rejected claims are not
-      // retries: they are dropped from the queue so the faculty sees the
-      // per-student outcome instead of a permanently stuck record.
-      const settled = new Set(
-        result.results
-          .filter(({ status }) => status !== "duplicate")
-          .map(({ studentId }) => studentId),
-      );
-      setQueue(dropSynced(queue, settled));
+      // Every per-record status is a settlement: accepted entries are recorded,
+      // duplicates were already recorded by an earlier sync, and
+      // rejected/invalid-signature claims are verdicts, not retries. The queue
+      // drops them all so nothing is endlessly resubmitted.
+      setQueue(dropSynced(queue, settledStudentIds(result.results)));
     } catch (cause) {
       setError(
         describeConvexError(

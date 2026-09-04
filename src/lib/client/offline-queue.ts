@@ -82,6 +82,20 @@ export async function enqueueStudent(
   return next;
 }
 
+/** Removes one queued record (by student) and persists the result; a fully emptied queue is wiped. */
+export function removeFromQueue(
+  state: OfflineQueueState,
+  studentId: string,
+): OfflineQueueState | null {
+  const queued = state.queued.filter((record) => record.studentId !== studentId);
+  if (queued.length === 0) {
+    clearQueue();
+    return null;
+  }
+  const next: OfflineQueueState = { ...state, queued };
+  saveState(next);
+  return next;
+}
 /** Drops synced records (by student) from the queue, keeping unsynced ones intact. */
 export function dropSynced(
   state: OfflineQueueState,
@@ -95,4 +109,20 @@ export function dropSynced(
   const next: OfflineQueueState = { ...state, queued };
   saveState(next);
   return next;
+}
+
+export type SyncResultStatus =
+  "accepted" | "step_up" | "flagged" | "rejected" | "duplicate" | "invalid_signature";
+
+/**
+ * Every per-record sync status is settled: accepted entries are recorded,
+ * duplicates were already recorded on an earlier sync, and rejected or
+ * invalid-signature claims are verdicts the queue must not resubmit.
+ * Transient failures surface as batch-level errors, which leave the whole
+ * queue intact for a retry.
+ */
+export function settledStudentIds(
+  results: ReadonlyArray<{ studentId: string; status: SyncResultStatus }>,
+): ReadonlySet<string> {
+  return new Set(results.map(({ studentId }) => studentId));
 }
