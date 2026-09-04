@@ -11,6 +11,9 @@ import {
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
+import { evaluateAccess } from "@/lib/auth/guard";
+import { getSessionRole } from "@/lib/auth/server";
+import type { Role } from "@/lib/auth/session";
 
 type DirectoryCard = {
   icon: typeof Users;
@@ -79,7 +82,15 @@ const DIRECTORY: DirectoryCard[] = [
   },
 ];
 
-export default function AdminPage() {
+/* Mirrors the middleware guard: a card is only shown when this role can open its route. */
+function canVisit(role: Role, pathname: string): boolean {
+  return evaluateAccess(pathname, role).status === "allow";
+}
+
+export default async function AdminPage() {
+  const role = await getSessionRole("admin");
+  const cards = DIRECTORY.filter((card) => canVisit(role, card.href));
+
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
@@ -91,7 +102,7 @@ export default function AdminPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Manage</h2>
         <div className="bg-border/70 grid gap-px overflow-hidden rounded-xl border md:grid-cols-2 lg:grid-cols-3">
-          {DIRECTORY.map((card) => (
+          {cards.map((card) => (
             <Link
               key={card.href}
               href={card.href}
