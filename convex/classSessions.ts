@@ -483,6 +483,7 @@ export const getBoard = query({
         venueName: venue?.name ?? "",
         startedAt: session.startedAt,
         windowEndsAt: session.windowEndsAt,
+        closedAt: session.closedAt ?? null,
       },
       rows,
     };
