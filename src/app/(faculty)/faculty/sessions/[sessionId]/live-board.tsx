@@ -209,127 +209,84 @@ export function LiveBoard({
               description="The roster appears once students enroll in this section."
             />
           ) : (
-            <div className="-mx-6 max-h-[70vh] overflow-auto px-6">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-left text-xs font-medium">
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
+            <ul className="-mx-6 divide-y border-t px-6 lg:max-h-[70vh] lg:overflow-auto">
+              {rows.map((row) => (
+                <li
+                  key={row.studentId}
+                  data-testid={`board-row-${row.studentId}`}
+                  className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                >
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-medium">{row.studentName}</span>
+                      <StateBadge state={row.state} />
+                      {row.state === "challenged" && row.challenge !== null ? (
+                        <ChallengeCountdown studentId={row.studentId} challenge={row.challenge} />
+                      ) : null}
+                    </div>
+                    <p className="text-muted-foreground truncate text-xs">{row.email}</p>
+                    <p
+                      className="text-muted-foreground text-xs tabular-nums"
+                      suppressHydrationWarning
                     >
-                      Student
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
-                    >
-                      State
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
-                    >
-                      Checked in
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
-                    >
-                      Reasons
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pb-2"
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr
-                      key={row.studentId}
-                      data-testid={`board-row-${row.studentId}`}
-                      className="border-b last:border-b-0"
-                    >
-                      <td className="py-2.5 pr-4">
-                        <div className="font-medium">{row.studentName}</div>
-                        <div className="text-muted-foreground text-xs">{row.email}</div>
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <StateBadge state={row.state} />
-                          {row.state === "challenged" && row.challenge !== null ? (
-                            <ChallengeCountdown
-                              studentId={row.studentId}
-                              challenge={row.challenge}
-                            />
-                          ) : null}
-                        </div>
-                      </td>
-                      <td
-                        className="text-muted-foreground py-2.5 pr-4 tabular-nums"
-                        suppressHydrationWarning
-                      >
-                        {row.checkedInAt !== null ? formatClock(row.checkedInAt) : "—"}
-                        {row.updatedAt !== null && row.updatedAt !== row.checkedInAt ? (
-                          <div className="text-xs">updated {formatClock(row.updatedAt)}</div>
-                        ) : null}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {row.reasonCodes.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {row.reasonCodes.map((code) => (
-                              <span
-                                key={code}
-                                title={code}
-                                className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-[11px]"
-                              >
-                                {formatReasonCode(code)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5">
-                        {row.state === "verified" ? (
-                          row.challenge?.kind === "spot_recheck" ? (
-                            <span
-                              data-testid={`spot-pending-${row.studentId}`}
-                              className="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"
-                            >
-                              Spot re-check requested
-                            </span>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              data-testid={`spot-recheck-${row.studentId}`}
-                              disabled={recheckBusy}
-                              onClick={() => void handleSpotRecheck(row.studentId)}
-                            >
-                              Recheck
-                            </Button>
-                          )
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="xs"
-                            data-testid={`manual-verify-${row.studentId}`}
-                            onClick={() => setVerifyTarget(row)}
+                      {row.checkedInAt !== null
+                        ? `Checked in ${formatClock(row.checkedInAt)}`
+                        : "Not checked in"}
+                      {row.updatedAt !== null && row.updatedAt !== row.checkedInAt
+                        ? ` · updated ${formatClock(row.updatedAt)}`
+                        : ""}
+                    </p>
+                    {row.reasonCodes.length > 0 ? (
+                      <div className="mt-0.5 flex flex-wrap gap-1">
+                        {row.reasonCodes.map((code) => (
+                          <span
+                            key={code}
+                            title={code}
+                            className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-[11px]"
                           >
-                            <ShieldCheck />
-                            {row.state === "pending" ? "Verify" : "Override"}
-                          </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                            {formatReasonCode(code)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  <div className="shrink-0">
+                    {row.state === "verified" ? (
+                      row.challenge?.kind === "spot_recheck" ? (
+                        <span
+                          data-testid={`spot-pending-${row.studentId}`}
+                          className="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
+                        >
+                          Spot re-check requested
+                        </span>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto"
+                          data-testid={`spot-recheck-${row.studentId}`}
+                          disabled={recheckBusy}
+                          onClick={() => void handleSpotRecheck(row.studentId)}
+                        >
+                          Recheck
+                        </Button>
+                      )
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        data-testid={`manual-verify-${row.studentId}`}
+                        onClick={() => setVerifyTarget(row)}
+                      >
+                        <ShieldCheck />
+                        {row.state === "pending" ? "Verify" : "Override"}
+                      </Button>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>
