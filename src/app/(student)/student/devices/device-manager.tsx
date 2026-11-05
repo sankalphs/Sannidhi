@@ -160,8 +160,9 @@ export function DeviceManager({
           </p>
         ) : (
           <div className="overflow-x-auto rounded-xl border">
+            {/* Below sm each row stacks as a card: label on top, state, date and actions beneath. */}
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-muted-foreground text-left text-xs tracking-wide uppercase">
+              <thead className="bg-muted/50 text-muted-foreground hidden text-left text-xs tracking-wide uppercase sm:table-header-group">
                 <tr>
                   <th className="px-4 py-2 font-medium">Label</th>
                   <th className="px-4 py-2 font-medium">State</th>
@@ -171,8 +172,11 @@ export function DeviceManager({
               </thead>
               <tbody className="divide-y">
                 {devices.map((device) => (
-                  <tr key={device._id}>
-                    <td className="cell-wrap px-4 py-2 font-medium">
+                  <tr
+                    key={device._id}
+                    className="flex flex-wrap items-center gap-2 px-4 py-3 sm:table-row sm:p-0"
+                  >
+                    <td className="cell-wrap w-full font-medium sm:w-auto sm:px-4 sm:py-2">
                       {device.label}
                       {device.stateReason ? (
                         <span className="text-muted-foreground block text-xs">
@@ -180,15 +184,15 @@ export function DeviceManager({
                         </span>
                       ) : null}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="sm:px-4 sm:py-2">
                       <Badge variant={DEVICE_STATE_BADGE_VARIANT[device.state]}>
                         {DEVICE_STATE_LABEL[device.state]}
                       </Badge>
                     </td>
-                    <td className="text-muted-foreground px-4 py-2 text-xs">
+                    <td className="text-muted-foreground text-xs sm:px-4 sm:py-2">
                       {formatDate(device.registeredAt)}
                     </td>
-                    <td className="flex justify-end gap-2 px-4 py-2">
+                    <td className="ml-auto flex justify-end gap-2 sm:ml-0 sm:px-4 sm:py-2">
                       {device.state === "new" && device.replacesDeviceId !== null ? (
                         <Button
                           size="xs"

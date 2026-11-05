@@ -49,6 +49,13 @@ function optionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 
+/** Coordinates and radius on one line, or null when the venue has no geofence. */
+function geofenceLabel(venue: VenueRow): string | null {
+  return venue.latitude !== null && venue.longitude !== null
+    ? `${venue.latitude.toFixed(4)}, ${venue.longitude.toFixed(4)} · ${venue.geofenceRadiusMeters ?? 100}\u00a0m`
+    : null;
+}
+
 /** Builds mutation args from the form; coordinates and radius travel together. */
 function draftToInput(draft: Draft) {
   const latitude = optionalNumber(draft.latitude);
@@ -235,14 +242,14 @@ export function VenueManager({ actorToken, venues }: { actorToken: string; venue
           description="Add your first classroom above, then schedule classes in it below."
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="relative overflow-x-auto rounded-lg border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground text-left text-xs tracking-wide uppercase">
               <tr>
                 <th className="px-4 py-2 font-medium">Venue</th>
-                <th className="px-4 py-2 font-medium">Capacity</th>
-                <th className="px-4 py-2 font-medium">Geofence</th>
-                <th className="px-4 py-2 font-medium">Weekly slots</th>
+                <th className="hidden px-4 py-2 font-medium sm:table-cell">Capacity</th>
+                <th className="hidden px-4 py-2 font-medium sm:table-cell">Geofence</th>
+                <th className="hidden px-4 py-2 font-medium sm:table-cell">Weekly slots</th>
                 <th className="px-4 py-2 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
@@ -251,14 +258,23 @@ export function VenueManager({ actorToken, venues }: { actorToken: string; venue
             <tbody className="divide-y">
               {venues.map((venue) => (
                 <tr key={venue.id}>
-                  <td className="cell-wrap px-4 py-2 font-medium">{venue.name}</td>
-                  <td className="text-muted-foreground px-4 py-2">{venue.capacity ?? "—"}</td>
-                  <td className="text-muted-foreground px-4 py-2 font-mono text-xs">
-                    {venue.latitude !== null && venue.longitude !== null
-                      ? `${venue.latitude.toFixed(4)}, ${venue.longitude.toFixed(4)} · ${venue.geofenceRadiusMeters ?? 100} m`
-                      : "Not set"}
+                  <td className="cell-wrap px-4 py-2 font-medium">
+                    {venue.name}
+                    <span className="text-muted-foreground block text-xs font-normal sm:hidden">
+                      {venue.capacity !== null ? `${venue.capacity} seats · ` : ""}
+                      {venue.slotCount} weekly {venue.slotCount === 1 ? "slot" : "slots"}
+                      <span className="block font-mono">
+                        {geofenceLabel(venue) ?? "No geofence"}
+                      </span>
+                    </span>
                   </td>
-                  <td className="px-4 py-2">{venue.slotCount}</td>
+                  <td className="text-muted-foreground hidden px-4 py-2 sm:table-cell">
+                    {venue.capacity ?? "—"}
+                  </td>
+                  <td className="text-muted-foreground hidden px-4 py-2 font-mono text-xs sm:table-cell">
+                    {geofenceLabel(venue) ?? "Not set"}
+                  </td>
+                  <td className="hidden px-4 py-2 sm:table-cell">{venue.slotCount}</td>
                   <td className="px-4 py-2">
                     <div className="flex justify-end gap-1">
                       <Button
