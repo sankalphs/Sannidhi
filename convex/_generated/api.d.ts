@@ -38,6 +38,7 @@ import type * as passkeys from "../passkeys.js";
 import type * as passkeysInternal from "../passkeysInternal.js";
 import type * as reviewAlerts from "../reviewAlerts.js";
 import type * as rosterSync from "../rosterSync.js";
+import type * as schedule from "../schedule.js";
 import type * as sessions from "../sessions.js";
 import type * as setup from "../setup.js";
 import type * as stepup from "../stepup.js";
@@ -81,6 +82,7 @@ declare const fullApi: ApiFromModules<{
   passkeysInternal: typeof passkeysInternal;
   reviewAlerts: typeof reviewAlerts;
   rosterSync: typeof rosterSync;
+  schedule: typeof schedule;
   sessions: typeof sessions;
   setup: typeof setup;
   stepup: typeof stepup;

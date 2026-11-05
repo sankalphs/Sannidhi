@@ -2,6 +2,7 @@
 
 import {
   BookOpen,
+  CalendarClock,
   ChartColumn,
   ClipboardList,
   FileText,
@@ -34,6 +35,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   inbox: Inbox,
   insights: ChartColumn,
   file: FileText,
+  calendar: CalendarClock,
 };
 
 type SideNavProps = {
