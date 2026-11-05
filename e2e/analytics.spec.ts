@@ -50,13 +50,13 @@ test("admin sees cohort analytics with trajectories and trends", async ({ page }
   const diyaProxy = proxyCards.filter({ hasText: "Diya Sharma" });
   await expect(diyaProxy).toContainText("2");
   await expect(diyaProxy).toContainText("flagged check-ins");
-  await expect(diyaProxy).toContainText("Face mismatch");
-  await expect(diyaProxy).toContainText("Face spoof suspected");
+  await expect(diyaProxy).toContainText("Possible proxy (camera check mismatch)");
+  await expect(diyaProxy).toContainText("Possible proxy (camera saw a photo/screen)");
 
   const aaravProxy = proxyCards.filter({ hasText: "Aarav Patel" });
   await expect(aaravProxy).toContainText("1");
   await expect(aaravProxy).toContainText("flagged check-in");
-  await expect(aaravProxy).toContainText("Distrusted device");
+  await expect(aaravProxy).toContainText("Suspended or revoked device");
 
   const replayed = page.getByTestId("anomaly-type-row").filter({ hasText: "challenge_replayed" });
   await expect(replayed).toContainText("3");

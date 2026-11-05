@@ -42,8 +42,8 @@ const STUDENT_ACTIONS_BY_CODE: Record<string, string> = {
 const FACULTY_FACTOR_LABELS: Record<string, string> = {
   [RISK_REASON_CODES.identityUnverified]: "identity unverified",
   [RISK_REASON_CODES.presenceUnverified]: "presence unverified",
-  [RISK_REASON_CODES.deviceDistrusted]: "device distrusted",
-  [RISK_REASON_CODES.deviceUntrusted]: "device untrusted",
+  [RISK_REASON_CODES.deviceDistrusted]: "device suspended or revoked",
+  [RISK_REASON_CODES.deviceUntrusted]: "device not yet active",
   [RISK_REASON_CODES.deviceMissing]: "device missing",
   [RISK_REASON_CODES.locationMismatch]: "location mismatch",
   [RISK_REASON_CODES.presenceUnresolvedAfterStepup]: "location unresolved after step-up",
