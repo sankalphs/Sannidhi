@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 
 import {
   analyzeTrajectory,
+  canReviewStudentAlert,
   deriveAlerts,
   PROXY_LOOKBACK_DAYS,
   summarizeProxyAttempts,
@@ -189,7 +190,10 @@ async function safeUser(ctx: MutationCtx | QueryCtx, userId: Id<"users"> | undef
   }
 }
 
-/** Inbox for admin and department authority: open alerts first, resolved history after. */
+/**
+ * Inbox for admin and department authority (scoped to their departments' students):
+ * open alerts first, resolved history after.
+ */
 export const listReviewAlerts = query({
   args: {
     actorToken: v.string(),
@@ -218,11 +222,12 @@ export const listReviewAlerts = query({
     }
 
     const mapped = await Promise.all(
-      rows.map(async (row): Promise<ReviewAlertRow> => {
+      rows.map(async (row): Promise<ReviewAlertRow | null> => {
         const [student, resolver] = await Promise.all([
           safeUser(ctx, row.studentId),
           safeUser(ctx, row.resolvedByUserId),
         ]);
+        if (!canReviewStudentAlert(caller, student)) return null;
         return {
           id: row._id,
           kind: row.kind,
@@ -239,7 +244,10 @@ export const listReviewAlerts = query({
       }),
     );
 
-    return mapped.sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt).slice(0, limit);
+    return mapped
+      .filter((row): row is ReviewAlertRow => row !== null)
+      .sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt)
+      .slice(0, limit);
   },
 });
 
@@ -260,6 +268,9 @@ export const resolveReviewAlert = mutation({
     const alert = await ctx.db.get(args.alertId);
     if (alert === null) throw new ConvexError("alert_not_found");
     if (alert.institutionId !== caller.institutionId) throw new ConvexError("unauthorized");
+    if (!canReviewStudentAlert(caller, await safeUser(ctx, alert.studentId))) {
+      throw new ConvexError("unauthorized");
+    }
     if (alert.status !== "open") throw new ConvexError("alert_not_open");
 
     const trimmed = args.note?.trim();

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { ANOMALY_ALERT_THRESHOLD, deriveAlerts } from "@/lib/analytics/alerts";
+import {
+  ANOMALY_ALERT_THRESHOLD,
+  canReviewStudentAlert,
+  deriveAlerts,
+} from "@/lib/analytics/alerts";
 import { analyzeTrajectory } from "@/lib/analytics/trajectory";
 import type { TrajectoryRecord } from "@/lib/analytics/trajectory";
 
@@ -125,5 +129,33 @@ describe("deriveAlerts", () => {
     expect(
       deriveAlerts({ trajectory: safeTrajectory(), proxy: null, verificationAnomalyCount: 0 }),
     ).toEqual([]);
+  });
+});
+
+describe("canReviewStudentAlert", () => {
+  const student = { departmentIds: ["cs", "math"] };
+
+  it("lets admins review every student in the institution", () => {
+    expect(canReviewStudentAlert({ role: "admin" }, student)).toBe(true);
+    expect(canReviewStudentAlert({ role: "admin" }, { departmentIds: undefined })).toBe(true);
+  });
+
+  it("scopes department authorities to students sharing one of their departments", () => {
+    expect(
+      canReviewStudentAlert({ role: "department_authority", departmentIds: ["math"] }, student),
+    ).toBe(true);
+    expect(
+      canReviewStudentAlert({ role: "department_authority", departmentIds: ["physics"] }, student),
+    ).toBe(false);
+  });
+
+  it("fails closed for authorities or students without departments, and missing students", () => {
+    expect(canReviewStudentAlert({ role: "department_authority" }, student)).toBe(false);
+    expect(canReviewStudentAlert({ role: "department_authority", departmentIds: ["cs"] }, {})).toBe(
+      false,
+    );
+    expect(
+      canReviewStudentAlert({ role: "department_authority", departmentIds: ["cs"] }, null),
+    ).toBe(false);
   });
 });
