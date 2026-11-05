@@ -35,10 +35,13 @@ jobs:
       - name: Start Convex backend
         run: |
           (echo n | bunx convex dev --typecheck disable > convex-dev.log 2>&1 &)
-          for i in $(seq 1 60); do
-            if curl -sf http://127.0.0.1:3210 >/dev/null 2>&1; then break; fi
+          # The port answers before `convex dev` writes .env.local and pushes
+          # functions; wait for the push so `convex env set` has a deployment.
+          for i in $(seq 1 90); do
+            if grep -q "Convex functions ready" convex-dev.log; then break; fi
             sleep 2
           done
+          grep -q "Convex functions ready" convex-dev.log || { cat convex-dev.log; exit 1; }
           bunx convex env set SESSION_SECRET local-dev-session-secret-0123456789
           bunx convex env set NEXT_PUBLIC_APP_URL http://localhost:3000
           bunx convex env set SANNIDHI_TEST_FIXTURES 1
