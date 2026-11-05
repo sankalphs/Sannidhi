@@ -29,7 +29,7 @@ export function PageHeader({ eyebrow, title, description, actions, className }: 
           <p className="text-muted-foreground text-sm sm:text-base">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }

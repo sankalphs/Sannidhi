@@ -184,10 +184,16 @@ export function QrPanel({
           </div>
         ) : challenge !== null && dataUrl !== null ? (
           <>
-            <div className="mx-auto w-fit rounded-lg bg-white p-3">
+            <div className="mx-auto w-full max-w-[304px] rounded-lg bg-white p-3">
               {/* Data URL source: next/image cannot optimize inline data URLs. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={dataUrl} alt="Session QR code" width={280} height={280} />
+              <img
+                src={dataUrl}
+                alt="Session QR code"
+                width={280}
+                height={280}
+                className="aspect-square h-auto w-full"
+              />
             </div>
             <p className="text-primary-foreground/70 max-w-[280px] text-center text-xs">
               Scan the QR with your phone camera — it opens check-in directly.
