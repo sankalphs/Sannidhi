@@ -80,20 +80,45 @@ export const getActiveForStudent = query({
     }
 
     if (activeSession === null) return null;
+    const session = activeSession;
 
-    const [course, section, venue] = await Promise.all([
-      ctx.db.get(activeSession.courseId),
-      ctx.db.get(activeSession.sectionId),
-      ctx.db.get(activeSession.venueId),
+    const [course, section, venue, latest, sessionEvents] = await Promise.all([
+      ctx.db.get(session.courseId),
+      ctx.db.get(session.sectionId),
+      ctx.db.get(session.venueId),
+      latestEventForStudent(ctx, {
+        studentId: caller._id,
+        sectionId: session.sectionId,
+        sessionId: session._id,
+        sinceMs: session.startedAt,
+      }),
+      ctx.db
+        .query("attendance_events")
+        .withIndex("by_student_section", (q) =>
+          q.eq("studentId", caller._id).eq("sectionId", session.sectionId),
+        )
+        .filter((q) => q.eq(q.field("sessionId"), session._id))
+        .collect(),
     ]);
 
+    // The student's own standing in this session, so check-in can show
+    // "you're checked in" instead of a scanner that can only echo it back.
+    const myCheckIn =
+      latest !== undefined && isDecisionEventState(latest.state)
+        ? {
+            state: latest.state === "corrected" ? ("verified" as const) : latest.state,
+            checkedInAt: Math.min(...sessionEvents.map((event) => event.capturedAt)),
+          }
+        : null;
+
     return {
-      sessionId: activeSession._id,
+      sessionId: session._id,
       courseCode: course?.code ?? "",
       courseTitle: course?.title ?? "",
       sectionName: section?.name ?? "",
       venueName: venue?.name ?? "",
-      windowEndsAt: activeSession.windowEndsAt,
+      windowEndsAt: session.windowEndsAt,
+      myCheckIn,
     };
   },
 });

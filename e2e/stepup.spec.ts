@@ -90,7 +90,12 @@ async function openScannerAt(
   await context.setGeolocation(coords);
   await page.goto("/student/check-in");
   const input = page.getByTestId("checkin-input");
-  await input.waitFor({ state: "visible", timeout: 120_000 });
+  // A student already settled in the live session sees that state instead of
+  // the scanner; scenarios that re-submit on purpose open it anyway.
+  const scanOther = page.getByTestId("checkin-scan-other");
+  await expect(input.or(scanOther).first()).toBeVisible({ timeout: 120_000 });
+  if (await scanOther.isVisible()) await scanOther.click();
+  await input.waitFor({ state: "visible", timeout: 30_000 });
   await expect(page.getByTestId("geo-status")).toHaveText(/Location ready/i, {
     timeout: 30_000,
   });

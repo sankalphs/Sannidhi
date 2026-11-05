@@ -68,8 +68,13 @@ test("faculty publishes a rotating QR token and the student checks in with it", 
       await tryAgain.click();
       await codeInput.waitFor({ state: "visible", timeout: 30_000 });
     } else {
+      // Already checked in: the page shows that state, not the scanner.
       await studentPage.goto("/student/check-in");
-      await codeInput.waitFor({ state: "visible", timeout: 60_000 });
+      await expect(studentPage.getByTestId("checkin-settled")).toContainText(/checked in/i, {
+        timeout: 60_000,
+      });
+      await studentPage.getByTestId("checkin-scan-other").click();
+      await codeInput.waitFor({ state: "visible", timeout: 30_000 });
     }
     await codeInput.fill(token);
     await studentPage.getByTestId("submit-code").click();
