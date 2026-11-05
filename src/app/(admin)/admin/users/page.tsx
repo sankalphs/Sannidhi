@@ -68,8 +68,8 @@ export default async function AdminUsersPage() {
         <PageHeader eyebrow="Admin" title="Users" description="People, roles, and enrollments." />
         <EmptyState
           icon={Users}
-          title="No institution yet"
-          description="Run `bun run seed` against your local Convex backend to create demo data."
+          title="No institution linked"
+          description="Your account is not linked to an institution. Ask your Sannidhi operator to run institution setup."
         />
       </div>
     );

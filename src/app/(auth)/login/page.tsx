@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { PersonaPicker } from "@/app/(auth)/login/impersonation-buttons";
 import { LoginMethods } from "@/app/(auth)/login/login-methods";
-import { isDemoLoginEnabled } from "@/lib/auth/dev-login";
+import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 import { ROLES, type Role } from "@/lib/auth/session";
 
 function parseHighlightRole(value: string | string[] | undefined): Role | null {
@@ -18,7 +18,7 @@ export default async function LoginPage({
 }) {
   const { as } = await searchParams;
   const highlightRole = parseHighlightRole(as);
-  const demoLoginEnabled = isDemoLoginEnabled();
+  const devLoginEnabled = isDevLoginEnabled();
 
   return (
     <div className="flex flex-col gap-8">
@@ -35,29 +35,21 @@ export default async function LoginPage({
 
       <LoginMethods />
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3">
-          <div className="border-border/70 h-px flex-1 border-t" />
-          <span className="text-muted-foreground font-mono text-[11px] tracking-[0.14em] uppercase">
-            Demo access
-          </span>
-          <div className="border-border/70 h-px flex-1 border-t" />
-        </div>
-        {demoLoginEnabled ? (
-          <>
-            <p className="text-muted-foreground text-sm">
-              Explore any panel with seeded data — sessions, check-ins, and history are preloaded
-              for this deployment.
-            </p>
-            <PersonaPicker highlightRole={highlightRole} />
-          </>
-        ) : (
+      {devLoginEnabled ? (
+        <div className="flex flex-col gap-3" data-testid="dev-login">
+          <div className="flex items-center gap-3">
+            <div className="border-border/70 h-px flex-1 border-t" />
+            <span className="text-muted-foreground font-mono text-[11px] tracking-[0.14em] uppercase">
+              Development sign-in
+            </span>
+            <div className="border-border/70 h-px flex-1 border-t" />
+          </div>
           <p className="text-muted-foreground text-sm">
-            Demo access is disabled on this deployment. Set <code>ENABLE_DEMO_LOGIN=1</code> to turn
-            it on.
+            Switch roles against the local test fixtures. Never available in production.
           </p>
-        )}
-      </div>
+          <PersonaPicker highlightRole={highlightRole} />
+        </div>
+      ) : null}
 
       <p className="text-muted-foreground text-sm">
         Invited by your institution? Open the link from your invite email to activate your passkey.

@@ -5,9 +5,9 @@ const USN = `1SI22CS${STAMP.slice(-4)}`;
 const EMAIL = `e2e-password-${STAMP}@sannidhi.test`;
 const PASSWORD = "Sunny-Campus42";
 
-/** Seeded demo invite (convex/seed.ts) for password signup, no user row exists for it. */
-const SIGNUP_INVITE_EMAIL = "password.signup.demo@sit.edu.in";
-const SIGNUP_INVITE_TOKEN = "demo-password-invite-token";
+/** Fixture invite (convex/testFixtures.ts) for password signup; no user row exists for it. */
+const SIGNUP_INVITE_EMAIL = "password.signup.fixture@sit.edu.in";
+const SIGNUP_INVITE_TOKEN = "fixture-password-invite-token";
 
 async function openPasswordLogin(page: Page) {
   await page.goto("/login");

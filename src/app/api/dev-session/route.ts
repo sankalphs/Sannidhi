@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { api } from "../../../../convex/_generated/api";
-import { isDemoLoginEnabled } from "@/lib/auth/dev-login";
+import { isDevLoginEnabled } from "@/lib/auth/dev-login";
 import { COOKIE_NAME, ROLES, signSession, type Role } from "@/lib/auth/session";
 import { getConvexClient } from "@/lib/convex/server-client";
 
@@ -10,9 +10,9 @@ function notFound() {
   return NextResponse.json({ error: "Not found" }, { status: 404 });
 }
 
-type DemoResolvableRole = "student" | "faculty" | "department_authority" | "admin" | "auditor";
+type FixtureRole = "student" | "faculty" | "department_authority" | "admin" | "auditor";
 
-const DEMO_RESOLVABLE_ROLES: readonly DemoResolvableRole[] = [
+const FIXTURE_ROLES: readonly FixtureRole[] = [
   "student",
   "faculty",
   "department_authority",
@@ -20,21 +20,21 @@ const DEMO_RESOLVABLE_ROLES: readonly DemoResolvableRole[] = [
   "auditor",
 ];
 
-async function resolveDemoUserId(role: Role): Promise<string | null> {
-  if (!DEMO_RESOLVABLE_ROLES.includes(role as DemoResolvableRole)) return null;
+async function resolveFixtureUserId(role: Role): Promise<string | null> {
+  if (!FIXTURE_ROLES.includes(role as FixtureRole)) return null;
   try {
-    const actor = await getConvexClient().query(api.demo.getDemoActor, {
-      role: role as DemoResolvableRole,
+    const actor = await getConvexClient().query(api.testFixtures.getFixtureActor, {
+      role: role as FixtureRole,
     });
     return actor?.userId ?? null;
   } catch (error) {
-    console.warn("dev-session: demo actor lookup failed", error);
+    console.warn("dev-session: fixture actor lookup failed", error);
     return null;
   }
 }
 
 export async function POST(request: Request) {
-  if (!isDemoLoginEnabled()) return notFound();
+  if (!isDevLoginEnabled()) return notFound();
   let body: unknown;
   try {
     body = await request.json();
@@ -46,8 +46,8 @@ export async function POST(request: Request) {
   if (typeof role !== "string" || !ROLES.includes(role as Role)) {
     return NextResponse.json({ error: "Unknown role" }, { status: 400 });
   }
-  const demoUserId = await resolveDemoUserId(role as Role);
-  const token = await signSession({ userId: demoUserId ?? `dev-${role}`, role: role as Role });
+  const fixtureUserId = await resolveFixtureUserId(role as Role);
+  const token = await signSession({ userId: fixtureUserId ?? `dev-${role}`, role: role as Role });
   const store = await cookies();
   store.set(COOKIE_NAME, token, {
     httpOnly: true,
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE() {
-  if (!isDemoLoginEnabled()) return notFound();
+  if (!isDevLoginEnabled()) return notFound();
   const store = await cookies();
   store.delete(COOKIE_NAME);
   return NextResponse.json({ ok: true });

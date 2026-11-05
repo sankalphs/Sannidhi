@@ -17,7 +17,7 @@ if (secretValue === undefined || secretValue.length < 16) {
 
 const client = new ConvexHttpClient(convexUrl);
 
-const admin = await client.query(api.demo.getDemoActor, { role: "admin" });
+const admin = await client.query(api.testFixtures.getFixtureActor, { role: "admin" });
 console.log("admin actor:", JSON.stringify(admin));
 
 const secret = new TextEncoder().encode(secretValue);

@@ -5,7 +5,7 @@ import {
   installDeniedCamera,
   installStaticCamera,
 } from "./helpers/fake-camera";
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -183,7 +183,7 @@ test.afterAll(async () => {
   await studentContext.close().catch(() => {});
   await staticContext?.close().catch(() => {});
   await deniedContext?.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 test("step-up: animated capture completes the challenge and verifies", async () => {

@@ -11,12 +11,11 @@ test("home page renders the redesigned landing", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Request institution access" })).toBeVisible();
 });
 
-test("home page presents the four role panels and the live session demo", async ({ page }) => {
+test("home page presents the four role panels and the live session preview", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("link", { name: "Explore the student panel" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Explore the faculty panel" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Explore the admin panel" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Explore the auditor panel" })).toBeVisible();
+  for (const panel of ["Student panel", "Faculty panel", "Admin panel", "Auditor panel"]) {
+    await expect(page.getByText(panel, { exact: true })).toBeVisible();
+  }
   await expect(page.getByTestId("demo-qr-token")).toBeVisible();
   await expect(page.getByText("Rotates every 8s")).toBeVisible();
 });
