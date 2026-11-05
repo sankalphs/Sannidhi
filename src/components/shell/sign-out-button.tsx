@@ -34,7 +34,7 @@ export function SignOutButton({
       size="sm"
       className={cn(
         onBoard &&
-          "text-primary-foreground/75 hover:bg-primary-foreground/10 hover:text-primary-foreground",
+          "text-primary-foreground/75 hover:bg-primary-foreground/10 hover:text-primary-foreground dark:text-sidebar-foreground/75 dark:hover:bg-sidebar-accent dark:hover:text-sidebar-accent-foreground",
         className,
       )}
       onClick={handleSignOut}
