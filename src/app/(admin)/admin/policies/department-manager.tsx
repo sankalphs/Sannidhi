@@ -147,17 +147,20 @@ export function DepartmentManager({
                   <td className="text-muted-foreground px-4 py-2">{department.courseCount}</td>
                   <td className="px-4 py-2">
                     <span className="flex items-center gap-2">
-                      <Input
-                        className="h-8 w-48"
-                        placeholder="New name"
-                        value={renames[department.id] ?? ""}
-                        onChange={(event) =>
-                          setRenames((current) => ({
-                            ...current,
-                            [department.id]: event.target.value,
-                          }))
-                        }
-                      />
+                      <label>
+                        <span className="sr-only">Rename {department.code}</span>
+                        <Input
+                          className="h-8 w-48"
+                          placeholder="New name"
+                          value={renames[department.id] ?? ""}
+                          onChange={(event) =>
+                            setRenames((current) => ({
+                              ...current,
+                              [department.id]: event.target.value,
+                            }))
+                          }
+                        />
+                      </label>
                       <Button
                         size="xs"
                         variant="outline"

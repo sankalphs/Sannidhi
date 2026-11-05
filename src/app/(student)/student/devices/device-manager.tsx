@@ -292,12 +292,15 @@ export function DeviceManager({
               <span className="text-muted-foreground">Passkey assertion accepted.</span>
             </p>
           )}
-          <textarea
-            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-            placeholder="Why does this device need replacement?"
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-          />
+          <label className="flex flex-col gap-1">
+            <span className="text-sm font-medium">Reason for replacement</span>
+            <textarea
+              className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+              placeholder="Why does this device need replacement?"
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+            />
+          </label>
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -330,14 +333,18 @@ export function DeviceManager({
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
-            <Input
-              className="w-36 font-mono"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-              placeholder="000000"
-            />
+            <label>
+              <span className="sr-only">Six-digit verification code</span>
+              <Input
+                className="w-36 font-mono"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+              />
+            </label>
             <Button
               size="sm"
               disabled={code.length !== 6 || busyDeviceId !== null}
@@ -370,11 +377,14 @@ export function DeviceManager({
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Register a device</h2>
         <div className="flex max-w-md items-center gap-2">
-          <Input
-            placeholder='Device label, e.g. "Pixel 9"'
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-          />
+          <label className="flex-1">
+            <span className="sr-only">Device label</span>
+            <Input
+              placeholder='Device label, e.g. "Pixel 9"'
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+            />
+          </label>
           <Button disabled={label.trim().length === 0 || phase !== "idle"} onClick={register}>
             Register
           </Button>

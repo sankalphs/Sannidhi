@@ -177,8 +177,8 @@ test("departments create, list, and carry policy scopes", async () => {
   const manager = adminPage.locator("section", { hasText: "Multi-department administration" });
   await pollFillSave(
     [
-      [manager.getByLabel("Code"), "CSE"],
-      [manager.getByLabel("Name"), "Computer Science & Engineering"],
+      [manager.getByLabel("Code", { exact: true }), "CSE"],
+      [manager.getByLabel("Name", { exact: true }), "Computer Science & Engineering"],
     ],
     manager.getByRole("button", { name: "Create department" }),
     departmentCard(adminPage, "CSE"),
