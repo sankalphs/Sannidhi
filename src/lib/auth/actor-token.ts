@@ -4,6 +4,9 @@ import type { Role } from "./session";
 
 export const ACTOR_TOKEN_ALGORITHM = "HS256";
 
+/** `typ` claim that verifyActorToken requires; session cookies carry "session" instead. */
+export const ACTOR_TOKEN_TYPE = "actor";
+
 /**
  * Sid-less tokens (demo/dev logins, enrollment ceremony helpers) carry no
  * server-side session, so their lifetime is bounded here.
@@ -51,6 +54,7 @@ export async function mintActorToken(
       ? `${SESSION_ACTOR_TOKEN_MAX_AGE_SECONDS}s`
       : `${ACTOR_TOKEN_MAX_AGE_SECONDS}s`;
   return new SignJWT({
+    typ: ACTOR_TOKEN_TYPE,
     userId: payload.userId,
     role: payload.role,
     ...(payload.sid !== undefined ? { sid: payload.sid } : {}),
