@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 import {
   dropSynced,
@@ -359,7 +360,10 @@ export function OfflineKit({
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium">{record.studentName}</p>
                         <p className="text-muted-foreground truncate text-xs tabular-nums">
-                          captured {new Date(record.capturedAt).toLocaleTimeString()}
+                          captured{" "}
+                          {new Date(record.capturedAt).toLocaleTimeString("en-IN", {
+                            timeZone: INSTITUTION_TIME_ZONE,
+                          })}
                         </p>
                       </div>
                       <Button

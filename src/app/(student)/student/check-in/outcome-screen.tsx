@@ -16,6 +16,7 @@ import Link from "next/link";
 import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 import type { Decision } from "@/lib/decision";
 import { cn } from "@/lib/utils";
 import { explainDecision } from "@/lib/risk";
@@ -135,7 +136,11 @@ function failureCopy(
 }
 
 function formatCheckedInAt(timestamp: number): string {
-  return new Date(timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(timestamp).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: INSTITUTION_TIME_ZONE,
+  });
 }
 
 function SuccessScreen({

@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatReasonCode } from "@/lib/analytics/labels";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 
 import { ManualVerifyDialog } from "./manual-verify-dialog";
 
@@ -40,12 +41,17 @@ const SPOT_ERROR_COPY: Record<SpotRecheckFailure["reason"], string> = {
   student_not_eligible: "This student has no verifiable attendance to re-check.",
 };
 
+const CLOCK_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: INSTITUTION_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/** HH:MM:SS on the institution's clock, whatever zone the browser is in. */
 function formatClock(timestamp: number): string {
-  const date = new Date(timestamp);
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  return CLOCK_FORMAT.format(timestamp);
 }
 
 function formatMmSs(totalSeconds: number): string {

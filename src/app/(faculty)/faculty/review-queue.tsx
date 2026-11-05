@@ -10,6 +10,7 @@ import { useState } from "react";
 import { EmptyState } from "@/components/shell/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 const PREVIOUS_STATE_BADGES: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -28,6 +29,7 @@ function formatDate(ms: number): string {
   return new Date(ms).toLocaleString("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: INSTITUTION_TIME_ZONE,
   });
 }
 
