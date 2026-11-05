@@ -119,7 +119,11 @@ export default async function AdminCoursesPage() {
         )}
       </section>
 
-      <RosterSyncPanel actorToken={actorToken} isAdmin={isAdmin} />
+      <RosterSyncPanel
+        actorToken={actorToken}
+        isAdmin={isAdmin}
+        showSample={process.env.NODE_ENV !== "production"}
+      />
     </div>
   );
 }

@@ -262,6 +262,10 @@ test("roster sync previews and applies the sample dataset idempotently", async (
 
   await pollClick(
     panel.getByRole("button", { name: "Apply sync" }),
+    panel.getByRole("button", { name: "Confirm apply" }),
+  );
+  await pollClick(
+    panel.getByRole("button", { name: "Confirm apply" }),
     panel.getByRole("heading", { name: "Sync applied", exact: true }),
     120_000,
   );
