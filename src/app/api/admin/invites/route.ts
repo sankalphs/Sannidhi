@@ -119,3 +119,32 @@ export async function DELETE(request: Request) {
     return errorResponse(error);
   }
 }
+
+/** Re-issues a fresh link for an email that has not activated yet; returns the new token once. */
+export async function PATCH(request: Request) {
+  const session = await getAdminSession();
+  if (session === null) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await request.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const email = body.email;
+  if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
+    return NextResponse.json({ error: "Missing email" }, { status: 400 });
+  }
+
+  try {
+    const client = getConvexClient();
+    const actorToken = await mintActorToken({ userId: session.userId, role: session.role });
+    const invite = await client.mutation(api.invites.reissueInvite, { actorToken, email });
+    return NextResponse.json({ invite });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}

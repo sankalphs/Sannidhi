@@ -9,6 +9,7 @@ import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
 
+import { CopyLinkButton } from "./copy-link-button";
 import { ImportPanel } from "./import-panel";
 import { RevokeButton } from "./revoke-button";
 
@@ -101,6 +102,7 @@ export default async function AdminUsersPage() {
                 <th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Role</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -113,6 +115,11 @@ export default async function AdminUsersPage() {
                   <td className="px-4 py-2">{formatRole(user.role)}</td>
                   <td className="px-4 py-2">
                     <UserStatusBadge status={user.status} />
+                  </td>
+                  <td className="px-4 py-2 text-right">
+                    {user.status === "invited" ? (
+                      <CopyLinkButton email={user.email} appUrl={appUrl} />
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -145,8 +152,11 @@ export default async function AdminUsersPage() {
                   <td className="text-muted-foreground px-4 py-2">
                     {formatDate(invite.expiresAt)}
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    <RevokeButton inviteId={invite.inviteId} />
+                  <td className="px-4 py-2">
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <CopyLinkButton email={invite.email} appUrl={appUrl} />
+                      <RevokeButton inviteId={invite.inviteId} />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -159,7 +169,9 @@ export default async function AdminUsersPage() {
         <h2 className="text-lg font-semibold">Invite people</h2>
         <ImportPanel
           institutionId={institution._id}
-          existingEmails={users.map((user) => user.email)}
+          existingEmails={users
+            .filter((user) => user.status !== "invited")
+            .map((user) => user.email)}
           appUrl={appUrl}
         />
       </section>

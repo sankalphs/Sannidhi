@@ -285,10 +285,13 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
               ))}
             </ul>
           ) : null}
-          <p className="text-muted-foreground text-xs">
-            Invites are pending on the Users page — each student receives a one-time enrollment
-            link.
-          </p>
+          {applied.invitesCreated > 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {applied.invitesCreated} student{applied.invitesCreated === 1 ? " was" : "s were"}{" "}
+              invited — Sannidhi does not email them, so share their activation links from the Users
+              page (Copy new link).
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

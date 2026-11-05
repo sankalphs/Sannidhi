@@ -18,6 +18,7 @@ type CreatedInvite = {
 
 type ImportPanelProps = {
   institutionId: string;
+  /** Emails of activated or suspended accounts — these cannot be invited again. */
   existingEmails: string[];
   appUrl: string;
 };
@@ -34,6 +35,8 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedInvite[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const singleEmailTaken = existingEmails.includes(singleEmail.trim().toLowerCase());
 
   const parsed = useMemo(
     () => parseInviteCsv(csvText, { existingEmails }),
@@ -146,7 +149,8 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
           <div>
             <h2 className="font-semibold">Single invite</h2>
             <p className="text-muted-foreground text-sm">
-              Create one account and get a one-time link.
+              Create one account and get a one-time link. Inviting someone who has not activated yet
+              replaces their old link.
             </p>
           </div>
           <Input
@@ -178,7 +182,7 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               submitting ||
               singleEmail.trim().length === 0 ||
               singleName.trim().length === 0 ||
-              existingEmails.includes(singleEmail.trim().toLowerCase())
+              singleEmailTaken
             }
             onClick={() =>
               submit([{ email: singleEmail.trim(), name: singleName.trim(), role: singleRole }])
@@ -187,6 +191,11 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
             {submitting ? <Loader2 className="animate-spin" /> : null}
             Create invite
           </Button>
+          {singleEmailTaken ? (
+            <p className="text-muted-foreground text-xs">
+              This email already has an account, so it cannot be invited again.
+            </p>
+          ) : null}
         </section>
       </div>
 
@@ -217,7 +226,7 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
                 </span>
                 <span className="flex items-center gap-2">
                   {!invite.userId ? (
-                    <span className="text-muted-foreground text-xs">existing user</span>
+                    <span className="text-muted-foreground text-xs">old link revoked</span>
                   ) : null}
                   <Button variant="outline" size="xs" onClick={() => copyLink(invite.token)}>
                     {copiedToken === invite.token ? <Check /> : <Copy />}
