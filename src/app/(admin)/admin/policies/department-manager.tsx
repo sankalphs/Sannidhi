@@ -132,7 +132,7 @@ export function DepartmentManager({
       ) : null}
 
       {departments.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="relative overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground text-left text-xs tracking-wide uppercase">
               <tr>
