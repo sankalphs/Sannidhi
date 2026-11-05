@@ -145,7 +145,7 @@ describe("student tier", () => {
       const explanation = explainDecision(decision, "student");
       expect(explanation.headline).toContain("faculty review");
       expect(explanation.actions).toEqual([
-        "A photo or video was detected instead of a live face — your attendance was sent to your faculty member for review.",
+        "The camera check looked like a still photo or screen — your attendance was sent to your faculty member for review.",
       ]);
       codesStayHidden(decision);
     });
@@ -157,7 +157,7 @@ describe("student tier", () => {
       const explanation = explainDecision(decision, "student");
       expect(explanation.headline).toContain("faculty review");
       expect(explanation.actions).toEqual([
-        "Your face did not match your enrolled profile — your attendance was sent to your faculty member for review.",
+        "The camera check didn't line up with your enrollment — your attendance was sent to your faculty member for review.",
       ]);
       codesStayHidden(decision);
     });
@@ -172,7 +172,7 @@ describe("student tier", () => {
       expect(decision.outcome).toBe("step_up");
       const explanation = explainDecision(decision, "student");
       expect(explanation.actions).toContain(
-        "Lighting or visibility made the face check inconclusive — try again in better light if prompted.",
+        "Lighting or visibility made the camera check inconclusive — try again in better light if prompted.",
       );
       codesStayHidden(decision);
     });
@@ -294,11 +294,13 @@ describe("faculty tier", () => {
     );
 
     expect(explainDecision(spoofDecision, "faculty").message).toContain(
-      "Face check: suspected photo/video",
+      "Camera check: looked like a photo/screen",
     );
-    expect(explainDecision(mismatchDecision, "faculty").message).toContain("Face check: no match");
+    expect(explainDecision(mismatchDecision, "faculty").message).toContain(
+      "Camera check: no match to enrollment",
+    );
     expect(explainDecision(inconclusiveDecision, "faculty").message).toContain(
-      "Face check inconclusive",
+      "Camera check inconclusive",
     );
     expect(explainDecision(spotDecision, "faculty").message).toContain("Spot re-check missed");
     expect(explainDecision(escalatedDecision, "faculty").message).toContain(

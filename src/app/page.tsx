@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 
 const VERDICTS: { verdict: Verdict; description: string }[] = [
   { verdict: "accept", description: "Evidence is strong. The student is checked in." },
-  { verdict: "step-up", description: "Evidence is thin. Liveness or face match is requested." },
+  {
+    verdict: "step-up",
+    description: "Evidence is thin. A quick camera check or faculty review is requested.",
+  },
   { verdict: "flag", description: "Something is off. A faculty member reviews the attempt." },
   { verdict: "reject", description: "Replay or tampering detected. The attempt is refused." },
 ];
@@ -101,7 +104,7 @@ const TRUST = [
   {
     title: "Verification in proportion",
     description:
-      "Strong checks run only when risk demands them. Routine check-ins stay fast, and biometrics are opt-in with consent.",
+      "Strong checks run only when risk demands them. Routine check-ins stay fast, and the camera check is opt-in, with consent.",
   },
 ];
 

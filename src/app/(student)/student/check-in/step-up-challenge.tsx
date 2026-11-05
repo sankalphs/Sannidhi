@@ -220,8 +220,8 @@ function ReviewPanel({
       ) : (
         // Attempts exhausted without a usable decision — the backend flagged the event.
         <p className="text-muted-foreground max-w-md text-sm">
-          Your face could not be confirmed after several attempts, so your attendance was sent to
-          your faculty member for review.
+          The camera check stayed inconclusive after several attempts, so your attendance was sent
+          to your faculty member for review.
         </p>
       )}
     </ResolvedPanel>
@@ -279,9 +279,9 @@ function NotEnrolledView({
         <div className="bg-verdict-flag/15 text-verdict-flag flex size-14 items-center justify-center rounded-full">
           <Info className="size-8" />
         </div>
-        <h3 className="text-xl font-semibold">Face check unavailable</h3>
+        <h3 className="text-xl font-semibold">Camera check unavailable</h3>
         <p className="text-muted-foreground max-w-md text-sm">
-          No face profile is enrolled on your account.
+          You haven&apos;t set up the camera check on your account.
         </p>
         {context.length > 0 ? (
           <p className="text-muted-foreground max-w-md text-sm">{context.join(" · ")}</p>
@@ -474,7 +474,7 @@ export function StepUpChallenge({
           <CountdownChip expiresAt={challenge.expiresAt} />
         </CardTitle>
         <CardDescription>
-          This attendance check needs one more proof that it&apos;s really you.
+          This check-in needs one more quick step before it counts.
           {courseCode !== undefined && courseCode.length > 0 ? ` ${courseCode}` : ""}
           {venueName !== undefined && venueName.length > 0 ? ` · ${venueName}` : ""}
         </CardDescription>
@@ -496,9 +496,9 @@ export function StepUpChallenge({
         ) : null}
         <FaceCapture
           key={captureKey}
-          title="Confirm it's you"
-          description="A quick live face scan with a liveness check — no photo is stored."
-          submitLabel="Scan my face"
+          title="Quick camera check"
+          description="A few seconds of camera frames are compared with your enrollment. It helps your faculty member review the check-in; it is not ID verification, and no photo is stored."
+          submitLabel="Run camera check"
           busy={busy || expired}
           onCapture={(result) => void handleCapture(result)}
         />
