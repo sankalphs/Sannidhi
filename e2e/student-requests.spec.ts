@@ -1,4 +1,11 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+/** Picks the newest session in the exemption / on-duty class picker. */
+async function selectFirstSession(page: Page) {
+  const picker = page.getByTestId("request-session-picker");
+  await expect(picker.locator("option").nth(1)).toBeAttached();
+  await picker.selectOption({ index: 1 });
+}
 
 test("students file attendance requests and see them listed with status", async ({ page }) => {
   await page.request.post("/api/dev-session", { data: { role: "student" } });
@@ -12,6 +19,8 @@ test("students file attendance requests and see them listed with status", async 
   await page.getByLabel("Reason").fill(reason);
 
   const submit = page.getByRole("button", { name: "Submit request" });
+  await expect(submit).toBeDisabled();
+  await selectFirstSession(page);
   await expect(submit).toBeEnabled();
   await submit.click();
 
@@ -51,13 +60,15 @@ test("an exemption request reaches the faculty queue and approval is recorded", 
     const reason = `E2E exemption review ${Date.now()} — represented the institute at a fest.`;
     await studentPage.getByLabel("Request type").selectOption("exemption");
     await studentPage.getByLabel("Reason").fill(reason);
+    // Every fixture session is run by the fixture faculty, so any pick routes to them.
+    await selectFirstSession(studentPage);
     const submit = studentPage.getByRole("button", { name: "Submit request" });
     await expect(submit).toBeEnabled();
     await submit.click();
     await expect(studentPage.getByText("Request filed.")).toBeVisible();
 
-    // Exemption filings carry no attendance record, so every faculty of the
-    // institution sees them; approval acknowledges the request.
+    // Exemption filings carry no attendance record; the faculty who ran the
+    // session sees them and approval acknowledges the request.
     const facultyPage = await facultyContext.newPage();
     await facultyPage.request.post("/api/dev-session", { data: { role: "faculty" } });
     await facultyPage.goto("/faculty");

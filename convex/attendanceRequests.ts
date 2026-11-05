@@ -13,6 +13,8 @@ const MIN_REASON_LENGTH = 10;
 const MAX_LISTED_REQUESTS = 50;
 const MAX_PENDING_REQUESTS = 10;
 const MAX_LISTED_CORRECTIONABLE_EVENTS = 30;
+const MAX_LISTED_SESSIONS = 60;
+const SESSION_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 
 const requestTypeValidator = v.union(
   v.literal("correction"),
@@ -92,12 +94,32 @@ async function requireDisputableEvent(
   return event.sessionId;
 }
 
+/** Exemption / on-duty filings must name a session of a section the student is enrolled in. */
+async function requireEnrolledSession(
+  ctx: MutationCtx,
+  student: Doc<"users">,
+  sessionId: Id<"class_sessions">,
+): Promise<void> {
+  const session = await ctx.db.get(sessionId);
+  if (session === null || session.institutionId !== student.institutionId) {
+    throw new ConvexError("That class session no longer exists.");
+  }
+  const enrollments = await ctx.db
+    .query("enrollments")
+    .withIndex("by_student", (q) => q.eq("studentId", student._id))
+    .collect();
+  if (!enrollments.some((enrollment) => enrollment.sectionId === session.sectionId)) {
+    throw new ConvexError("unauthorized");
+  }
+}
+
 export const submitMyRequest = mutation({
   args: {
     actorToken: v.string(),
     type: requestTypeValidator,
     reason: v.string(),
     eventId: v.optional(v.id("attendance_events")),
+    sessionId: v.optional(v.id("class_sessions")),
   },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
@@ -117,6 +139,12 @@ export const submitMyRequest = mutation({
         throw new ConvexError("Select the attendance record you want to dispute.");
       }
       sessionId = await requireDisputableEvent(ctx, caller, args.eventId);
+    } else {
+      if (args.sessionId === undefined) {
+        throw new ConvexError("Select the class session this request is for.");
+      }
+      await requireEnrolledSession(ctx, caller, args.sessionId);
+      sessionId = args.sessionId;
     }
 
     const pending = await ctx.db
@@ -140,7 +168,9 @@ export const submitMyRequest = mutation({
       status: "submitted",
       requestedAt,
       ...(sessionId !== undefined ? { sessionId } : {}),
-      ...(args.eventId !== undefined ? { eventId: args.eventId } : {}),
+      ...(args.type === "correction" && args.eventId !== undefined
+        ? { eventId: args.eventId }
+        : {}),
     });
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
@@ -226,13 +256,58 @@ export const listMyCorrectionableEvents = query({
 });
 
 /**
- * Correction disputes waiting for review, plus exemption / on-duty filings.
- * Faculty see correction requests routed to them via the recording session's
- * facultyId; session-less requests (exemption / on-duty) have no recording
- * session, so any faculty of the institution may act on them. Admins see
- * everything in their institution. Correction rows carry the disputed event's
- * current verdict so the reviewer sees the previous state without leaving the
- * queue.
+ * Sessions of the student's sections from the last 30 days, attended or
+ * missed, newest first — the exemption / on-duty picker's options.
+ */
+export const listMyRecentSessions = query({
+  args: { actorToken: v.string() },
+  returns: v.array(
+    v.object({
+      sessionId: v.id("class_sessions"),
+      courseCode: v.string(),
+      startedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const caller = await requireStudent(ctx, args.actorToken);
+    const since = Date.now() - SESSION_LOOKBACK_MS;
+
+    const enrollments = await ctx.db
+      .query("enrollments")
+      .withIndex("by_student", (q) => q.eq("studentId", caller._id))
+      .collect();
+
+    const rows: Array<{ sessionId: Id<"class_sessions">; courseCode: string; startedAt: number }> =
+      [];
+    for (const enrollment of enrollments) {
+      const sessions = await ctx.db
+        .query("class_sessions")
+        .withIndex("by_section_started", (q) =>
+          q.eq("sectionId", enrollment.sectionId).gte("startedAt", since),
+        )
+        .collect();
+      if (sessions.length === 0) continue;
+      const course = await ctx.db.get(sessions[0].courseId);
+      for (const session of sessions) {
+        rows.push({
+          sessionId: session._id,
+          courseCode: course?.code ?? "",
+          startedAt: session.startedAt,
+        });
+      }
+    }
+
+    rows.sort((a, b) => b.startedAt - a.startedAt);
+    return rows.slice(0, MAX_LISTED_SESSIONS);
+  },
+});
+
+/**
+ * Correction disputes plus exemption / on-duty filings waiting for review.
+ * Every request names a class session; faculty see only requests for sessions
+ * they ran, admins see everything in their institution (including legacy
+ * session-less filings). Correction rows carry the disputed event's current
+ * verdict so the reviewer sees the previous state without leaving the queue.
  */
 export const listReviewQueue = query({
   args: { actorToken: v.string() },
@@ -291,41 +366,41 @@ export const listReviewQueue = query({
     for (const request of submitted) {
       const student = await studentDoc(request.studentId);
       if (student === null) continue;
-      if (request.type !== "correction") {
-        rows.push({
-          requestId: request._id,
-          type: request.type,
-          studentName: student.name,
-          reason: request.reason,
-          requestedAt: request.requestedAt,
-        });
-        continue;
-      }
-      if (request.sessionId === undefined || request.eventId === undefined) continue;
-
-      const [session, event] = await Promise.all([
-        ctx.db.get(request.sessionId),
-        ctx.db.get(request.eventId),
-      ]);
-      if (session === null || event === null) continue;
-      if (caller.role === "faculty" && session.facultyId !== caller._id) continue;
-
-      const section = await ctx.db.get(session.sectionId);
-      const course = await ctx.db.get(session.courseId);
-
-      rows.push({
+      const base = {
         requestId: request._id,
         type: request.type,
         studentName: student.name,
         reason: request.reason,
         requestedAt: request.requestedAt,
+      };
+      if (request.sessionId === undefined) {
+        if (caller.role === "admin" && request.type !== "correction") rows.push(base);
+        continue;
+      }
+
+      const session = await ctx.db.get(request.sessionId);
+      if (session === null) continue;
+      if (caller.role === "faculty" && session.facultyId !== caller._id) continue;
+
+      const event = request.eventId !== undefined ? await ctx.db.get(request.eventId) : null;
+      if (request.type === "correction" && event === null) continue;
+
+      const section = await ctx.db.get(session.sectionId);
+      const course = await ctx.db.get(session.courseId);
+
+      rows.push({
+        ...base,
         sessionId: session._id,
         courseCode: course?.code ?? "",
         sectionName: section?.name ?? "",
         sessionStartedAt: session.startedAt,
-        eventId: event._id,
-        previousState: event.state,
-        previousReasonCodes: event.decision?.reasonCodes ?? [],
+        ...(event !== null
+          ? {
+              eventId: event._id,
+              previousState: event.state,
+              previousReasonCodes: event.decision?.reasonCodes ?? [],
+            }
+          : {}),
       });
     }
 
@@ -357,13 +432,9 @@ export const reviewRequest = mutation({
     if (request.status !== "submitted") throw new ConvexError("request_already_reviewed");
 
     if (reviewer.role === "faculty") {
-      // Session-less requests (exemption / on-duty) have no recording session
-      // to route by, so any faculty of the institution may review them.
-      if (request.sessionId !== undefined) {
-        const session = await ctx.db.get(request.sessionId);
-        if (session === null || session.facultyId !== reviewer._id) {
-          throw new ConvexError("unauthorized");
-        }
+      const session = request.sessionId !== undefined ? await ctx.db.get(request.sessionId) : null;
+      if (session === null || session.facultyId !== reviewer._id) {
+        throw new ConvexError("unauthorized");
       }
     }
 
@@ -408,7 +479,12 @@ export const reviewRequest = mutation({
         type: "attendance_request_reviewed",
         actorUserId: reviewer._id,
         subjectUserId: request.studentId,
-        payload: { requestId: request._id, decision: "approved", requestType: request.type },
+        payload: {
+          requestId: request._id,
+          decision: "approved",
+          requestType: request.type,
+          ...(request.sessionId !== undefined ? { sessionId: request.sessionId } : {}),
+        },
       });
       return { ok: true };
     }
@@ -511,16 +587,19 @@ export const listMyRequests = query({
         requestedAt: request.requestedAt,
         reviewedAt: request.reviewedAt,
       };
+      const session = request.sessionId !== undefined ? await ctx.db.get(request.sessionId) : null;
+      const course = session !== null ? await ctx.db.get(session.courseId) : null;
+      const sessionFields = {
+        ...(course !== null ? { courseCode: course.code } : {}),
+        ...(session !== null ? { sessionStartedAt: session.startedAt } : {}),
+      };
       if (request.eventId === undefined) {
-        rows.push(base);
+        rows.push({ ...base, ...sessionFields });
         continue;
       }
 
       const eventId = request.eventId;
       const event = await ctx.db.get(eventId);
-      const section = event !== null ? await ctx.db.get(event.sectionId) : null;
-      const course = section !== null ? await ctx.db.get(section.courseId) : null;
-      const session = request.sessionId !== undefined ? await ctx.db.get(request.sessionId) : null;
       const correction = await ctx.db
         .query("attendance_events")
         .withIndex("by_corrects_event", (q) => q.eq("correctsEventId", eventId))
@@ -528,9 +607,8 @@ export const listMyRequests = query({
 
       rows.push({
         ...base,
+        ...sessionFields,
         eventId,
-        ...(course !== null ? { courseCode: course.code } : {}),
-        ...(session !== null ? { sessionStartedAt: session.startedAt } : {}),
         ...(event !== null ? { disputedState: event.state } : {}),
         ...(correction !== null ? { correctionEventId: correction._id } : {}),
       });

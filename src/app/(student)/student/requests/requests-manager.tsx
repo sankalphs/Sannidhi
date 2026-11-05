@@ -54,18 +54,22 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
   const correctionableEvents = useQuery(api.attendanceRequests.listMyCorrectionableEvents, {
     actorToken,
   });
+  const recentSessions = useQuery(api.attendanceRequests.listMyRecentSessions, { actorToken });
   const submitRequest = useMutation(api.attendanceRequests.submitMyRequest);
 
   const [type, setType] = useState<"correction" | "exemption" | "on_duty">("correction");
   const [eventId, setEventId] = useState<string>("");
+  const [sessionId, setSessionId] = useState<string>("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justFiled, setJustFiled] = useState(false);
 
+  const missingTarget = type === "correction" ? eventId === "" : sessionId === "";
+
   async function submit() {
     if (submitting) return;
-    if (type === "correction" && eventId === "") return;
+    if (missingTarget) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -73,9 +77,9 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
         actorToken,
         type,
         reason,
-        ...(type === "correction" && eventId !== ""
+        ...(type === "correction"
           ? { eventId: eventId as Id<"attendance_events"> }
-          : {}),
+          : { sessionId: sessionId as Id<"class_sessions"> }),
       });
       setReason("");
       setJustFiled(true);
@@ -96,8 +100,8 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
             File a request
           </CardTitle>
           <CardDescription>
-            Ask for an attendance correction, an exemption, or mark an on-duty day. Your faculty
-            member reviews requests — the outcome lands in your history.
+            Ask for an attendance correction, an exemption, or mark an on-duty class. The faculty
+            member who ran that class reviews it — the outcome lands in your history.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -138,6 +142,32 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
                 ))}
               </select>
             </div>
+          ) : (
+            <div className="border-input bg-background ring-offset-background focus-visible:ring-ring flex max-w-md items-center gap-2 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none">
+              <label className="text-muted-foreground shrink-0 text-sm" htmlFor="request-session">
+                Class
+              </label>
+              <select
+                id="request-session"
+                aria-label="Class session"
+                value={sessionId}
+                onChange={(event) => setSessionId(event.target.value)}
+                className="bg-background w-full text-sm focus-visible:outline-none"
+                data-testid="request-session-picker"
+              >
+                <option value="">Select the class…</option>
+                {(recentSessions ?? []).map((session) => (
+                  <option key={session.sessionId} value={session.sessionId}>
+                    {`${session.courseCode} · ${formatDate(session.startedAt)}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          {type !== "correction" && recentSessions !== undefined && recentSessions.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              No class sessions in the last 30 days to file against.
+            </p>
           ) : null}
           {type === "correction" &&
           correctionableEvents !== undefined &&
@@ -158,11 +188,7 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
           <div className="flex items-center gap-3">
             <Button
               onClick={() => void submit()}
-              disabled={
-                submitting ||
-                reason.trim().length < MIN_REASON_LENGTH ||
-                (type === "correction" && eventId === "")
-              }
+              disabled={submitting || reason.trim().length < MIN_REASON_LENGTH || missingTarget}
             >
               {submitting ? <Loader2 className="animate-spin" /> : null}
               Submit request
@@ -213,6 +239,13 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
                         : ""}
                       {request.disputedState !== undefined ? ` · was ${request.disputedState}` : ""}
                       {request.correctionEventId !== undefined ? " → corrected to verified" : ""}
+                    </p>
+                  ) : request.courseCode !== undefined ? (
+                    <p className="text-muted-foreground text-xs">
+                      For: {request.courseCode}
+                      {request.sessionStartedAt !== undefined
+                        ? ` · ${formatDay(request.sessionStartedAt)}`
+                        : ""}
                     </p>
                   ) : null}
                 </div>
