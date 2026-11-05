@@ -328,6 +328,7 @@ test("strict venue policy escalates a far-away check-in to faculty review", asyn
     const close = facultyPage.getByTestId("close-session");
     await expect(close).toBeVisible({ timeout: 30_000 });
     await close.click();
+    await facultyPage.getByTestId("confirm-close-session").click();
     await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });
   }
 
