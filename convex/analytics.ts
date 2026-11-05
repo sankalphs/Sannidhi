@@ -13,7 +13,11 @@ import {
   type SectionTrendRow,
   type StudentTrajectory,
 } from "../src/lib/analytics";
-import { projectAttendanceState } from "../src/lib/attendance/projection";
+import {
+  isAbsence,
+  projectAttendanceState,
+  type AttendanceRecordState,
+} from "../src/lib/attendance/projection";
 import { requireAnalyticsAuthority } from "./lib/actor";
 import { studentTrajectoryRecords } from "./lib/analytics_projection";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -283,7 +287,7 @@ export type ReportRow = {
   studentEmail: string;
   courseCode: string;
   sectionName: string;
-  state: "verified" | "flagged" | "pending" | "rejected" | "corrected";
+  state: AttendanceRecordState;
   reasonCodes: string[];
   capturedAt: number;
 };
@@ -294,10 +298,21 @@ export type ReportRowsResult = {
   startMs: number;
   endMs: number;
   rows: ReportRow[];
-  summary: { total: number; verified: number; flagged: number; rejected: number; pending: number };
+  summary: {
+    total: number;
+    verified: number;
+    flagged: number;
+    rejected: number;
+    absent: number;
+    pending: number;
+  };
 };
 
-/** Rolling-window attendance report rows feeding the CSV/PDF exports. */
+/**
+ * Rolling-window attendance report rows feeding the CSV/PDF exports: one
+ * record per (session, student) for every class held in the window,
+ * including absentees of closed sessions (see isAbsence).
+ */
 export const reportRows = query({
   args: { actorToken: v.string(), period: v.string() },
   handler: async (ctx, args): Promise<ReportRowsResult> => {
@@ -316,54 +331,91 @@ export const reportRows = query({
       (event) => event.capturedAt < window.endMs && event.institutionId === caller.institutionId,
     );
 
-    const sectionCache = new Map<Id<"sections">, { sectionName: string; courseCode: string }>();
-    const userCache = new Map<Id<"users">, Doc<"users"> | null>();
+    type ReportRecord = {
+      studentId: Id<"users">;
+      sectionId: Id<"sections">;
+      state: AttendanceRecordState;
+      reasonCodes: string[];
+      capturedAt: number;
+    };
 
-    // One row per (session, student): a session that emitted pending then
+    // One record per (session, student): a session that emitted pending then
     // flagged then verified events is one record, resolved to its latest.
     // capturedAt ties break by seq so the choice is deterministic.
-    const bySessionStudent = new Map<
-      string,
-      { event: Doc<"attendance_events">; sectionId: Id<"sections"> }
-    >();
+    const bySessionStudent = new Map<string, Doc<"attendance_events">>();
     for (const event of events) {
       if (event.sessionId === undefined) continue;
       const key = `${event.sessionId}:${event.studentId}`;
       const existing = bySessionStudent.get(key);
       if (
         existing === undefined ||
-        event.capturedAt > existing.event.capturedAt ||
-        (event.capturedAt === existing.event.capturedAt && event.seq > existing.event.seq)
+        event.capturedAt > existing.capturedAt ||
+        (event.capturedAt === existing.capturedAt && event.seq > existing.seq)
       ) {
-        bySessionStudent.set(key, { event, sectionId: event.sectionId });
+        bySessionStudent.set(key, event);
+      }
+    }
+    const records: ReportRecord[] = [...bySessionStudent.values()].map((event) => ({
+      studentId: event.studentId,
+      sectionId: event.sectionId,
+      state: projectAttendanceState(event.state),
+      reasonCodes: event.decision?.reasonCodes ?? [],
+      capturedAt: event.capturedAt,
+    }));
+
+    const sectionCache = new Map<Id<"sections">, { sectionName: string; courseCode: string }>();
+    const courses = await ctx.db
+      .query("courses")
+      .withIndex("by_institution_code", (q) => q.eq("institutionId", caller.institutionId))
+      .collect();
+    for (const course of courses) {
+      const sections = await ctx.db
+        .query("sections")
+        .withIndex("by_course", (q) => q.eq("courseId", course._id))
+        .collect();
+      for (const section of sections) {
+        sectionCache.set(section._id, { sectionName: section.name, courseCode: course.code });
+        const sessions = await ctx.db
+          .query("class_sessions")
+          .withIndex("by_section_started", (q) =>
+            q
+              .eq("sectionId", section._id)
+              .gte("startedAt", window.startMs)
+              .lt("startedAt", window.endMs),
+          )
+          .collect();
+        if (sessions.length === 0) continue;
+        const enrollments = await ctx.db
+          .query("enrollments")
+          .withIndex("by_section", (q) => q.eq("sectionId", section._id))
+          .collect();
+        for (const session of sessions) {
+          for (const enrollment of enrollments) {
+            const attended = bySessionStudent.has(`${session._id}:${enrollment.studentId}`);
+            if (isAbsence({ session, enrolledAt: enrollment.enrolledAt, attended })) {
+              records.push({
+                studentId: enrollment.studentId,
+                sectionId: section._id,
+                state: "absent",
+                reasonCodes: [],
+                capturedAt: session.startedAt,
+              });
+            }
+          }
+        }
       }
     }
 
+    const userCache = new Map<Id<"users">, Doc<"users"> | null>();
     const rows: ReportRow[] = [];
-    for (const { event, sectionId } of [...bySessionStudent.values()].sort(
-      (a, b) => a.event.capturedAt - b.event.capturedAt,
-    )) {
-      let section = sectionCache.get(sectionId);
-      if (section === undefined) {
-        const sectionDoc = await ctx.db.get(sectionId);
-        const course = sectionDoc !== null ? await ctx.db.get(sectionDoc.courseId) : null;
-        if (sectionDoc !== null && course !== null) {
-          section = { sectionName: sectionDoc.name, courseCode: course.code };
-          sectionCache.set(sectionId, section);
-        } else {
-          sectionCache.set(
-            sectionId,
-            null as unknown as { sectionName: string; courseCode: string },
-          );
-          continue;
-        }
-      }
-      if (section === null) continue;
+    for (const record of records.sort((a, b) => a.capturedAt - b.capturedAt)) {
+      const section = sectionCache.get(record.sectionId);
+      if (section === undefined) continue;
 
-      let student = userCache.get(event.studentId);
+      let student = userCache.get(record.studentId);
       if (student === undefined) {
-        student = await ctx.db.get(event.studentId);
-        userCache.set(event.studentId, student);
+        student = await ctx.db.get(record.studentId);
+        userCache.set(record.studentId, student);
       }
       if (student === null) continue;
 
@@ -372,17 +424,25 @@ export const reportRows = query({
         studentEmail: student.email,
         courseCode: section.courseCode,
         sectionName: section.sectionName,
-        state: projectAttendanceState(event.state),
-        reasonCodes: event.decision?.reasonCodes ?? [],
-        capturedAt: event.capturedAt,
+        state: record.state,
+        reasonCodes: record.reasonCodes,
+        capturedAt: record.capturedAt,
       });
     }
 
-    const summary = { total: rows.length, verified: 0, flagged: 0, rejected: 0, pending: 0 };
+    const summary = {
+      total: rows.length,
+      verified: 0,
+      flagged: 0,
+      rejected: 0,
+      absent: 0,
+      pending: 0,
+    };
     for (const row of rows) {
       if (row.state === "verified" || row.state === "corrected") summary.verified += 1;
       else if (row.state === "flagged") summary.flagged += 1;
       else if (row.state === "rejected") summary.rejected += 1;
+      else if (row.state === "absent") summary.absent += 1;
       else summary.pending += 1;
     }
 

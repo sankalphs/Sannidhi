@@ -1,4 +1,4 @@
-import { projectAttendanceState } from "../../src/lib/attendance/projection";
+import { isAbsence, projectAttendanceState } from "../../src/lib/attendance/projection";
 import type { TrajectoryRecord } from "../../src/lib/analytics/trajectory";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
@@ -30,12 +30,42 @@ export function latestEventBySession(
 }
 
 /**
+ * Closed sessions of the student's enrolled sections that count as absences
+ * (see isAbsence), given every attendance event the student has. Sessions
+ * before a student joined a section, and open or paused sessions, never count.
+ */
+export async function missedClassSessions(
+  ctx: QueryCtx,
+  args: { studentId: Id<"users">; events: Array<Doc<"attendance_events">> },
+): Promise<Array<Doc<"class_sessions">>> {
+  const attendedSessionIds = new Set(args.events.map((event) => event.sessionId));
+  const enrollments = await ctx.db
+    .query("enrollments")
+    .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
+    .collect();
+
+  const missed: Array<Doc<"class_sessions">> = [];
+  for (const enrollment of enrollments) {
+    const sessions = await ctx.db
+      .query("class_sessions")
+      .withIndex("by_section_started", (q) =>
+        q.eq("sectionId", enrollment.sectionId).gte("startedAt", enrollment.enrolledAt),
+      )
+      .collect();
+    for (const session of sessions) {
+      const attended = attendedSessionIds.has(session._id);
+      if (isAbsence({ session, enrolledAt: enrollment.enrolledAt, attended })) {
+        missed.push(session);
+      }
+    }
+  }
+  return missed;
+}
+
+/**
  * Single source of truth for trajectory records: a student's own attendance
- * events resolved to one record per session, plus synthesized "absent"
- * records for closed sessions of enrolled sections where the student left
- * no event. Synthesis starts at each enrollment's own start — sessions
- * before a student joined a section never count as that student's absences —
- * and open or paused sessions never count; only settled classes do.
+ * events resolved to one record per session, plus an "absent" record for
+ * every missed class session.
  */
 export async function studentTrajectoryRecords(
   ctx: QueryCtx,
@@ -50,29 +80,9 @@ export async function studentTrajectoryRecords(
     state: projectAttendanceState(event.state),
     capturedAt: event.capturedAt,
   }));
-
-  const enrollments = await ctx.db
-    .query("enrollments")
-    .withIndex("by_student", (q) => q.eq("studentId", args.studentId))
-    .collect();
-
-  for (const enrollment of enrollments) {
-    const sessions = await ctx.db
-      .query("class_sessions")
-      .withIndex("by_section_started", (q) => q.eq("sectionId", enrollment.sectionId))
-      .collect();
-    for (const session of sessions) {
-      if (session.status !== "closed") continue;
-      if (session.startedAt < enrollment.enrolledAt) continue;
-      const attended = events.some(
-        (event) => event.sessionId !== undefined && event.sessionId === session._id,
-      );
-      if (!attended) {
-        records.push({ state: "absent", capturedAt: session.startedAt });
-      }
-    }
+  for (const session of await missedClassSessions(ctx, { studentId: args.studentId, events })) {
+    records.push({ state: "absent", capturedAt: session.startedAt });
   }
-
   return records;
 }
 

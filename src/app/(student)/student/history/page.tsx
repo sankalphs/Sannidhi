@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import {
   DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
   summarizeAttendance,
+  type AttendanceRecordState,
 } from "@/lib/attendance/projection";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
@@ -23,7 +24,7 @@ type StudentHistoryRow = {
   courseId: string;
   courseCode: string;
   courseTitle: string;
-  state: "verified" | "flagged" | "pending" | "rejected" | "corrected";
+  state: AttendanceRecordState;
   decidedAt: number;
   reasonCodes: string[];
 };

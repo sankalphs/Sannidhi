@@ -5,7 +5,7 @@ import {
   type AttendanceSummary,
 } from "@/lib/attendance/projection";
 
-export type TrajectoryRecordState = AttendanceRecordState | "absent";
+export type TrajectoryRecordState = AttendanceRecordState;
 
 export type TrajectoryRecord = { state: TrajectoryRecordState; capturedAt: number };
 
@@ -67,12 +67,7 @@ export function analyzeTrajectory(
   thresholdPercent: number = DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
 ): StudentTrajectory {
   const sorted = [...records].sort((a, b) => a.capturedAt - b.capturedAt);
-  const summary = summarizeAttendance(
-    sorted.map((record) => ({
-      state: record.state === "absent" ? ("rejected" as const) : record.state,
-    })),
-    thresholdPercent,
-  );
+  const summary = summarizeAttendance(sorted, thresholdPercent);
 
   const heldStates = sorted
     .filter((record) => record.state !== "pending")

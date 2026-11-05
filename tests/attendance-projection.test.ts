@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
+  isAbsence,
   projectAttendanceState,
   summarizeAttendance,
   type AttendanceRecordState,
@@ -165,6 +166,15 @@ describe("summarizeAttendance", () => {
     expect(summary.mustAttend).toBe(5);
   });
 
+  it("counts missed classes as held and unattended, so absences pull the percentage down", () => {
+    const summary = summarizeAttendance(records("verified", "absent", "verified", "absent"));
+    expect(summary.totalHeld).toBe(4);
+    expect(summary.rejectedCount).toBe(2);
+    expect(summary.percentage).toBe(50);
+    expect(summary.canMiss).toBe(0);
+    expect(summary.mustAttend).toBe(4);
+  });
+
   it.each([0, -1, 100, 150])("rejects a threshold of %d percent", (thresholdPercent) => {
     expect(() => summarizeAttendance(records("verified"), thresholdPercent)).toThrow(RangeError);
   });
@@ -193,5 +203,30 @@ describe("projectAttendanceState", () => {
   it("falls back to pending for unknown states", () => {
     expect(projectAttendanceState("something_else")).toBe("pending");
     expect(projectAttendanceState("")).toBe("pending");
+  });
+});
+
+describe("isAbsence", () => {
+  const closed = { status: "closed", startedAt: 1_000 };
+
+  it("counts a closed session after enrollment with no student event", () => {
+    expect(isAbsence({ session: closed, enrolledAt: 500, attended: false })).toBe(true);
+    expect(isAbsence({ session: closed, enrolledAt: 1_000, attended: false })).toBe(true);
+  });
+
+  it("never counts a session the student left an event in", () => {
+    expect(isAbsence({ session: closed, enrolledAt: 500, attended: true })).toBe(false);
+  });
+
+  it("never counts sessions held before the student enrolled", () => {
+    expect(isAbsence({ session: closed, enrolledAt: 1_001, attended: false })).toBe(false);
+  });
+
+  it("never counts open or paused sessions", () => {
+    for (const status of ["active", "paused"]) {
+      expect(
+        isAbsence({ session: { status, startedAt: 1_000 }, enrolledAt: 0, attended: false }),
+      ).toBe(false);
+    }
   });
 });
