@@ -107,3 +107,92 @@ export const setUserRole = mutation({
     return { ok: true as const };
   },
 });
+
+/**
+ * Deletes someone who never activated — still "invited", with no attendance,
+ * device, passkey, password or biometrics — and revokes their pending
+ * invites; any roster enrollments go with them. Anyone with history is
+ * refused (suspend them instead) so the evidence trail stays intact.
+ */
+export const removeInvitedUser = mutation({
+  args: { actorToken: v.string(), userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const { admin, target } = await requireAdminAndTarget(ctx, args.actorToken, args.userId);
+    if (target.status !== "invited") {
+      throw new ConvexError(
+        `${target.name} has already activated their account — suspend it instead of removing it`,
+      );
+    }
+    const userId = target._id;
+    const history = await Promise.all([
+      ctx.db
+        .query("attendance_events")
+        .withIndex("by_student_section", (q) => q.eq("studentId", userId))
+        .first(),
+      ctx.db
+        .query("devices")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first(),
+      ctx.db
+        .query("passkey_credentials")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first(),
+      ctx.db
+        .query("password_credentials")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first(),
+      ctx.db
+        .query("biometric_records")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .first(),
+    ]);
+    if (history.some((row) => row !== null)) {
+      throw new ConvexError(
+        `${target.name} has already started using Sannidhi — suspend the account instead of removing it`,
+      );
+    }
+    const taughtSlot = await ctx.db
+      .query("timetable_slots")
+      .withIndex("by_faculty_day", (q) => q.eq("facultyId", userId))
+      .first();
+    if (taughtSlot !== null) {
+      throw new ConvexError(
+        `${target.name} is assigned to a timetable slot — reassign it on the Schedule page first`,
+      );
+    }
+
+    const enrollments = await ctx.db
+      .query("enrollments")
+      .withIndex("by_student", (q) => q.eq("studentId", userId))
+      .collect();
+    for (const enrollment of enrollments) await ctx.db.delete(enrollment._id);
+
+    const revokedInviteIds: Id<"invites">[] = [];
+    const invites = await ctx.db
+      .query("invites")
+      .withIndex("by_email", (q) => q.eq("email", target.email))
+      .collect();
+    for (const invite of invites) {
+      if (invite.institutionId !== target.institutionId || invite.status !== "pending") continue;
+      await ctx.db.patch(invite._id, { status: "revoked" });
+      revokedInviteIds.push(invite._id);
+    }
+
+    await ctx.db.delete(userId);
+    await ctx.runMutation(internal.ledger.appendLedgerEvent, {
+      institutionId: target.institutionId,
+      category: "identity",
+      type: "identity.user_removed",
+      actorUserId: admin._id,
+      subjectUserId: userId,
+      payload: {
+        email: target.email,
+        name: target.name,
+        role: target.role,
+        revokedInviteIds,
+        removedEnrollments: enrollments.length,
+      },
+    });
+    return { ok: true as const };
+  },
+});
