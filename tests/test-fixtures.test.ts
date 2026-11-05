@@ -22,11 +22,9 @@ describe("convex/testFixtures.ts", () => {
     expect(source).toContain("for (const table of ALL_TABLES)");
   });
 
-  it("computes today's weekday and brackets the current time for a live slot", () => {
-    expect(source).toMatch(/const todayDayOfWeek = seedMoment\.getDay\(\)/);
-    expect(source).toMatch(
-      /const currentMinutes = seedMoment\.getHours\(\) \* 60 \+ seedMoment\.getMinutes\(\)/,
-    );
+  it("computes today's weekday and time in the institution timezone for a live slot", () => {
+    expect(source).toMatch(/const todayDayOfWeek = institutionDayOfWeek\(now\)/);
+    expect(source).toMatch(/const currentMinutes = institutionMinutesOfDay\(now\)/);
     expect(source).toMatch(/dayOfWeek: todayDayOfWeek/);
     expect(source).toMatch(/startMinutes: liveStartMinutes/);
     expect(source).toMatch(/endMinutes: liveEndMinutes/);

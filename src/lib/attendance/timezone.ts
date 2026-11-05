@@ -17,6 +17,20 @@ export function institutionDayOfWeek(timestamp: number): number {
   return ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(weekday);
 }
 
+/** Minutes since midnight (0–1439) of an instant in the institution timezone. */
+export function institutionMinutesOfDay(timestamp: number): number {
+  const [hours, minutes] = new Intl.DateTimeFormat("en-GB", {
+    timeZone: INSTITUTION_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  })
+    .format(timestamp)
+    .split(":")
+    .map(Number);
+  return hours * 60 + minutes;
+}
+
 /** Calendar date (YYYY-MM-DD) of an instant in the institution timezone. */
 const DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
   timeZone: INSTITUTION_TIME_ZONE,

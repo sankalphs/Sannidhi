@@ -8,6 +8,7 @@ import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
 import { computeEventHash } from "../src/lib/ledger/hash";
 import { RISK_POLICY_VERSION } from "../src/lib/risk/types";
 import type { Decision } from "../src/lib/decision";
+import { institutionDayOfWeek, institutionMinutesOfDay } from "../src/lib/attendance/timezone";
 import { ALL_TABLES, deleteRows } from "./lib/wipe";
 
 /**
@@ -246,10 +247,11 @@ async function loadFixtures(ctx: MutationCtx) {
     slotCount += 1;
   }
 
-  const seedMoment = new Date(now);
-  const todayDayOfWeek = seedMoment.getDay();
+  // "Today" in the institution's timezone — the same clock the faculty
+  // schedule reads — so the live slot exists whatever the server's zone.
+  const todayDayOfWeek = institutionDayOfWeek(now);
   const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
-  const currentMinutes = seedMoment.getHours() * 60 + seedMoment.getMinutes();
+  const currentMinutes = institutionMinutesOfDay(now);
   const liveStartMinutes = Math.max(0, currentMinutes - 15);
   const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
 
