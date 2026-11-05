@@ -55,6 +55,19 @@ describe("deviceErrorResponse", () => {
     expect(status).toBe(400);
   });
 
+  it("points an expired or exhausted possession code at reissue", async () => {
+    const { status, body } = await jsonResponse(new ConvexError("verification attempts-exhausted"));
+    expect(status).toBe(400);
+    expect(body.error).toContain("Issue a new code");
+  });
+
+  it("maps a reissue on an already verified device to 409", async () => {
+    const { status } = await jsonResponse(
+      new ConvexError("device is not awaiting a possession code"),
+    );
+    expect(status).toBe(409);
+  });
+
   it("maps unauthorized to 403", async () => {
     const { status } = await jsonResponse(new ConvexError("unauthorized"));
     expect(status).toBe(403);

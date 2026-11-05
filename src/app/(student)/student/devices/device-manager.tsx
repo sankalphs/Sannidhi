@@ -91,6 +91,20 @@ export function DeviceManager({
     });
   }
 
+  async function reissueCode(deviceId: string) {
+    await runDeviceOp(deviceId, async () => {
+      try {
+        const result = await postJson("/api/devices", { action: "reissue-code", deviceId });
+        const possessionCode = typeof result.code === "string" ? result.code : "";
+        setPendingCode({ deviceId, code: possessionCode });
+        setCode("");
+        setPhase("awaiting-code");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not issue a new code");
+      }
+    });
+  }
+
   async function activate(deviceId: string) {
     await runDeviceOp(deviceId, async () => {
       try {
@@ -311,10 +325,11 @@ export function DeviceManager({
             </p>
           ) : (
             <p className="text-muted-foreground text-sm">
-              Enter the six-digit code issued when you registered this device.
+              Enter the six-digit code issued when you registered this device. Lost it, or did it
+              expire? Issue a new code.
             </p>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               className="w-36 font-mono"
               inputMode="numeric"
@@ -329,6 +344,14 @@ export function DeviceManager({
               onClick={() => verify(pendingCode.deviceId)}
             >
               Verify
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busyDeviceId !== null}
+              onClick={() => reissueCode(pendingCode.deviceId)}
+            >
+              Issue new code
             </Button>
             <Button
               variant="ghost"
