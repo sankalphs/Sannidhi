@@ -10,7 +10,6 @@ import { requireActorUserWithActiveSession } from "./lib/actor";
 
 const MAX_REASON_LENGTH = 1000;
 const MIN_REASON_LENGTH = 10;
-const MAX_REVIEW_NOTE_LENGTH = 1000;
 const MAX_LISTED_REQUESTS = 50;
 const MAX_REVIEW_NOTE_LENGTH = 500;
 const MAX_PENDING_REQUESTS = 10;
@@ -445,7 +444,6 @@ export const reviewRequest = mutation({
 
     const reviewedAt = Date.now();
     const reviewNote = args.note?.trim() ?? "";
-    if (reviewNote.length > MAX_REVIEW_NOTE_LENGTH) throw new ConvexError("note_too_long");
     const noteField = reviewNote.length > 0 ? { reviewNote } : {};
 
     if (args.decision === "dismissed") {
