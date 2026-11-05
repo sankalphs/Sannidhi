@@ -32,7 +32,7 @@ const KIND_BADGES: Record<
   { label: string; variant: "secondary" | "destructive" | "outline" }
 > = {
   low_attendance: { label: "Low attendance", variant: "secondary" },
-  proxy_attempt: { label: "Proxy attempt", variant: "destructive" },
+  proxy_attempt: { label: "Flagged check-ins", variant: "destructive" },
   verification_anomaly: { label: "Verification anomaly", variant: "outline" },
 };
 
