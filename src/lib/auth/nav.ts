@@ -10,7 +10,8 @@ export type NavIcon =
   | "scroll"
   | "inbox"
   | "insights"
-  | "file";
+  | "file"
+  | "calendar";
 
 export type NavItem = {
   label: string;
@@ -49,6 +50,7 @@ export const ROLE_NAV: Record<Role, NavItem[]> = {
     { label: "Review inbox", href: "/admin/review", icon: "inbox" },
     { label: "Reports", href: "/admin/reports", icon: "file" },
     { label: "Courses & sections", href: "/admin/courses", icon: "book" },
+    { label: "Venues & timetable", href: "/admin/schedule", icon: "calendar" },
     { label: "Policies", href: "/admin/policies", icon: "landmark" },
     { label: "Event ledger", href: "/audit/events", icon: "scroll" },
   ],

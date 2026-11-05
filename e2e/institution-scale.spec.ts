@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -42,7 +42,7 @@ test.afterAll(async () => {
   await adminContext.close().catch(() => {});
   await facultyContext.close().catch(() => {});
   await studentContext.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 function institutionCard(page: Page) {

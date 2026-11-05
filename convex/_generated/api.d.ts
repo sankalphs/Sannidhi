@@ -17,7 +17,6 @@ import type * as challenges from "../challenges.js";
 import type * as checkin from "../checkin.js";
 import type * as classSessions from "../classSessions.js";
 import type * as crons from "../crons.js";
-import type * as demo from "../demo.js";
 import type * as departments from "../departments.js";
 import type * as devices from "../devices.js";
 import type * as enrollment from "../enrollment.js";
@@ -32,15 +31,18 @@ import type * as lib_policyContext from "../lib/policyContext.js";
 import type * as lib_policyStore from "../lib/policyStore.js";
 import type * as lib_retentionSweep from "../lib/retentionSweep.js";
 import type * as lib_rosterSyncRows from "../lib/rosterSyncRows.js";
+import type * as lib_wipe from "../lib/wipe.js";
 import type * as maintenance from "../maintenance.js";
 import type * as offlineSync from "../offlineSync.js";
 import type * as passkeys from "../passkeys.js";
 import type * as passkeysInternal from "../passkeysInternal.js";
 import type * as reviewAlerts from "../reviewAlerts.js";
 import type * as rosterSync from "../rosterSync.js";
-import type * as seed from "../seed.js";
+import type * as schedule from "../schedule.js";
 import type * as sessions from "../sessions.js";
+import type * as setup from "../setup.js";
 import type * as stepup from "../stepup.js";
+import type * as testFixtures from "../testFixtures.js";
 import type * as users from "../users.js";
 
 import type {
@@ -59,7 +61,6 @@ declare const fullApi: ApiFromModules<{
   checkin: typeof checkin;
   classSessions: typeof classSessions;
   crons: typeof crons;
-  demo: typeof demo;
   departments: typeof departments;
   devices: typeof devices;
   enrollment: typeof enrollment;
@@ -74,15 +75,18 @@ declare const fullApi: ApiFromModules<{
   "lib/policyStore": typeof lib_policyStore;
   "lib/retentionSweep": typeof lib_retentionSweep;
   "lib/rosterSyncRows": typeof lib_rosterSyncRows;
+  "lib/wipe": typeof lib_wipe;
   maintenance: typeof maintenance;
   offlineSync: typeof offlineSync;
   passkeys: typeof passkeys;
   passkeysInternal: typeof passkeysInternal;
   reviewAlerts: typeof reviewAlerts;
   rosterSync: typeof rosterSync;
-  seed: typeof seed;
+  schedule: typeof schedule;
   sessions: typeof sessions;
+  setup: typeof setup;
   stepup: typeof stepup;
+  testFixtures: typeof testFixtures;
   users: typeof users;
 }>;
 

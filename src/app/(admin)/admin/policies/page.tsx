@@ -51,8 +51,8 @@ export default async function AdminPoliciesPage() {
         <PageHeader eyebrow="Admin" title="Policies" description="Thresholds and step-up rules." />
         <EmptyState
           icon={Landmark}
-          title="No institution yet"
-          description="Run `bun run seed` against your local Convex backend to create demo data."
+          title="Policies unavailable"
+          description="Policies could not be loaded. Refresh the page to try again."
         />
       </div>
     );

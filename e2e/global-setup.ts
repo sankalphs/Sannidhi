@@ -1,30 +1,28 @@
 import { execSync } from "node:child_process";
 
-const RESEED_COMMANDS = ["seed:clearDemoData", "seed:seedDemoData"] as const;
-
-export function reseedDemoData(): boolean {
+/** Wipes the local deployment and reloads fixtures (needs SANNIDHI_TEST_FIXTURES=1 on Convex). */
+export function resetFixtures(): boolean {
   try {
-    for (const command of RESEED_COMMANDS) {
-      execSync(`bunx convex run ${command}`, { stdio: "ignore" });
-    }
+    execSync("bunx convex run testFixtures:reset", { stdio: "ignore" });
     return true;
   } catch (cause) {
-    console.warn(`[sannidhi-e2e] demo reseed skipped: ${String(cause)}`);
+    console.warn(`[sannidhi-e2e] fixture reset skipped: ${String(cause)}`);
     return false;
   }
 }
 
 export default function globalSetup(): void {
-  if (reseedDemoData()) {
-    console.log("[sannidhi-e2e] demo data cleared and reseeded");
+  if (resetFixtures()) {
+    console.log("[sannidhi-e2e] test fixtures reset");
     return;
   }
   if (process.env.SANNIDHI_E2E_ALLOW_STALE_SEED === "1") {
-    console.warn("[sannidhi-e2e] continuing without a deterministic reseed");
+    console.warn("[sannidhi-e2e] continuing without a deterministic fixture reset");
     return;
   }
   throw new Error(
-    "[sannidhi-e2e] demo reseed failed; aborting the suite. " +
-      "Set SANNIDHI_E2E_ALLOW_STALE_SEED=1 to run against stale data.",
+    "[sannidhi-e2e] fixture reset failed; aborting the suite. " +
+      "Set SANNIDHI_TEST_FIXTURES=1 on the Convex deployment, or " +
+      "SANNIDHI_E2E_ALLOW_STALE_SEED=1 to run against stale data.",
   );
 }

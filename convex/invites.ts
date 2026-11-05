@@ -103,7 +103,7 @@ export async function activateUserAndAcceptInvite(
   });
 }
 
-async function createSingleInvite(
+export async function createSingleInvite(
   ctx: MutationCtx,
   args: {
     institutionId: Id<"institutions">;

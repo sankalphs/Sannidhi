@@ -45,7 +45,7 @@ export function PasskeyLoginButton() {
     try {
       if (passkeysUnsupported()) {
         throw new Error(
-          "This browser does not support passkeys. Use demo access below or switch browsers.",
+          "This browser does not support passkeys. Use the USN / Email tab or switch browsers.",
         );
       }
       const optionsResponse = await fetch("/api/auth/webauthn/authenticate/options", {
@@ -63,7 +63,7 @@ export function PasskeyLoginButton() {
 
       const response = await withTimeout(
         startAuthentication({ optionsJSON: options }),
-        "Passkey sign-in timed out. Try again, or use the demo access below.",
+        "Passkey sign-in timed out. Try again, or use the USN / Email tab.",
       );
 
       const verifyResponse = await fetch("/api/auth/webauthn/authenticate/verify", {

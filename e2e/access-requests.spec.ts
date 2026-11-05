@@ -32,7 +32,7 @@ test("the request-access form rejects a blank submission", async ({ page }) => {
   await expect(page.getByText("Request received")).toHaveCount(0);
 });
 
-test("the login page highlights the requested persona and demo login reaches the panel", async ({
+test("the login page highlights the requested persona and dev login reaches the panel", async ({
   page,
 }) => {
   await page.goto("/login?as=student");

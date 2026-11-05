@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -90,7 +90,7 @@ test.afterAll(async () => {
   await facultyContext.close().catch(() => {});
   await studentContext.close().catch(() => {});
   await adminContext.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 /**

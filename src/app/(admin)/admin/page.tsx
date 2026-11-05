@@ -1,6 +1,7 @@
 import {
   ArrowRight,
   BookOpen,
+  CalendarClock,
   ChartColumn,
   FileText,
   Inbox,
@@ -51,6 +52,13 @@ const DIRECTORY: DirectoryCard[] = [
     description: "Catalog, departments, and roster sync for timetables and sessions.",
     href: "/admin/courses",
     cta: "Manage courses",
+  },
+  {
+    icon: CalendarClock,
+    title: "Venues & timetable",
+    description: "Rooms with check-in geofences, and the weekly slots faculty start sessions from.",
+    href: "/admin/schedule",
+    cta: "Manage schedule",
   },
   {
     icon: Landmark,
