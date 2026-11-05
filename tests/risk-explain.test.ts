@@ -219,6 +219,25 @@ describe("faculty tier", () => {
     expect(explanation.message).toContain("location mismatch");
   });
 
+  it("explains a location mismatch a passed camera check could not resolve", () => {
+    const decision = decide(
+      input([
+        identitySessionSignal(),
+        challengePresenceSignal("session_1"),
+        deviceTrustSignal({ state: "active" }),
+        geolocationSignal({ verdict: "mismatch", distanceMeters: 900 }),
+        faceMatchSignal({ verdict: "match", similarity: 0.95 }),
+      ]),
+    );
+    expect(decision.outcome).toBe("flag");
+    expect(explainDecision(decision, "faculty").message).toContain(
+      "location unresolved after step-up",
+    );
+    expect(explainDecision(decision, "student").actions[0]).toContain(
+      "faculty member will confirm",
+    );
+  });
+
   it("renders device_state suffix codes readably", () => {
     const decision = flaggedDecision();
     const explanation = explainDecision(decision, "faculty");
