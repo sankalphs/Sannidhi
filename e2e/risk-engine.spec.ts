@@ -153,11 +153,11 @@ test("step-up: far-away geolocation demands an extra check", async () => {
   await expect(studentPage.getByTestId("face-start")).toBeVisible({ timeout: 60_000 });
 });
 
-test("replay: a consumed code reports already used", async () => {
+test("replay: re-submitting a consumed code echoes the settled check-in", async () => {
   test.setTimeout(180_000);
 
   // Fresh session: the previous scenario left this student mid-step-up; the
-  // replay verdict below must come from the consumed nonce, not that state.
+  // echo below must come from this session's settled check-in, not that state.
   await rotateFacultySession();
 
   const token = await nextFreshToken();
@@ -170,13 +170,14 @@ test("replay: a consumed code reports already used", async () => {
 
   await reloadScanner();
   await submitCode(token);
-  await expect(studentPage.getByTestId("checkin-outcome")).toContainText(/already used/i, {
+  // An honest re-submit (a reloaded QR link, a second scan) is not a replay
+  // anomaly: the student sees their settled check-in again.
+  await expect(studentPage.getByTestId("outcome-headline")).toContainText(/you're checked in/i, {
     timeout: 60_000,
   });
 
-  // The replayed scan reports its verdict, but it must not overturn the
-  // settled outcome: the board keeps the student's verified row and appends
-  // no rejection over it.
+  // The re-submit must not overturn the settled outcome: the board keeps the
+  // student's verified row and appends no rejection over it.
   const boardRows = facultyPage.locator('[data-testid^="board-row-"]');
   await expect(boardRows.filter({ hasText: /verified/i }).first()).toBeVisible({
     timeout: 30_000,

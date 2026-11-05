@@ -297,6 +297,16 @@ test("step-up: unavailable camera escalates to faculty review", async ({ browser
     timeout: 30_000,
   });
 
+  // A fresh code scanned in the venue cannot upgrade the settled flag: the
+  // student gets their flagged outcome echoed and the row stays flagged.
+  const freshToken = await nextFreshToken();
+  await openScannerAt(deniedContext, deniedPage, LH1_COORDS);
+  await submitCode(deniedPage, freshToken);
+  await expect(deniedPage.getByTestId("outcome-verdict")).toHaveText(/flag/i, {
+    timeout: 60_000,
+  });
+  await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/flagged/i);
+
   await overrideViaDialog(rowId, "Student arrived without a working camera; verified in person.");
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {
     timeout: 30_000,

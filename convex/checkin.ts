@@ -291,64 +291,12 @@ export const redeemChallenge = mutation({
       });
     }
 
-    const nonceHash = await nonceDigest(payload.n);
-    const storedDoc = await ctx.db
-      .query("session_challenges")
-      .withIndex("by_nonceHash", (q) => q.eq("nonceHash", nonceHash))
-      .first();
-
-    // A displayed code is shared by the whole class; it counts as replayed
-    // only for a student who already redeemed it.
-    const priorRedemption =
-      storedDoc !== null
-        ? await ctx.db
-            .query("session_challenge_redemptions")
-            .withIndex("by_challenge_student", (q) =>
-              q.eq("challengeId", storedDoc._id).eq("studentId", caller._id),
-            )
-            .first()
-        : null;
-
-    // Token verdicts outrank session idempotency: a replayed, expired, or
-    // malformed code still reports its own verdict even when the student is
-    // already settled in this session.
-    const outcome = await classifyRedeem({
-      verified,
-      stored:
-        storedDoc !== null
-          ? {
-              nonceHash: storedDoc.nonceHash,
-              issuedAt: storedDoc.issuedAt,
-              expiresAt: storedDoc.expiresAt,
-              consumedAt: priorRedemption?.redeemedAt,
-            }
-          : undefined,
-      session: {
-        institutionId: session.institutionId,
-        sessionId: session._id,
-        courseId: session.courseId,
-        sectionId: session.sectionId,
-        venueId: session.venueId,
-        windowEndsAt: session.windowEndsAt,
-        status: session.status,
-      } satisfies SessionContextState,
-      now,
-    });
-
-    if (outcome.verdict !== "valid") {
-      await appendFailure(outcome.verdict, outcome.reasonCodes, nonceHash, session._id);
-      return fail({ kind: "failed", verdict: outcome.verdict, reasonCodes: outcome.reasonCodes });
-    }
-
-    if (storedDoc === null) {
-      await appendFailure("replayed", ["challenge_unknown"], nonceHash, session._id);
-      return fail({ kind: "failed", verdict: "replayed", reasonCodes: ["challenge_unknown"] });
-    }
-
     // (session, student) idempotency: once a decision state is settled for
-    // this student in this session, a fresh valid code cannot self-upgrade
-    // it. A flagged student re-scanning gets their flagged outcome echoed
-    // back, not a second shot at an accept.
+    // this student in this session, no code — fresh, reused or expired — can
+    // self-upgrade it. A flagged student re-scanning gets their flagged
+    // outcome echoed back, not a second shot at an accept. This runs before
+    // the token verdict so an honest re-submit (a reloaded QR link, a second
+    // scan) is not recorded as a replay anomaly against the student.
     const settled = await latestEventForStudent(ctx, {
       studentId: caller._id,
       sectionId: session.sectionId,
@@ -387,6 +335,57 @@ export const redeemChallenge = mutation({
         policyVersion: settled.decision?.policyVersion ?? "unknown",
         decidedAt: settled.capturedAt,
       };
+    }
+
+    const nonceHash = await nonceDigest(payload.n);
+    const storedDoc = await ctx.db
+      .query("session_challenges")
+      .withIndex("by_nonceHash", (q) => q.eq("nonceHash", nonceHash))
+      .first();
+
+    // A displayed code is shared by the whole class; it counts as replayed
+    // only for a student who already redeemed it.
+    const priorRedemption =
+      storedDoc !== null
+        ? await ctx.db
+            .query("session_challenge_redemptions")
+            .withIndex("by_challenge_student", (q) =>
+              q.eq("challengeId", storedDoc._id).eq("studentId", caller._id),
+            )
+            .first()
+        : null;
+
+    const outcome = await classifyRedeem({
+      verified,
+      stored:
+        storedDoc !== null
+          ? {
+              nonceHash: storedDoc.nonceHash,
+              issuedAt: storedDoc.issuedAt,
+              expiresAt: storedDoc.expiresAt,
+              consumedAt: priorRedemption?.redeemedAt,
+            }
+          : undefined,
+      session: {
+        institutionId: session.institutionId,
+        sessionId: session._id,
+        courseId: session.courseId,
+        sectionId: session.sectionId,
+        venueId: session.venueId,
+        windowEndsAt: session.windowEndsAt,
+        status: session.status,
+      } satisfies SessionContextState,
+      now,
+    });
+
+    if (outcome.verdict !== "valid") {
+      await appendFailure(outcome.verdict, outcome.reasonCodes, nonceHash, session._id);
+      return fail({ kind: "failed", verdict: outcome.verdict, reasonCodes: outcome.reasonCodes });
+    }
+
+    if (storedDoc === null) {
+      await appendFailure("replayed", ["challenge_unknown"], nonceHash, session._id);
+      return fail({ kind: "failed", verdict: "replayed", reasonCodes: ["challenge_unknown"] });
     }
 
     await ctx.db.insert("session_challenge_redemptions", {
