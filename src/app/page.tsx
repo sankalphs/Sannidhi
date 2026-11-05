@@ -22,7 +22,7 @@ const STEPS = [
     number: "1",
     title: "Start the session",
     description:
-      "Faculty open the timetable and tap once. A rotating QR appears — it refreshes every few seconds, so screenshots and replays are worthless.",
+      "Faculty open the timetable and tap once. A QR appears and refreshes every 30 seconds; each code expires within a minute, and check-ins are weighed against the phone's location when it's shared.",
   },
   {
     number: "2",
@@ -87,14 +87,14 @@ const PANELS = [
 
 const TRUST = [
   {
-    title: "Passkeys, not passwords",
+    title: "Passkeys first",
     description:
-      "Accounts activate with a passkey bound to the student's own device. Nothing to phish, nothing to share.",
+      "Accounts activate with a passkey bound to the student's own device. A USN or email password stays available as a fallback for shared devices.",
   },
   {
     title: "Challenges that expire",
     description:
-      "Session QRs rotate every few seconds behind single-use nonces. A screenshot from last week proves nothing.",
+      "Session QRs refresh every 30 seconds and expire within a minute, and each student can check in once per session. A forwarded screenshot is still weighed against the phone's location.",
   },
   {
     title: "A ledger that remembers",
@@ -138,7 +138,7 @@ export default function Home() {
                 </Button>
               </div>
               <p className="text-muted-foreground/80 font-mono text-xs tracking-[0.1em] uppercase">
-                No passwords · No shared secrets · No blind trust
+                Passkeys first · Codes that expire · No blind trust
               </p>
             </div>
             <LiveSessionDemo />
