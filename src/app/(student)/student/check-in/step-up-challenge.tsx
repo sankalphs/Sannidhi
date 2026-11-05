@@ -21,6 +21,7 @@ export type StepUpChallengeRef = {
   _id: Id<"verification_challenges">;
   expiresAt: number;
   attempts?: number;
+  kind?: "checkin_stepup" | "spot_recheck";
 };
 
 type TerminalPanel =
@@ -314,11 +315,13 @@ export function StepUpChallenge({
   onDismiss,
   onSettled,
   onDone,
+  className,
 }: {
   actorToken: string;
   challenge: StepUpChallengeRef;
   courseCode?: string;
   venueName?: string;
+  className?: string;
   onResolved?: () => void;
   onDismiss?: () => void;
   /** Fired once when any settled outcome is reached so wrappers can freeze the panel. */
@@ -465,16 +468,19 @@ export function StepUpChallenge({
     return <TerminalView panel={terminal} dismiss={doneDismiss ?? legacyDismiss} />;
   }
 
+  const spotRecheck = challenge.kind === "spot_recheck";
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle className="flex flex-wrap items-center gap-2">
           <ScanLine className="size-5" />
-          <span>Extra verification needed</span>
+          <span>{spotRecheck ? "Spot re-check requested" : "Extra verification needed"}</span>
           <CountdownChip expiresAt={challenge.expiresAt} />
         </CardTitle>
         <CardDescription>
-          This check-in needs one more quick step before it counts.
+          {spotRecheck
+            ? "Your faculty member asked for a quick camera check while class is on."
+            : "This check-in needs one more quick step before it counts."}
           {courseCode !== undefined && courseCode.length > 0 ? ` ${courseCode}` : ""}
           {venueName !== undefined && venueName.length > 0 ? ` · ${venueName}` : ""}
         </CardDescription>
@@ -545,31 +551,14 @@ export function PendingChallengeBanner({ actorToken }: { actorToken: string }) {
   if (frozen === null && (pending === undefined || pending === null)) return null;
   if (challenge === null) return null;
 
-  const settled = frozen !== null;
-
   return (
-    <section
-      data-testid="pending-challenge"
-      className="border-primary/60 bg-primary/5 flex flex-col gap-4 rounded-xl border p-5"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <ScanLine className="size-5" />
-          {settled ? "Verification update" : "Live verification requested"}
-        </h2>
-        <div className="flex items-center gap-2">
-          <Badge variant="secondary">
-            {[challenge.courseCode, challenge.venueName].filter(Boolean).join(" · ") ||
-              "Verification"}
-          </Badge>
-          {!settled ? <CountdownChip expiresAt={challenge.expiresAt} /> : null}
-        </div>
-      </div>
+    <section data-testid="pending-challenge">
       <StepUpChallenge
         actorToken={actorToken}
         challenge={challenge}
         courseCode={challenge.courseCode}
         venueName={challenge.venueName}
+        className="border-primary/60 bg-primary/5"
         onSettled={freezeLatest}
         onDone={unfreeze}
       />
