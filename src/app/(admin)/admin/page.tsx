@@ -13,7 +13,7 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { evaluateAccess } from "@/lib/auth/guard";
-import { getSessionRole } from "@/lib/auth/server";
+import { canReviewAccessRequests, getSessionRole } from "@/lib/auth/server";
 import type { Role } from "@/lib/auth/session";
 
 type DirectoryCard = {
@@ -97,7 +97,10 @@ function canVisit(role: Role, pathname: string): boolean {
 
 export default async function AdminPage() {
   const role = await getSessionRole("admin");
-  const cards = DIRECTORY.filter((card) => canVisit(role, card.href));
+  const showRequests = role === "admin" && (await canReviewAccessRequests());
+  const cards = DIRECTORY.filter(
+    (card) => canVisit(role, card.href) && (card.href !== "/admin/requests" || showRequests),
+  );
 
   return (
     <div className="flex flex-col gap-8">

@@ -112,6 +112,7 @@ slot, and a term of history) — this wipes the local deployment first:
 
 ```sh
 bunx convex env set SANNIDHI_TEST_FIXTURES 1
+bunx convex env set SANNIDHI_OPERATOR_EMAILS ananya.iyer@sit.edu.in  # fixture admin reviews access requests
 bun run fixtures
 ```
 
@@ -126,7 +127,8 @@ these are internal functions, unreachable from the browser.
 
 1. **Set Convex env vars:** `SESSION_SECRET` (32+ random bytes, same value as the Vercel env)
    and `NEXT_PUBLIC_APP_URL` (the public origin, e.g. `https://sannidhi-six.vercel.app`). Never
-   set `SANNIDHI_TEST_FIXTURES` here.
+   set `SANNIDHI_TEST_FIXTURES` here. Set `SANNIDHI_OPERATOR_EMAILS` (comma-separated) to the
+   admins who may review onboarding access requests; other admins never see that queue.
 2. **Clear old demo data** (only if this deployment ever ran the demo seed; irreversible):
 
    ```sh
