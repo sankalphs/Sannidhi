@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { FaceCapture } from "@/components/biometry/face-capture";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { runPasskeyStepUp } from "@/lib/client/passkey-step-up";
 
 import { formatDate } from "./device-state";
 
@@ -47,6 +48,8 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
   const [busy, setBusy] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A scan held back because replacing a template needs a fresh passkey step-up.
+  const [pendingEmbedding, setPendingEmbedding] = useState<number[] | null>(null);
   const state = deriveBiometricUiState(record);
 
   async function postAction(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -62,24 +65,49 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
     return data;
   }
 
+  async function enrollFace(embedding: number[]) {
+    // The consent disclosure above is shown before capture starts, so the
+    // explicit acknowledgement travels with the enrollment request.
+    const data = await postAction({
+      action: "enroll-face",
+      embedding,
+      consentAcknowledged: true,
+    });
+    if (data.record !== null && data.record !== undefined) {
+      setRecord(data.record as BiometricRecordView);
+    }
+    setCapturing(false);
+    setPendingEmbedding(null);
+    router.refresh();
+  }
+
   async function handleCapture(embedding: number[]) {
     setError(null);
     setBusy(true);
     try {
-      // The consent disclosure above is shown before capture starts, so the
-      // explicit acknowledgement travels with the enrollment request.
-      const data = await postAction({
-        action: "enroll-face",
-        embedding,
-        consentAcknowledged: true,
-      });
-      if (data.record !== null && data.record !== undefined) {
-        setRecord(data.record as BiometricRecordView);
-      }
-      setCapturing(false);
-      router.refresh();
+      await enrollFace(embedding);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Request failed");
+      const message = cause instanceof Error ? cause.message : "Request failed";
+      if (/identity re-verification required/i.test(message)) {
+        setCapturing(false);
+        setPendingEmbedding(embedding);
+      } else {
+        setError(message);
+      }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleReverify() {
+    if (pendingEmbedding === null) return;
+    setError(null);
+    setBusy(true);
+    try {
+      await runPasskeyStepUp();
+      await enrollFace(pendingEmbedding);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Identity re-verification failed");
     } finally {
       setBusy(false);
     }
@@ -141,6 +169,21 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
         <p role="alert" data-testid="biometric-error" className="text-destructive text-sm">
           {error}
         </p>
+      ) : null}
+      {pendingEmbedding !== null ? (
+        <div
+          data-testid="biometric-reverify"
+          className="flex flex-col items-start gap-2 rounded-lg border p-3"
+        >
+          <p className="text-sm">
+            You have enrolled a face template before, so replacing it needs a fresh identity check.
+            Confirm it&apos;s you with your passkey to finish enrolling this scan.
+          </p>
+          <Button size="sm" disabled={busy} onClick={() => void handleReverify()}>
+            {busy ? <Loader2 className="animate-spin" /> : null}
+            Verify with passkey
+          </Button>
+        </div>
       ) : null}
       {record !== null && record.consentedAt !== null ? (
         <p className="text-muted-foreground text-xs">

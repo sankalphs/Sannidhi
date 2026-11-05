@@ -1,13 +1,13 @@
 "use client";
 
 import { Loader2, ShieldCheck } from "lucide-react";
-import { startAuthentication } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { runPasskeyStepUp } from "@/lib/client/passkey-step-up";
 import { postJson } from "@/lib/client/post-json";
 
 import {
@@ -119,7 +119,7 @@ export function DeviceManager({
   async function activateSuccessor(deviceId: string) {
     await runDeviceOp(deviceId, async () => {
       try {
-        await runStepUp();
+        await runPasskeyStepUp();
         await postJson("/api/devices", { action: "verify-successor", deviceId });
         await postJson("/api/devices", { action: "activate", deviceId });
         router.refresh();
@@ -129,24 +129,11 @@ export function DeviceManager({
     });
   }
 
-  async function runStepUp(): Promise<boolean> {
-    const options = await fetch("/api/auth/webauthn/step-up/options", { method: "POST" });
-    if (!options.ok) throw new Error("Step-up could not start");
-    const assertion = await startAuthentication({ optionsJSON: await options.json() });
-    const verification = await fetch("/api/auth/webauthn/step-up/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ response: assertion }),
-    });
-    if (!verification.ok) throw new Error("Identity re-verification failed");
-    return true;
-  }
-
   async function requestReplacement(deviceId: string) {
     await runDeviceOp(deviceId, async () => {
       try {
         if (!stepUpDone) {
-          await runStepUp();
+          await runPasskeyStepUp();
           setStepUpDone(true);
         }
         await postJson("/api/devices/replacement", { deviceId, reason });
@@ -274,7 +261,7 @@ export function DeviceManager({
               onClick={async () => {
                 setBusyDeviceId(replacementFor);
                 try {
-                  await runStepUp();
+                  await runPasskeyStepUp();
                   setStepUpDone(true);
                   setError(null);
                 } catch (cause) {
