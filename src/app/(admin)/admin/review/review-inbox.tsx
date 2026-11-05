@@ -112,7 +112,9 @@ export function ReviewInbox({
     setScanResult(null);
     try {
       const result = await runScan({ actorToken });
-      setScanResult(`Scan created ${result.alertsCreated} alerts`);
+      setScanResult(
+        `Scan created ${result.alertsCreated} ${result.alertsCreated === 1 ? "alert" : "alerts"}`,
+      );
       router.refresh();
     } catch {
       setScanResult("Scan failed. Please try again.");

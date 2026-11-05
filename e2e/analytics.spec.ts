@@ -74,7 +74,7 @@ test("early-warning scan routes alerts into the human-review inbox", async ({ pa
   await expect(page.getByTestId("run-scan")).toBeVisible();
 
   await page.getByTestId("run-scan").click();
-  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts/, {
+  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts?/, {
     timeout: 30_000,
   });
 
@@ -102,7 +102,7 @@ test("acknowledged and dismissed alerts stay in the inbox history", async ({ pag
   await expect(inboxSummary).toBeVisible();
   if (!(await inboxSummary.textContent())?.includes("4 open")) {
     await page.getByTestId("run-scan").click();
-    await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts/, {
+    await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts?/, {
       timeout: 30_000,
     });
     await expect(inboxSummary).toContainText("4 open", { timeout: 30_000 });
@@ -129,7 +129,7 @@ test("acknowledged and dismissed alerts stay in the inbox history", async ({ pag
   });
 
   await page.getByTestId("run-scan").click();
-  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts/, {
+  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts?/, {
     timeout: 30_000,
   });
   await expect(inboxSummary).toContainText("4 open · 1 acknowledged · 1 dismissed", {

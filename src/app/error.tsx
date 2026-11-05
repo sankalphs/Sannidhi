@@ -37,7 +37,10 @@ export default function AppError({
         </Button>
       </div>
       {error.digest !== undefined ? (
-        <p className="text-muted-foreground font-mono text-xs">Digest: {error.digest}</p>
+        <p className="text-muted-foreground text-xs">
+          Reference: <span className="font-mono">{error.digest}</span> — share this if you contact
+          support.
+        </p>
       ) : null}
     </div>
   );
