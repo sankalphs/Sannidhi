@@ -129,25 +129,32 @@ export const signUpWithPassword = action({
       throw new ConvexError("signup_requires_invite");
     }
 
-    const recentSignups = await ctx.runQuery(
-      internal.accountsInternal.countInstitutionSignupsSince,
-      { institutionId: institution._id, cutoff: Date.now() - SIGNUP_WINDOW_MS },
-    );
-    if (recentSignups >= MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR) {
-      throw new ConvexError("signup_rate_limited");
-    }
-
+    // Invites normally pre-create an "invited" row for the email, which
+    // signup claims (createPasswordUser enforces it, once); only a brand-new
+    // row counts against the signup rate limit.
     const existingByEmail = await ctx.runQuery(internal.accountsInternal.getUserByEmail, {
       email: input.email,
     });
-    if (existingByEmail !== null) {
+    if (
+      existingByEmail !== null &&
+      (existingByEmail.status !== "invited" || existingByEmail.institutionId !== institution._id)
+    ) {
       throw new ConvexError("account_exists");
+    }
+    if (existingByEmail === null) {
+      const recentSignups = await ctx.runQuery(
+        internal.accountsInternal.countInstitutionSignupsSince,
+        { institutionId: institution._id, cutoff: Date.now() - SIGNUP_WINDOW_MS },
+      );
+      if (recentSignups >= MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR) {
+        throw new ConvexError("signup_rate_limited");
+      }
     }
     const existingByUsn = await ctx.runQuery(internal.accountsInternal.getUserByInstitutionUsn, {
       institutionId: institution._id,
       usn: input.usn,
     });
-    if (existingByUsn !== null) {
+    if (existingByUsn !== null && existingByUsn._id !== existingByEmail?._id) {
       throw new ConvexError("usn_taken");
     }
 
