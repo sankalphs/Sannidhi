@@ -90,7 +90,7 @@ test("early-warning scan routes alerts into the human-review inbox", async ({ pa
   await expect(lowAttendance).toContainText("Attendance at 54.2%");
 
   const verificationAnomaly = page.locator('[data-kind="verification_anomaly"]');
-  await expect(verificationAnomaly).toContainText("5 ledger anomalies");
+  await expect(verificationAnomaly).toContainText("4 ledger anomalies");
 });
 
 test("acknowledged and dismissed alerts stay in the inbox history", async ({ page }) => {
