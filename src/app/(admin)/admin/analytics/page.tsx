@@ -65,7 +65,7 @@ function TrajectoriesTable({ rows }: { rows: TrajectoryRow[] }) {
         <tbody className="divide-y">
           {rows.map((row) => (
             <tr key={row.studentId} data-testid="trajectory-row">
-              <td className="px-4 py-2">
+              <td className="cell-wrap px-4 py-2">
                 <div className="flex flex-col">
                   <span className="font-medium">{row.studentName}</span>
                   <span className="text-muted-foreground font-mono text-xs">
@@ -127,7 +127,7 @@ function SectionTrendsTable({ rows }: { rows: SectionTrendRow[] }) {
         <tbody className="divide-y">
           {rows.map((row) => (
             <tr key={row.sectionId} data-testid="section-trend-row">
-              <td className="px-4 py-2">
+              <td className="cell-wrap px-4 py-2">
                 <div className="flex flex-col">
                   <span className="font-medium">{row.courseCode}</span>
                   <span className="text-muted-foreground text-xs">{row.courseTitle}</span>

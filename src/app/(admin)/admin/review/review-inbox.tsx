@@ -174,7 +174,7 @@ export function ReviewInbox({
             <tbody className="divide-y">
               {rows.map((row) => (
                 <tr key={row.id} data-testid="review-alert-row" data-kind={row.kind}>
-                  <td className="px-4 py-2">
+                  <td className="cell-wrap px-4 py-2">
                     <div className="flex flex-col">
                       <span className="font-medium">
                         {row.studentName ?? <span className="text-muted-foreground">—</span>}

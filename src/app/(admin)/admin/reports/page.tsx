@@ -173,7 +173,7 @@ export default async function AdminReportsPage({
             <tbody className="divide-y">
               {report.rows.map((row, index) => (
                 <tr key={index} data-testid="report-row">
-                  <td className="px-4 py-2">
+                  <td className="cell-wrap px-4 py-2">
                     <div className="flex flex-col">
                       <span className="font-medium">{row.studentName}</span>
                       <span className="text-muted-foreground font-mono text-xs">
@@ -182,7 +182,7 @@ export default async function AdminReportsPage({
                     </div>
                   </td>
                   <td className="px-4 py-2">{row.courseCode}</td>
-                  <td className="px-4 py-2">{row.sectionName}</td>
+                  <td className="cell-wrap px-4 py-2">{row.sectionName}</td>
                   <td className="px-4 py-2">
                     <StateBadge state={row.state} />
                   </td>

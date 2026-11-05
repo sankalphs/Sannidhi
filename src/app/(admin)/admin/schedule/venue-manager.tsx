@@ -251,7 +251,7 @@ export function VenueManager({ actorToken, venues }: { actorToken: string; venue
             <tbody className="divide-y">
               {venues.map((venue) => (
                 <tr key={venue.id}>
-                  <td className="px-4 py-2 font-medium">{venue.name}</td>
+                  <td className="cell-wrap px-4 py-2 font-medium">{venue.name}</td>
                   <td className="text-muted-foreground px-4 py-2">{venue.capacity ?? "—"}</td>
                   <td className="text-muted-foreground px-4 py-2 font-mono text-xs">
                     {venue.latitude !== null && venue.longitude !== null

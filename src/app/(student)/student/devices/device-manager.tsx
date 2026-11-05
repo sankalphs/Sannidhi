@@ -170,7 +170,7 @@ export function DeviceManager({
               <tbody className="divide-y">
                 {devices.map((device) => (
                   <tr key={device._id}>
-                    <td className="px-4 py-2 font-medium">
+                    <td className="cell-wrap px-4 py-2 font-medium">
                       {device.label}
                       {device.stateReason ? (
                         <span className="text-muted-foreground block text-xs">
@@ -414,8 +414,8 @@ export function DeviceManager({
                         {request.status}
                       </Badge>
                     </td>
-                    <td className="text-muted-foreground max-w-md truncate px-4 py-2">
-                      {request.reason}
+                    <td className="text-muted-foreground px-4 py-2">
+                      <div className="max-w-md truncate">{request.reason}</div>
                     </td>
                   </tr>
                 ))}

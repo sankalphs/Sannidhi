@@ -139,9 +139,21 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Long unbroken user text wraps instead of widening the page. */
   body {
     @apply bg-background text-foreground;
+    overflow-wrap: anywhere;
   }
+  /* Tables size columns by their longest word; cells holding user text opt in with `cell-wrap`. */
+  table {
+    overflow-wrap: normal;
+  }
+}
+
+/* A table cell of user-entered text: wraps long words rather than widening the table. */
+@utility cell-wrap {
+  overflow-wrap: anywhere;
+  min-width: 10rem;
 }
 
 @layer utilities {

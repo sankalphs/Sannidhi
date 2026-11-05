@@ -143,7 +143,7 @@ export function DepartmentManager({
               {departments.map((department) => (
                 <tr key={department.id}>
                   <td className="px-4 py-2 font-mono text-xs">{department.code}</td>
-                  <td className="px-4 py-2">{department.name}</td>
+                  <td className="cell-wrap px-4 py-2">{department.name}</td>
                   <td className="text-muted-foreground px-4 py-2">{department.courseCount}</td>
                   <td className="px-4 py-2">
                     <span className="flex items-center gap-2">
