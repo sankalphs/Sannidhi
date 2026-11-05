@@ -2,7 +2,9 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isOfflineSyncOpen,
   mintBundleKey,
+  OFFLINE_SYNC_GRACE_MS,
   nonceHash,
   signRecord,
   verifySignature,
@@ -125,5 +127,19 @@ describe("canonical signing stability", () => {
     expect((await signRecord(key, BASE_RECORD)).signature).not.toBe(
       (await signRecord(key, { ...BASE_RECORD, note: undefined })).signature,
     );
+  });
+});
+
+describe("isOfflineSyncOpen", () => {
+  const windowEndsAt = 1_756_000_000_000;
+
+  it("allows sync through the grace period after the session window ends", () => {
+    expect(OFFLINE_SYNC_GRACE_MS).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(isOfflineSyncOpen(windowEndsAt, windowEndsAt - 1)).toBe(true);
+    expect(isOfflineSyncOpen(windowEndsAt, windowEndsAt + OFFLINE_SYNC_GRACE_MS)).toBe(true);
+  });
+
+  it("closes sync once the grace period has passed", () => {
+    expect(isOfflineSyncOpen(windowEndsAt, windowEndsAt + OFFLINE_SYNC_GRACE_MS + 1)).toBe(false);
   });
 });

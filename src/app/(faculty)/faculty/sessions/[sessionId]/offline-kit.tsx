@@ -43,6 +43,10 @@ const SYNC_ERROR_TRANSLATIONS: ErrorTranslation = [
     message: "The queue is too large for one sync. Sync in smaller batches.",
   },
   { match: "unauthorized", message: "You are not authorized to sync records for this session." },
+  {
+    match: "offline_sync_window_closed",
+    message: "This session ended more than 7 days ago, so its offline records can no longer sync.",
+  },
 ];
 
 const STATUS_COPY: Record<SyncStatus, string> = {
