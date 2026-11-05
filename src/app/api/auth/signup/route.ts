@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       pendingActivation: true,
-      redirect: "/signup/pending",
+      redirect: "/signup/pending?created=1",
     });
   } catch (error) {
     if (error instanceof ConvexError && typeof error.data === "string") {

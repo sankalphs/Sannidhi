@@ -47,8 +47,8 @@ test.describe.serial("password signup and login", () => {
     await form.getByRole("button", { name: "Create account" }).click();
 
     // No session is minted: the invite link (passkey enrollment) activates.
-    await expect(page).toHaveURL(/\/signup\/pending$/);
-    await expect(page.getByTestId("signup-pending-title")).toBeVisible();
+    await expect(page).toHaveURL(/\/signup\/pending\?created=1$/);
+    await expect(page.getByTestId("signup-pending-title")).toHaveText(/Account created/);
   });
 
   test("the pending-activation account cannot sign in with its password yet", async ({ page }) => {
