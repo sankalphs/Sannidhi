@@ -272,6 +272,9 @@ export function LiveBoard({
                         suppressHydrationWarning
                       >
                         {row.checkedInAt !== null ? formatClock(row.checkedInAt) : "—"}
+                        {row.updatedAt !== null && row.updatedAt !== row.checkedInAt ? (
+                          <div className="text-xs">updated {formatClock(row.updatedAt)}</div>
+                        ) : null}
                       </td>
                       <td className="py-2.5 pr-4">
                         {row.reasonCodes.length > 0 ? (
