@@ -248,6 +248,12 @@ export function RequestsManager({ actorToken }: { actorToken: string }) {
                         : ""}
                     </p>
                   ) : null}
+                  {request.reviewNote !== undefined ? (
+                    <p className="text-sm" data-testid="review-note">
+                      <span className="text-muted-foreground">Reviewer note: </span>
+                      {request.reviewNote}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="text-muted-foreground shrink-0 text-xs sm:text-right">
                   <p>
