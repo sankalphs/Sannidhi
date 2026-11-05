@@ -7,7 +7,7 @@ import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ROLES, type Role } from "@/lib/auth/session";
-import { parseInviteCsv } from "@/lib/invites/csv";
+import { EMAIL_PATTERN, parseInviteCsv } from "@/lib/invites/csv";
 
 type CreatedInvite = {
   email: string;
@@ -37,6 +37,8 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const singleEmailTaken = existingEmails.includes(singleEmail.trim().toLowerCase());
+  const singleEmailInvalid =
+    singleEmail.trim().length > 0 && !EMAIL_PATTERN.test(singleEmail.trim());
 
   const parsed = useMemo(
     () => parseInviteCsv(csvText, { existingEmails }),
@@ -166,7 +168,14 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
             placeholder="email@sit.edu.in"
             value={singleEmail}
             onChange={(event) => setSingleEmail(event.target.value)}
+            aria-invalid={singleEmailInvalid || undefined}
+            aria-describedby={singleEmailInvalid ? "invite-email-error" : undefined}
           />
+          {singleEmailInvalid ? (
+            <p id="invite-email-error" className="text-destructive text-xs">
+              Enter a valid email address, like name@example.com.
+            </p>
+          ) : null}
           <label htmlFor="invite-name" className="text-sm font-medium">
             Full name
           </label>
@@ -198,6 +207,7 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               submitting ||
               singleEmail.trim().length === 0 ||
               singleName.trim().length === 0 ||
+              singleEmailInvalid ||
               singleEmailTaken
             }
             onClick={() =>
