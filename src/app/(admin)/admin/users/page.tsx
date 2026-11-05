@@ -13,6 +13,7 @@ import { getConvexClient } from "@/lib/convex/server-client";
 import { CopyLinkButton } from "./copy-link-button";
 import { ImportPanel } from "./import-panel";
 import { RevokeButton } from "./revoke-button";
+import { UserActions } from "./user-actions";
 
 type UserRow = FunctionReturnType<typeof api.users.listUsers>[number];
 
@@ -129,10 +130,19 @@ export default async function AdminUsersPage() {
                   <td className="px-4 py-2">
                     <UserStatusBadge status={user.status} />
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    {user.status === "invited" ? (
-                      <CopyLinkButton email={user.email} appUrl={appUrl} />
-                    ) : null}
+                  <td className="px-4 py-2">
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      {user.status === "invited" ? (
+                        <CopyLinkButton email={user.email} appUrl={appUrl} />
+                      ) : null}
+                      <UserActions
+                        userId={user._id}
+                        name={user.name}
+                        role={user.role}
+                        status={user.status}
+                        isSelf={user._id === session.userId}
+                      />
+                    </span>
                   </td>
                 </tr>
               ))}
