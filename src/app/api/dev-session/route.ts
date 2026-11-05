@@ -20,11 +20,12 @@ const FIXTURE_ROLES: readonly FixtureRole[] = [
   "auditor",
 ];
 
-async function resolveFixtureUserId(role: Role): Promise<string | null> {
+async function resolveFixtureUserId(role: Role, email?: string): Promise<string | null> {
   if (!FIXTURE_ROLES.includes(role as FixtureRole)) return null;
   try {
     const actor = await getConvexClient().query(api.testFixtures.getFixtureActor, {
       role: role as FixtureRole,
+      ...(email !== undefined ? { email } : {}),
     });
     return actor?.userId ?? null;
   } catch (error) {
@@ -46,7 +47,10 @@ export async function POST(request: Request) {
   if (typeof role !== "string" || !ROLES.includes(role as Role)) {
     return NextResponse.json({ error: "Unknown role" }, { status: 400 });
   }
-  const fixtureUserId = await resolveFixtureUserId(role as Role);
+  const rawEmail =
+    typeof body === "object" && body !== null ? (body as { email?: unknown }).email : undefined;
+  const email = typeof rawEmail === "string" && rawEmail.length > 0 ? rawEmail : undefined;
+  const fixtureUserId = await resolveFixtureUserId(role as Role, email);
   const token = await signSession({ userId: fixtureUserId ?? `dev-${role}`, role: role as Role });
   const store = await cookies();
   store.set(COOKIE_NAME, token, {

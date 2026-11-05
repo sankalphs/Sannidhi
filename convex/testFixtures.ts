@@ -41,16 +41,19 @@ const FIXTURE_EMAILS = {
   auditor: "rohan.gupta@sit.edu.in",
 } as const;
 
-/** Resolves the fixture user behind each dev-login role (see /api/dev-session). */
+/**
+ * Resolves the fixture user behind a dev-login role (see /api/dev-session);
+ * `email` picks a specific fixture user of that role, e.g. a second student.
+ */
 export const getFixtureActor = query({
-  args: { role: FIXTURE_ROLES },
+  args: { role: FIXTURE_ROLES, email: v.optional(v.string()) },
   handler: async (ctx, args): Promise<{ userId: string; email: string } | null> => {
     if (!fixturesEnabled()) throw new ConvexError("unauthorized");
     const user: Doc<"users"> | null = await ctx.db
       .query("users")
-      .withIndex("by_email", (q) => q.eq("email", FIXTURE_EMAILS[args.role]))
+      .withIndex("by_email", (q) => q.eq("email", args.email ?? FIXTURE_EMAILS[args.role]))
       .unique();
-    if (user === null || user.status === "suspended") return null;
+    if (user === null || user.status === "suspended" || user.role !== args.role) return null;
     return { userId: user._id, email: user.email };
   },
 });
