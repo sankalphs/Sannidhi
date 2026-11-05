@@ -1,6 +1,7 @@
 import { api } from "../../../../../convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import { Landmark } from "lucide-react";
+import Link from "next/link";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
@@ -92,26 +93,45 @@ export default async function AdminPoliciesPage() {
           Per-venue overrides of geofence defaults. A venue&apos;s own geofence radius always wins
           over the policy default.
         </p>
-        <div className="grid gap-4 md:grid-cols-2">
-          {overview.venues.map((venue) => {
-            const venuePolicy = overview.venuePolicies.find(
-              (policy) => policy.venueId === venue.id,
-            );
-            return (
-              <PolicyEditor
-                key={venue.id}
-                scope="venue"
-                venueId={venue.id}
-                title={venue.name}
-                description="Presence rule overrides for this venue."
-                settings={venuePolicy?.settings ?? null}
-                revision={venuePolicy?.revision ?? null}
-                actorToken={actorToken}
-                isAdmin={isAdmin}
-              />
-            );
-          })}
-        </div>
+        {overview.venues.length === 0 ? (
+          <p className="text-muted-foreground rounded-xl border border-dashed p-4 text-sm">
+            No venues yet.{" "}
+            {isAdmin ? (
+              <>
+                <Link
+                  href="/admin/schedule"
+                  className="text-primary underline-offset-4 hover:underline"
+                >
+                  Add a venue under Schedule
+                </Link>{" "}
+                to set its presence rules here.
+              </>
+            ) : (
+              "Presence rules appear here once an administrator adds venues."
+            )}
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {overview.venues.map((venue) => {
+              const venuePolicy = overview.venuePolicies.find(
+                (policy) => policy.venueId === venue.id,
+              );
+              return (
+                <PolicyEditor
+                  key={venue.id}
+                  scope="venue"
+                  venueId={venue.id}
+                  title={venue.name}
+                  description="Presence rule overrides for this venue."
+                  settings={venuePolicy?.settings ?? null}
+                  revision={venuePolicy?.revision ?? null}
+                  actorToken={actorToken}
+                  isAdmin={isAdmin}
+                />
+              );
+            })}
+          </div>
+        )}
       </section>
 
       <section className="flex flex-col gap-3">

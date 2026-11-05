@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { query } from "./_generated/server";
 import { requireActorUser } from "./lib/actor";
+import { missedClassSessions } from "./lib/analytics_projection";
 import { institutionDateKey } from "../src/lib/attendance/timezone";
 import {
   projectAttendanceState,
@@ -37,10 +38,12 @@ export const studentHistory = query({
       .collect();
     events.sort((a, b) => a.capturedAt - b.capturedAt);
 
+    // One record per class session (latest event wins), matching analytics;
+    // session-less events fall back to one record per day and section.
     const latestByKey = new Map<string, { dateKey: string; event: Doc<"attendance_events"> }>();
     for (const event of events) {
       const eventDateKey = dateKey(event.capturedAt);
-      latestByKey.set(`${eventDateKey}:${event.sectionId}`, {
+      latestByKey.set(event.sessionId ?? `${eventDateKey}:${event.sectionId}`, {
         dateKey: eventDateKey,
         event,
       });
@@ -48,8 +51,18 @@ export const studentHistory = query({
 
     const sectionCache = new Map<
       Id<"sections">,
-      { section: Doc<"sections"> | null; course: Doc<"courses"> | null }
+      { section: Doc<"sections">; course: Doc<"courses"> } | null
     >();
+    async function loadSection(sectionId: Id<"sections">) {
+      let cached = sectionCache.get(sectionId);
+      if (cached === undefined) {
+        const section = await ctx.db.get(sectionId);
+        const course = section !== null ? await ctx.db.get(section.courseId) : null;
+        cached = section !== null && course !== null ? { section, course } : null;
+        sectionCache.set(sectionId, cached);
+      }
+      return cached;
+    }
 
     const rows: Array<{
       dateKey: string;
@@ -63,14 +76,8 @@ export const studentHistory = query({
     }> = [];
 
     for (const { dateKey, event } of latestByKey.values()) {
-      let cached = sectionCache.get(event.sectionId);
-      if (cached === undefined) {
-        const section = await ctx.db.get(event.sectionId);
-        const course = section !== null ? await ctx.db.get(section.courseId) : null;
-        cached = { section, course };
-        sectionCache.set(event.sectionId, cached);
-      }
-      if (cached.section === null || cached.course === null) continue;
+      const cached = await loadSection(event.sectionId);
+      if (cached === null) continue;
       rows.push({
         dateKey,
         sectionId: event.sectionId,
@@ -80,6 +87,21 @@ export const studentHistory = query({
         state: projectAttendanceState(event.state),
         decidedAt: event.capturedAt,
         reasonCodes: event.decision?.reasonCodes ?? [],
+      });
+    }
+
+    for (const session of await missedClassSessions(ctx, { studentId: subjectId, events })) {
+      const cached = await loadSection(session.sectionId);
+      if (cached === null) continue;
+      rows.push({
+        dateKey: dateKey(session.startedAt),
+        sectionId: session.sectionId,
+        courseId: cached.course._id,
+        courseCode: cached.course.code,
+        courseTitle: cached.course.title,
+        state: "absent",
+        decidedAt: session.startedAt,
+        reasonCodes: [],
       });
     }
 

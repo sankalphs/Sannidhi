@@ -16,7 +16,7 @@ export default function AuditPage() {
       <EmptyState
         icon={ScrollText}
         title="Event ledger"
-        description="An append-only, hash-chained trail of attendance decisions and administrative actions will stream in here."
+        description="Every attendance decision and administrative action is recorded in an append-only, tamper-evident ledger. Open it to browse events and check that nothing has been altered."
         action={
           <Link href="/audit/events" className={buttonVariants({ variant: "outline", size: "sm" })}>
             Open the ledger

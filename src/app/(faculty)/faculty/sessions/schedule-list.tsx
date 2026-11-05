@@ -9,7 +9,6 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/shell/empty-state";
-import { institutionDayOfWeek } from "@/lib/attendance/timezone";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,12 +101,6 @@ export function ScheduleList({
   const startFromSlot = useMutation(api.classSessions.startFromSlot);
   const [pendingSlotId, setPendingSlotId] = useState<string | null>(null);
   const [errorsBySlot, setErrorsBySlot] = useState<Record<string, string>>({});
-  const today = institutionDayOfWeek(Date.now());
-
-  const todaysRows = initialRows.filter((row) => row.dayOfWeek === today);
-  const otherRows = initialRows
-    .filter((row) => row.dayOfWeek !== today)
-    .sort((a, b) => a.dayOfWeek - b.dayOfWeek || a.startMinutes - b.startMinutes);
 
   async function handleStart(row: ScheduleRow) {
     const slotId = row.slotId;
@@ -129,45 +122,31 @@ export function ScheduleList({
     }
   }
 
-  function renderCards(rows: ScheduleRow[]) {
-    return (
-      <ol className="flex flex-col gap-3">
-        {rows.map((row) => (
-          <ScheduleCard
-            key={row.slotId ?? `guest-${row.sectionId}`}
-            row={row}
-            starting={row.slotId !== null && pendingSlotId === row.slotId}
-            disabled={pendingSlotId !== null}
-            error={row.slotId !== null ? (errorsBySlot[row.slotId] ?? null) : null}
-            onStart={() => void handleStart(row)}
-          />
-        ))}
-      </ol>
-    );
-  }
-
   return (
-    <div className="flex flex-col gap-8">
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">Today&apos;s schedule</h2>
-          <GuestSessionDialog actorToken={actorToken} />
-        </div>
-        {todaysRows.length === 0 ? (
-          <EmptyState
-            title="No classes scheduled today"
-            description="Nothing on your timetable for today. You can still run a guest session."
-          />
-        ) : (
-          renderCards(todaysRows)
-        )}
-      </section>
-      {otherRows.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-base font-semibold">Other days</h2>
-          {renderCards(otherRows)}
-        </section>
-      ) : null}
-    </div>
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-base font-semibold">Today&apos;s schedule</h2>
+        <GuestSessionDialog actorToken={actorToken} />
+      </div>
+      {initialRows.length === 0 ? (
+        <EmptyState
+          title="No classes scheduled today"
+          description="Nothing on your timetable for today. You can still run a guest session."
+        />
+      ) : (
+        <ol className="flex flex-col gap-3">
+          {initialRows.map((row) => (
+            <ScheduleCard
+              key={row.slotId ?? `guest-${row.sectionId}`}
+              row={row}
+              starting={row.slotId !== null && pendingSlotId === row.slotId}
+              disabled={pendingSlotId !== null}
+              error={row.slotId !== null ? (errorsBySlot[row.slotId] ?? null) : null}
+              onStart={() => void handleStart(row)}
+            />
+          ))}
+        </ol>
+      )}
+    </section>
   );
 }

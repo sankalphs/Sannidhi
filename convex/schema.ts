@@ -354,6 +354,14 @@ export default defineSchema({
     .index("by_session_issued", ["sessionId", "issuedAt"])
     .index("by_expiresAt", ["expiresAt"]),
 
+  // One row per student who redeemed a displayed code: the whole class scans
+  // the same QR, so replay is judged per (challenge, student).
+  session_challenge_redemptions: defineTable({
+    challengeId: v.id("session_challenges"),
+    studentId: v.id("users"),
+    redeemedAt: v.number(),
+  }).index("by_challenge_student", ["challengeId", "studentId"]),
+
   access_requests: defineTable({
     institution: v.string(),
     name: v.string(),

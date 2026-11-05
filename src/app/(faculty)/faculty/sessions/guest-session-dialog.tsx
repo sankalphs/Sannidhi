@@ -144,6 +144,16 @@ export function GuestSessionDialog({ actorToken }: { actorToken: string }) {
             Run an ad-hoc session outside your timetable.
           </p>
         </div>
+        {optionsResult !== undefined && (courses.length === 0 || venues.length === 0) ? (
+          <p
+            className="text-muted-foreground bg-muted/40 mt-4 rounded-lg px-3 py-2 text-sm"
+            data-testid="guest-missing-setup"
+          >
+            {courses.length === 0
+              ? "No courses exist yet. Ask your administrator to import the roster first."
+              : "No venues exist yet. Ask your administrator to add rooms under Venues & timetable."}
+          </p>
+        ) : null}
         <form className="mt-4 flex flex-col gap-4" onSubmit={handleCreate}>
           <div className="flex flex-col gap-1.5">
             <label htmlFor="guest-course" className="text-sm font-medium">

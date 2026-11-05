@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 
 import type { ActorTokenClaims } from "../src/lib/auth/actor-token";
 import { type Role } from "../src/lib/auth/session";
+import { inviteRefusal } from "../src/lib/invites/eligibility";
 import { hashInviteToken, randomToken } from "../src/lib/invites/token";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -57,18 +58,27 @@ export type UserDoc = {
   status?: "invited" | "active" | "suspended";
 };
 
+async function listPendingInvites(
+  ctx: QueryCtx | MutationCtx,
+  institutionId: Id<"institutions">,
+  email: string,
+): Promise<Doc<"invites">[]> {
+  const candidates = await ctx.db
+    .query("invites")
+    .withIndex("by_email", (q) => q.eq("email", email))
+    .collect();
+  return candidates
+    .filter((invite) => invite.institutionId === institutionId && invite.status === "pending")
+    .sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/** The newest unexpired pending invite for a user — what passkey enrollment consumes. */
 export async function findPendingInviteForUser(
   ctx: QueryCtx | MutationCtx,
   user: Pick<UserDoc, "institutionId" | "email">,
 ): Promise<Doc<"invites"> | null> {
-  const candidates = await ctx.db
-    .query("invites")
-    .withIndex("by_email", (q) => q.eq("email", user.email))
-    .collect();
-  const pending = candidates
-    .filter((invite) => invite.institutionId === user.institutionId && invite.status === "pending")
-    .sort((a, b) => b.createdAt - a.createdAt);
-  return pending[0] ?? null;
+  const pending = await listPendingInvites(ctx, user.institutionId, user.email);
+  return pending.find((invite) => invite.expiresAt > Date.now()) ?? null;
 }
 
 export async function activateUserAndAcceptInvite(
@@ -103,6 +113,13 @@ export async function activateUserAndAcceptInvite(
   });
 }
 
+/**
+ * Issues a one-time invite link for an email, creating an "invited" user row
+ * when the email is new. Only not-yet-activated accounts can be re-invited;
+ * `allowExistingAccount` is for operator recovery (setup.issueAdminInvite),
+ * which deliberately re-issues for an existing admin. Any older pending
+ * invite for the same email is revoked, so only the newest link works.
+ */
 export async function createSingleInvite(
   ctx: MutationCtx,
   args: {
@@ -112,6 +129,7 @@ export async function createSingleInvite(
     name: string;
     role: Role;
     expiresAt: number;
+    allowExistingAccount?: boolean;
   },
 ): Promise<CreatedInvite> {
   const email = args.email.trim().toLowerCase();
@@ -119,6 +137,19 @@ export async function createSingleInvite(
     .query("users")
     .withIndex("by_email", (q) => q.eq("email", email))
     .first();
+  const refusal = inviteRefusal(email, existingUser, args.institutionId, {
+    allowExistingAccount: args.allowExistingAccount,
+  });
+  if (refusal !== null) throw new ConvexError(refusal);
+  if (existingUser?.status === "invited" && existingUser.role !== args.role) {
+    await ctx.db.patch(existingUser._id, { role: args.role });
+  }
+
+  const supersededInviteIds: Id<"invites">[] = [];
+  for (const older of await listPendingInvites(ctx, args.institutionId, email)) {
+    await ctx.db.patch(older._id, { status: "revoked" });
+    supersededInviteIds.push(older._id);
+  }
 
   let userId: Id<"users"> | null = null;
   if (existingUser === null) {
@@ -165,8 +196,8 @@ export async function createSingleInvite(
     category: "identity",
     type: "invite.created",
     actorUserId: args.actorUserId,
-    subjectUserId: userId ?? undefined,
-    payload: { email, role: args.role, inviteId, expiresAt: args.expiresAt },
+    subjectUserId: existingUser?._id ?? userId ?? undefined,
+    payload: { email, role: args.role, inviteId, expiresAt: args.expiresAt, supersededInviteIds },
   });
 
   return { email, userId, inviteId, token };
@@ -239,6 +270,42 @@ export const importUsersCsv = mutation({
       invites: args.rows,
       ttlDays: args.ttlDays,
     }),
+});
+
+/**
+ * Issues a fresh link for someone who has not activated yet (revoking their
+ * older pending link) and returns it once, for the admin to copy and share —
+ * Sannidhi sends no email. Works from a pending invite or an "invited" user.
+ */
+export const reissueInvite = mutation({
+  args: { actorToken: v.string(), email: v.string() },
+  handler: async (ctx, args): Promise<CreatedInvite> => {
+    const admin = await requireAdminUser(ctx, args.actorToken);
+    const claims = await verifyActorToken(args.actorToken);
+    const email = args.email.trim().toLowerCase();
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .first();
+    const [latestInvite] = await ctx.db
+      .query("invites")
+      .withIndex("by_email", (q) => q.eq("email", email))
+      .filter((q) => q.eq(q.field("institutionId"), admin.institutionId))
+      .order("desc")
+      .take(1);
+    const role = user?.role ?? latestInvite?.role;
+    if (role === undefined) throw new ConvexError("invite not found");
+    if (user !== null) assertSameInstitution(admin.institutionId, user.institutionId);
+
+    return createSingleInvite(ctx, {
+      institutionId: admin.institutionId,
+      actorUserId: await resolveActorUserId(ctx, claims),
+      email,
+      name: user?.name ?? email.split("@")[0] ?? email,
+      role,
+      expiresAt: Date.now() + DEFAULT_TTL_DAYS * 24 * 60 * 60 * 1000,
+    });
+  },
 });
 
 export const listInvites = query({

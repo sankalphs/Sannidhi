@@ -18,6 +18,7 @@ type CreatedInvite = {
 
 type ImportPanelProps = {
   institutionId: string;
+  /** Emails of activated or suspended accounts — these cannot be invited again. */
   existingEmails: string[];
   appUrl: string;
 };
@@ -34,6 +35,8 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
   const [error, setError] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatedInvite[]>([]);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
+
+  const singleEmailTaken = existingEmails.includes(singleEmail.trim().toLowerCase());
 
   const parsed = useMemo(
     () => parseInviteCsv(csvText, { existingEmails }),
@@ -107,7 +110,11 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               }}
             />
           </label>
+          <label htmlFor="invite-csv" className="text-sm font-medium">
+            CSV rows
+          </label>
           <textarea
+            id="invite-csv"
             value={csvText}
             onChange={(event) => setCsvText(event.target.value)}
             rows={6}
@@ -146,21 +153,34 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
           <div>
             <h2 className="font-semibold">Single invite</h2>
             <p className="text-muted-foreground text-sm">
-              Create one account and get a one-time link.
+              Create one account and get a one-time link. Inviting someone who has not activated yet
+              replaces their old link.
             </p>
           </div>
+          <label htmlFor="invite-email" className="text-sm font-medium">
+            Email
+          </label>
           <Input
+            id="invite-email"
             type="email"
             placeholder="email@sit.edu.in"
             value={singleEmail}
             onChange={(event) => setSingleEmail(event.target.value)}
           />
+          <label htmlFor="invite-name" className="text-sm font-medium">
+            Full name
+          </label>
           <Input
-            placeholder="Full name"
+            id="invite-name"
+            placeholder="Ananya Sharma"
             value={singleName}
             onChange={(event) => setSingleName(event.target.value)}
           />
+          <label htmlFor="invite-role" className="text-sm font-medium">
+            Role
+          </label>
           <select
+            id="invite-role"
             value={singleRole}
             onChange={(event) => setSingleRole(event.target.value as Role)}
             className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
@@ -178,7 +198,7 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               submitting ||
               singleEmail.trim().length === 0 ||
               singleName.trim().length === 0 ||
-              existingEmails.includes(singleEmail.trim().toLowerCase())
+              singleEmailTaken
             }
             onClick={() =>
               submit([{ email: singleEmail.trim(), name: singleName.trim(), role: singleRole }])
@@ -187,6 +207,11 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
             {submitting ? <Loader2 className="animate-spin" /> : null}
             Create invite
           </Button>
+          {singleEmailTaken ? (
+            <p className="text-muted-foreground text-xs">
+              This email already has an account, so it cannot be invited again.
+            </p>
+          ) : null}
         </section>
       </div>
 
@@ -204,7 +229,8 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
             <h2 className="font-semibold">Invite links — shown only once</h2>
           </div>
           <p className="text-muted-foreground text-sm">
-            Copy these now. The raw tokens are never stored; only their hashes are kept.
+            Copy these now — Sannidhi does not email them, and they cannot be shown again. If one
+            gets lost, use Copy new link on the Users page.
           </p>
           <ul className="flex flex-col gap-2">
             {created.map((invite) => (
@@ -217,7 +243,7 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
                 </span>
                 <span className="flex items-center gap-2">
                   {!invite.userId ? (
-                    <span className="text-muted-foreground text-xs">existing user</span>
+                    <span className="text-muted-foreground text-xs">old link revoked</span>
                   ) : null}
                   <Button variant="outline" size="xs" onClick={() => copyLink(invite.token)}>
                     {copiedToken === invite.token ? <Check /> : <Copy />}

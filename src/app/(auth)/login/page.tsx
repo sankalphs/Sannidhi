@@ -3,6 +3,7 @@ import Link from "next/link";
 import { PersonaPicker } from "@/app/(auth)/login/impersonation-buttons";
 import { LoginMethods } from "@/app/(auth)/login/login-methods";
 import { isDevLoginEnabled } from "@/lib/auth/dev-login";
+import { safeNextPath } from "@/lib/auth/guard";
 import { ROLES, type Role } from "@/lib/auth/session";
 
 function parseHighlightRole(value: string | string[] | undefined): Role | null {
@@ -14,10 +15,11 @@ function parseHighlightRole(value: string | string[] | undefined): Role | null {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ as?: string | string[] }>;
+  searchParams: Promise<{ as?: string | string[]; next?: string | string[] }>;
 }) {
-  const { as } = await searchParams;
+  const { as, next } = await searchParams;
   const highlightRole = parseHighlightRole(as);
+  const nextPath = safeNextPath(Array.isArray(next) ? next[0] : next);
   const devLoginEnabled = isDevLoginEnabled();
 
   return (
@@ -33,7 +35,7 @@ export default async function LoginPage({
         </p>
       </div>
 
-      <LoginMethods />
+      <LoginMethods next={nextPath} />
 
       {devLoginEnabled ? (
         <div className="flex flex-col gap-3" data-testid="dev-login">

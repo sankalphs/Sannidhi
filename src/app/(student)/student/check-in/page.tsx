@@ -35,7 +35,13 @@ async function loadActiveSession(): Promise<{
   }
 }
 
-export default async function StudentCheckInPage() {
+export default async function StudentCheckInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ code?: string | string[] }>;
+}) {
+  const { code } = await searchParams;
+  const linkedCode = (Array.isArray(code) ? code[0] : code) ?? null;
   const missingSteps = await loadMissingEnrollmentSteps();
 
   if (missingSteps.length > 0) {
@@ -67,7 +73,11 @@ export default async function StudentCheckInPage() {
           description="Something went wrong while preparing check-in. Please refresh the page and try again."
         />
       ) : (
-        <CheckInPanel actorToken={loaded.actorToken} active={loaded.active} />
+        <CheckInPanel
+          actorToken={loaded.actorToken}
+          active={loaded.active}
+          linkedCode={linkedCode}
+        />
       )}
     </div>
   );

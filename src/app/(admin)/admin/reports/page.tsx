@@ -65,6 +65,13 @@ function StateBadge({ state }: { state: ReportRow["state"] }) {
       </Badge>
     );
   }
+  if (state === "absent") {
+    return (
+      <Badge variant="outline" className="text-muted-foreground">
+        absent
+      </Badge>
+    );
+  }
   return <Badge variant="secondary">pending</Badge>;
 }
 
@@ -138,6 +145,9 @@ export default async function AdminReportsPage({
         <Badge variant="outline" className="text-verdict-reject">
           {report.summary.rejected} rejected
         </Badge>
+        <Badge variant="outline" className="text-muted-foreground">
+          {report.summary.absent} absent
+        </Badge>
         <Badge variant="secondary">{report.summary.pending} pending</Badge>
       </div>
 
@@ -145,7 +155,7 @@ export default async function AdminReportsPage({
         <EmptyState
           icon={FileText}
           title="No records in this window"
-          description="Check-ins during this window appear here with exports."
+          description="Check-ins and absences during this window appear here with exports."
         />
       ) : (
         <div className="overflow-x-auto rounded-xl border">

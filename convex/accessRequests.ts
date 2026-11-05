@@ -1,7 +1,8 @@
 import { ConvexError, v } from "convex/values";
 
-import type { Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { isOperatorEmail } from "../src/lib/auth/operators";
+import type { Doc, Id } from "./_generated/dataModel";
+import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { requireAdminUser } from "./lib/actor";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -109,6 +110,29 @@ export const submit = mutation({
   },
 });
 
+/** Access requests are platform-level leads: only operator admins may read or review them. */
+async function requireOperator(ctx: QueryCtx | MutationCtx, token: string): Promise<Doc<"users">> {
+  const user = await requireAdminUser(ctx, token);
+  if (!isOperatorEmail(user.email, process.env.SANNIDHI_OPERATOR_EMAILS)) {
+    throw new ConvexError("unauthorized");
+  }
+  return user;
+}
+
+/** Whether the caller may open the access-request queue; drives nav and dashboard visibility. */
+export const canReview = query({
+  args: { actorToken: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    try {
+      await requireOperator(ctx, args.actorToken);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+});
+
 export const list = query({
   args: { actorToken: v.string() },
   returns: v.array(
@@ -124,7 +148,7 @@ export const list = query({
     }),
   ),
   handler: async (ctx, args) => {
-    await requireAdminUser(ctx, args.actorToken);
+    await requireOperator(ctx, args.actorToken);
     const requests = await ctx.db
       .query("access_requests")
       .withIndex("by_status_submitted", (q) => q.eq("status", "new"))
@@ -164,7 +188,7 @@ export const markReviewed = mutation({
   args: { actorToken: v.string(), requestId: v.id("access_requests") },
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
-    await requireAdminUser(ctx, args.actorToken);
+    await requireOperator(ctx, args.actorToken);
     const request = await ctx.db.get(args.requestId);
     if (request === null) throw new ConvexError("Request not found");
     if (request.status === "reviewed") return { ok: true };

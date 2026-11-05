@@ -1,6 +1,7 @@
 import { api } from "../../../../../convex/_generated/api";
 import type { FunctionReturnType } from "convex/server";
 import { Users } from "lucide-react";
+import { headers } from "next/headers";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
@@ -9,8 +10,10 @@ import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
 
+import { CopyLinkButton } from "./copy-link-button";
 import { ImportPanel } from "./import-panel";
 import { RevokeButton } from "./revoke-button";
+import { UserActions } from "./user-actions";
 
 type UserRow = FunctionReturnType<typeof api.users.listUsers>[number];
 
@@ -27,6 +30,18 @@ function formatDate(ms: number): string {
     day: "numeric",
     timeZone: "Asia/Kolkata",
   });
+}
+
+/** Origin for invite links: the configured public URL, else the host this request came in on. */
+async function appOrigin(): Promise<string> {
+  const configured = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (configured) return configured.replace(/\/+$/, "");
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "";
+  const proto =
+    requestHeaders.get("x-forwarded-proto")?.split(",")[0]?.trim() ??
+    (/^(localhost|127\.0\.0\.1)(:|$)/.test(host) ? "http" : "https");
+  return `${proto}://${host}`;
 }
 
 function UserStatusBadge({ status }: { status: UserRow["status"] }) {
@@ -80,7 +95,7 @@ export default async function AdminUsersPage() {
     client.query(api.invites.listInvites, { actorToken }),
   ]);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = await appOrigin();
   const pendingInvites = invites.filter((invite) => invite.status === "pending");
 
   return (
@@ -101,6 +116,7 @@ export default async function AdminUsersPage() {
                 <th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Role</th>
                 <th className="px-4 py-2 font-medium">Status</th>
+                <th className="px-4 py-2 text-right font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -113,6 +129,20 @@ export default async function AdminUsersPage() {
                   <td className="px-4 py-2">{formatRole(user.role)}</td>
                   <td className="px-4 py-2">
                     <UserStatusBadge status={user.status} />
+                  </td>
+                  <td className="px-4 py-2">
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      {user.status === "invited" ? (
+                        <CopyLinkButton email={user.email} appUrl={appUrl} />
+                      ) : null}
+                      <UserActions
+                        userId={user._id}
+                        name={user.name}
+                        role={user.role}
+                        status={user.status}
+                        isSelf={user._id === session.userId}
+                      />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -145,8 +175,11 @@ export default async function AdminUsersPage() {
                   <td className="text-muted-foreground px-4 py-2">
                     {formatDate(invite.expiresAt)}
                   </td>
-                  <td className="px-4 py-2 text-right">
-                    <RevokeButton inviteId={invite.inviteId} />
+                  <td className="px-4 py-2">
+                    <span className="flex flex-wrap items-center justify-end gap-2">
+                      <CopyLinkButton email={invite.email} appUrl={appUrl} />
+                      <RevokeButton inviteId={invite.inviteId} />
+                    </span>
                   </td>
                 </tr>
               ))}
@@ -159,7 +192,9 @@ export default async function AdminUsersPage() {
         <h2 className="text-lg font-semibold">Invite people</h2>
         <ImportPanel
           institutionId={institution._id}
-          existingEmails={users.map((user) => user.email)}
+          existingEmails={users
+            .filter((user) => user.status !== "invited")
+            .map((user) => user.email)}
           appUrl={appUrl}
         />
       </section>

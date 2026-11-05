@@ -12,6 +12,7 @@ export type CsvParseError = {
 };
 
 export type ParseInviteCsvOptions = {
+  /** Emails that cannot be invited (activated or suspended accounts); not-yet-activated ones can be re-invited. */
   existingEmails?: string[];
 };
 

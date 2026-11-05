@@ -49,6 +49,7 @@ export function TimetableManager({
   const [start, setStart] = useState("09:00");
   const [end, setEnd] = useState("10:00");
   const [pending, setPending] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<Id<"timetable_slots"> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const missing: string[] = [];
@@ -250,23 +251,33 @@ export function TimetableManager({
                         {slot.facultyName ?? "Unassigned"}
                       </span>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label={`Remove ${slot.sectionLabel} on ${group.name} at ${formatTimeOfDay(slot.startMinutes)}`}
-                      disabled={pending !== null}
-                      onClick={() =>
-                        void run(`delete:${slot.id}`, () =>
-                          deleteSlot({ actorToken, slotId: slot.id }),
-                        )
-                      }
-                    >
-                      {pending === `delete:${slot.id}` ? (
-                        <Loader2 className="animate-spin" />
-                      ) : (
+                    {confirmDeleteId === slot.id ? (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        disabled={pending !== null}
+                        onClick={() =>
+                          void run(`delete:${slot.id}`, () =>
+                            deleteSlot({ actorToken, slotId: slot.id }),
+                          ).then(() => setConfirmDeleteId(null))
+                        }
+                      >
+                        {pending === `delete:${slot.id}` ? (
+                          <Loader2 className="animate-spin" />
+                        ) : null}
+                        Confirm remove
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        aria-label={`Remove ${slot.sectionLabel} on ${group.name} at ${formatTimeOfDay(slot.startMinutes)}`}
+                        disabled={pending !== null}
+                        onClick={() => setConfirmDeleteId(slot.id)}
+                      >
                         <Trash2 />
-                      )}
-                    </Button>
+                      </Button>
+                    )}
                   </li>
                 ))}
               </ul>

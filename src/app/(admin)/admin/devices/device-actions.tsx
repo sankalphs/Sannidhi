@@ -9,6 +9,13 @@ import { postJson } from "@/lib/client/post-json";
 
 type AdminAction = "suspend" | "revoke" | "activate";
 
+const ACTION_LABEL: Record<AdminAction, string> = {
+  activate: "Reactivate",
+  suspend: "Suspend",
+  revoke: "Revoke",
+};
+
+/** One admin device action; suspend and revoke ask for a second click to confirm. */
 export function DeviceActionButton({
   action,
   deviceId,
@@ -18,13 +25,16 @@ export function DeviceActionButton({
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const needsConfirm = action !== "activate";
 
   async function run() {
     setPending(true);
     setError(null);
     try {
       await postJson("/api/admin/devices", { action, deviceId });
+      setConfirming(false);
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Action failed");
@@ -35,15 +45,27 @@ export function DeviceActionButton({
 
   return (
     <span className="flex items-center gap-2">
-      <Button
-        variant={action === "revoke" ? "destructive" : "outline"}
-        size="xs"
-        disabled={pending}
-        onClick={run}
-      >
-        {pending ? <Loader2 className="animate-spin" /> : null}
-        {action === "activate" ? "Reactivate" : action}
-      </Button>
+      {needsConfirm && confirming ? (
+        <>
+          <Button variant="destructive" size="xs" disabled={pending} onClick={run}>
+            {pending ? <Loader2 className="animate-spin" /> : null}
+            Confirm {action}
+          </Button>
+          <Button variant="ghost" size="xs" disabled={pending} onClick={() => setConfirming(false)}>
+            Cancel
+          </Button>
+        </>
+      ) : (
+        <Button
+          variant={action === "revoke" ? "destructive" : "outline"}
+          size="xs"
+          disabled={pending}
+          onClick={needsConfirm ? () => setConfirming(true) : run}
+        >
+          {pending ? <Loader2 className="animate-spin" /> : null}
+          {ACTION_LABEL[action]}
+        </Button>
+      )}
       {error ? <span className="text-destructive text-xs">{error}</span> : null}
     </span>
   );

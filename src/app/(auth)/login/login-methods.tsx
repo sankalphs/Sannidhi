@@ -44,7 +44,8 @@ function TabPanel({
   );
 }
 
-export function LoginMethods() {
+/** `next` is a vetted same-origin path to land on after sign-in, overriding the role home. */
+export function LoginMethods({ next }: { next: string | null }) {
   const [method, setMethod] = useState<LoginMethod>("passkey");
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
@@ -114,13 +115,13 @@ export function LoginMethods() {
       </div>
 
       <TabPanel method="passkey" active={method === "passkey"}>
-        <PasskeyLoginButton />
+        <PasskeyLoginButton next={next} />
         <p className="text-muted-foreground text-sm">
           Use the passkey registered to your Sannidhi account — no passwords, no shared secrets.
         </p>
       </TabPanel>
       <TabPanel method="password" active={method === "password"}>
-        <PasswordLoginForm />
+        <PasswordLoginForm next={next} />
       </TabPanel>
     </div>
   );

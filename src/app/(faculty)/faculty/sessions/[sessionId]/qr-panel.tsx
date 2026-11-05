@@ -9,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
+import { checkInLink } from "@/lib/client/check-in-link";
 import { cn } from "@/lib/utils";
 
 type Challenge = {
@@ -115,7 +116,10 @@ export function QrPanel({
     void (async () => {
       try {
         const qrcode = await import("qrcode");
-        const url = await qrcode.toDataURL(challenge.token, { width: 280, margin: 1 });
+        const url = await qrcode.toDataURL(checkInLink(window.location.origin, challenge.token), {
+          width: 280,
+          margin: 1,
+        });
         if (!cancelled) setDataUrl(url);
       } catch {
         if (!cancelled) setDataUrl(null);
@@ -180,22 +184,20 @@ export function QrPanel({
           </div>
         ) : challenge !== null && dataUrl !== null ? (
           <>
-            <div className="mx-auto w-fit rounded-lg bg-white p-3">
+            <div className="mx-auto w-full max-w-[304px] rounded-lg bg-white p-3">
               {/* Data URL source: next/image cannot optimize inline data URLs. */}
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={dataUrl} alt="Session QR code" width={280} height={280} />
+              <img
+                src={dataUrl}
+                alt="Session QR code"
+                width={280}
+                height={280}
+                className="aspect-square h-auto w-full"
+              />
             </div>
-            <div className="w-full max-w-[280px] space-y-1">
-              <p className="text-primary-foreground/70 text-center text-xs">
-                Camera not available? Enter this code instead:
-              </p>
-              <p
-                data-testid="qr-code-text"
-                className="text-primary-foreground bg-primary-foreground/10 rounded-md px-3 py-2 text-center font-mono text-sm font-semibold break-all select-all"
-              >
-                {challenge.token}
-              </p>
-            </div>
+            <p className="text-primary-foreground/70 max-w-[280px] text-center text-xs">
+              Scan the QR with your phone camera — it opens check-in directly.
+            </p>
             <p className="text-primary-foreground/70 font-mono text-sm tracking-[0.08em] tabular-nums">
               Refreshes in {secondsLeft}s
             </p>

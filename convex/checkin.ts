@@ -297,6 +297,18 @@ export const redeemChallenge = mutation({
       .withIndex("by_nonceHash", (q) => q.eq("nonceHash", nonceHash))
       .first();
 
+    // A displayed code is shared by the whole class; it counts as replayed
+    // only for a student who already redeemed it.
+    const priorRedemption =
+      storedDoc !== null
+        ? await ctx.db
+            .query("session_challenge_redemptions")
+            .withIndex("by_challenge_student", (q) =>
+              q.eq("challengeId", storedDoc._id).eq("studentId", caller._id),
+            )
+            .first()
+        : null;
+
     // Token verdicts outrank session idempotency: a replayed, expired, or
     // malformed code still reports its own verdict even when the student is
     // already settled in this session.
@@ -308,7 +320,7 @@ export const redeemChallenge = mutation({
               nonceHash: storedDoc.nonceHash,
               issuedAt: storedDoc.issuedAt,
               expiresAt: storedDoc.expiresAt,
-              consumedAt: storedDoc.consumedAt,
+              consumedAt: priorRedemption?.redeemedAt,
             }
           : undefined,
       session: {
@@ -377,7 +389,14 @@ export const redeemChallenge = mutation({
       };
     }
 
-    await ctx.db.patch(storedDoc._id, { consumedAt: now, consumedByUserId: caller._id });
+    await ctx.db.insert("session_challenge_redemptions", {
+      challengeId: storedDoc._id,
+      studentId: caller._id,
+      redeemedAt: now,
+    });
+    if (storedDoc.consumedAt === undefined) {
+      await ctx.db.patch(storedDoc._id, { consumedAt: now, consumedByUserId: caller._id });
+    }
 
     const venue = await ctx.db.get(session.venueId);
     const policy = await resolveSessionPolicy(ctx, session);

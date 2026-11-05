@@ -4,7 +4,7 @@ import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
 import { computeEventHash, type LedgerEventCategory } from "../src/lib/ledger/hash";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, query, type QueryCtx } from "./_generated/server";
-import { resolveActorUser } from "./lib/actor";
+import { requireActorUser } from "./lib/actor";
 
 const categoryValidator = v.union(
   v.literal("device"),
@@ -46,16 +46,10 @@ export const appendLedgerEvent = internalMutation({
 const MAX_VERIFY_WINDOW = 2000;
 const MAX_LEDGER_PAGE = 200;
 
-async function resolveCaller(ctx: QueryCtx, actorToken: string): Promise<Doc<"users">> {
-  const user = await resolveActorUser(ctx, actorToken);
-  if (user === null) throw new ConvexError("unauthorized");
-  return user;
-}
-
 export const history = query({
   args: { actorToken: v.string(), subjectUserId: v.id("users") },
   handler: async (ctx, args) => {
-    const caller = await resolveCaller(ctx, args.actorToken);
+    const caller = await requireActorUser(ctx, args.actorToken);
     if (caller._id !== args.subjectUserId && caller.role !== "admin" && caller.role !== "auditor") {
       throw new ConvexError("unauthorized");
     }
@@ -91,7 +85,7 @@ export const listLedgerEvents = query({
     cursorSeq: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const caller = await resolveCaller(ctx, args.actorToken);
+    const caller = await requireActorUser(ctx, args.actorToken);
     if (caller.role !== "admin" && caller.role !== "auditor") {
       throw new ConvexError("unauthorized");
     }
@@ -228,7 +222,7 @@ export const verifyChain = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const caller = await resolveCaller(ctx, args.actorToken);
+    const caller = await requireActorUser(ctx, args.actorToken);
     if (caller.role !== "admin" && caller.role !== "auditor") {
       throw new ConvexError("unauthorized");
     }
@@ -300,7 +294,7 @@ export const verifyAttendanceChain = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const caller = await resolveCaller(ctx, args.actorToken);
+    const caller = await requireActorUser(ctx, args.actorToken);
     if (caller.role !== "admin" && caller.role !== "auditor") {
       throw new ConvexError("unauthorized");
     }

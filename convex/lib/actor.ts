@@ -4,6 +4,7 @@ import { ConvexError } from "convex/values";
 import {
   ACTOR_TOKEN_ALGORITHM,
   ACTOR_TOKEN_MAX_AGE_SECONDS,
+  ACTOR_TOKEN_TYPE,
   getActorSecret,
   SESSION_ACTOR_TOKEN_MAX_AGE_SECONDS,
   type ActorTokenClaims,
@@ -26,7 +27,10 @@ export async function verifyActorToken(token: string): Promise<ActorTokenClaims>
     throw new Error(`Invalid actor token: ${reason}`);
   }
 
-  const { userId, role, sid } = payload;
+  const { typ, userId, role, sid } = payload;
+  if (typ !== ACTOR_TOKEN_TYPE) {
+    throw new Error("Invalid actor token: wrong token type");
+  }
   // Sid-carrying tokens are bounded by the server session itself (checked in
   // requireActorUser*); sid-less ones only by this issued-at window.
   const maxAge =

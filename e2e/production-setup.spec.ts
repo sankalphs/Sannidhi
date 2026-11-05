@@ -132,6 +132,7 @@ test("admins build venues and the timetable that faculty start sessions from", a
   );
 
   await admin.getByRole("button", { name: /^Remove MA201 - Section A on \w+ at 22:00$/ }).click();
+  await admin.getByRole("button", { name: "Confirm remove" }).click();
   await expect(admin.getByText("22:00–23:00")).toHaveCount(0);
   await admin.getByRole("button", { name: `Delete ${venueName}` }).click();
   await admin.getByRole("button", { name: "Confirm delete" }).click();

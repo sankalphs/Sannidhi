@@ -21,7 +21,7 @@ const admin = await client.query(api.testFixtures.getFixtureActor, { role: "admi
 console.log("admin actor:", JSON.stringify(admin));
 
 const secret = new TextEncoder().encode(secretValue);
-const token = await new SignJWT({ userId: admin.userId, role: "admin" })
+const token = await new SignJWT({ typ: "actor", userId: admin.userId, role: "admin" })
   .setProtectedHeader({ alg: "HS256" })
   .setIssuedAt()
   .sign(secret);

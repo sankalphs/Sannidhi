@@ -1,5 +1,5 @@
 import { api } from "../../../../../convex/_generated/api";
-import { BookOpen } from "lucide-react";
+import { BookOpen, TriangleAlert } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { LockedEmptyState } from "@/components/shell/locked-empty-state";
@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import {
   DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
   summarizeAttendance,
+  type AttendanceRecordState,
 } from "@/lib/attendance/projection";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
@@ -23,12 +24,13 @@ type StudentHistoryRow = {
   courseId: string;
   courseCode: string;
   courseTitle: string;
-  state: "verified" | "flagged" | "pending" | "rejected" | "corrected";
+  state: AttendanceRecordState;
   decidedAt: number;
   reasonCodes: string[];
 };
 
-async function loadStudentHistory(): Promise<StudentHistoryRow[]> {
+/** The student's decided attendance rows, or null when the query fails. */
+async function loadStudentHistory(): Promise<StudentHistoryRow[] | null> {
   try {
     const session = await getActiveSession();
     if (session === null) return [];
@@ -40,7 +42,7 @@ async function loadStudentHistory(): Promise<StudentHistoryRow[]> {
     return await getConvexClient().query(api.history.studentHistory, { actorToken });
   } catch (cause) {
     console.error("[student-history] history query failed", cause);
-    return [];
+    return null;
   }
 }
 
@@ -61,6 +63,23 @@ export default async function StudentHistoryPage() {
   }
 
   const rows = await loadStudentHistory();
+  if (rows === null) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PageHeader
+          eyebrow="Student panel"
+          title="Attendance history"
+          description="Calendar and subject-wise views."
+        />
+        <EmptyState
+          icon={TriangleAlert}
+          title="History unavailable"
+          description="Your attendance history could not be loaded. Refresh the page to try again."
+        />
+      </div>
+    );
+  }
+
   const overall = summarizeAttendance(rows);
   const thresholdPercent = DEFAULT_ATTENDANCE_THRESHOLD_PERCENT;
 

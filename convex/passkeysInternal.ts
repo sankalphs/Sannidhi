@@ -176,12 +176,14 @@ export const completeRegistration = internalMutation({
     if (user === null) throw new Error("user not found");
     if (user.status === "suspended") throw new Error("account suspended");
 
-    if (user.status === "invited") {
-      const invite = await findPendingInviteForUser(ctx, user);
-      if (invite === null) {
-        throw new Error("no pending invite found for this account");
-      }
+    // Every invite link is single-use: enrolling a passkey consumes the
+    // holder's pending invite whatever the account status (operator recovery
+    // re-invites active admins), so the link cannot enrol a second passkey.
+    const invite = await findPendingInviteForUser(ctx, user);
+    if (invite !== null) {
       await activateUserAndAcceptInvite(ctx, { user, invite });
+    } else if (user.status === "invited") {
+      throw new Error("no pending invite found for this account");
     }
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {

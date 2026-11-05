@@ -2,8 +2,8 @@ import { expect, test, type Page } from "@playwright/test";
 
 test.describe.configure({ mode: "serial" });
 
-async function devLogin(page: Page, role: "student" | "faculty"): Promise<void> {
-  const response = await page.request.post("/api/dev-session", { data: { role } });
+async function devLogin(page: Page, role: "student" | "faculty", email?: string): Promise<void> {
+  const response = await page.request.post("/api/dev-session", { data: { role, email } });
   expect(response.ok()).toBeTruthy();
 }
 
@@ -14,6 +14,7 @@ test("faculty publishes a rotating QR token and the student checks in with it", 
 
   const facultyContext = await browser.newContext();
   const studentContext = await browser.newContext();
+  const classmateContext = await browser.newContext();
   try {
     const facultyPage = await facultyContext.newPage();
     const studentPage = await studentContext.newPage();
@@ -49,6 +50,19 @@ test("faculty publishes a rotating QR token and the student checks in with it", 
     const outcome = studentPage.getByTestId("checkin-outcome");
     await expect(outcome).toContainText(/checked in/i, { timeout: 60_000 });
 
+    // The whole class scans the same displayed code: a classmate redeeming
+    // it right after is judged on their own evidence, not refused as replay.
+    const classmatePage = await classmateContext.newPage();
+    await devLogin(classmatePage, "student", "diya.sharma@sit.edu.in");
+    await classmatePage.goto("/student/check-in");
+    const classmateInput = classmatePage.getByTestId("checkin-input");
+    await classmateInput.waitFor({ state: "visible", timeout: 60_000 });
+    await classmateInput.fill(token);
+    await classmatePage.getByTestId("submit-code").click();
+    const classmateOutcome = classmatePage.getByTestId("checkin-outcome");
+    await expect(classmateOutcome).toBeVisible({ timeout: 60_000 });
+    await expect(classmateOutcome).not.toContainText(/already used/i);
+
     const tryAgain = studentPage.getByTestId("try-again");
     if ((await tryAgain.count()) > 0 && (await tryAgain.isVisible().catch(() => false))) {
       await tryAgain.click();
@@ -71,5 +85,6 @@ test("faculty publishes a rotating QR token and the student checks in with it", 
   } finally {
     await facultyContext.close();
     await studentContext.close();
+    await classmateContext.close();
   }
 });

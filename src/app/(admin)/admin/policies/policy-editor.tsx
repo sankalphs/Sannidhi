@@ -319,8 +319,7 @@ export function PolicyEditor({
           ) : null}
           {savedRevision !== null ? (
             <span className="text-muted-foreground text-xs">
-              Saved as revision {savedRevision} — decisions now stamp{" "}
-              <code>risk-engine/v1+policy:{savedRevision}</code>
+              Saved as revision {savedRevision}. New check-ins are decided with this policy.
             </span>
           ) : null}
         </div>

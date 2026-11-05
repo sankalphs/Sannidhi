@@ -62,6 +62,7 @@ export function SessionControl({
   const restart = useMutation(api.classSessions.restart);
   const [pending, setPending] = useState<ControlAction | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // Live subscription keeps this tab truthful against co-taught and
   // second-device transitions; the page-load snapshot is only the fallback
@@ -69,6 +70,7 @@ export function SessionControl({
   const board = useQuery(api.classSessions.getBoard, { actorToken, sessionId });
   const snapshot = board ?? initialSnapshot;
   const session = snapshot.session;
+  const closable = session.status === "active" || session.status === "paused";
 
   async function run(action: ControlAction) {
     if (pending !== null) return;
@@ -141,17 +143,35 @@ export function SessionControl({
               Restart window
             </Button>
           ) : null}
-          {session.status === "active" || session.status === "paused" ? (
+          {!closable ? null : confirmingClose ? (
+            <>
+              <Button
+                variant="destructive"
+                data-testid="confirm-close-session"
+                onClick={() => {
+                  setConfirmingClose(false);
+                  void run("close");
+                }}
+                disabled={pending !== null}
+              >
+                <Square />
+                Confirm close
+              </Button>
+              <Button variant="outline" onClick={() => setConfirmingClose(false)}>
+                Cancel
+              </Button>
+            </>
+          ) : (
             <Button
               variant="destructive"
               data-testid="close-session"
-              onClick={() => void run("close")}
+              onClick={() => setConfirmingClose(true)}
               disabled={pending !== null}
             >
               <Square />
               Close session
             </Button>
-          ) : null}
+          )}
         </div>
       </div>
       {error !== null ? (

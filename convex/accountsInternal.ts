@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 import type { Role } from "../src/lib/auth/session";
 import { hashInviteToken } from "../src/lib/invites/token";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery } from "./_generated/server";
 
 export const MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR = 100;
@@ -217,11 +218,25 @@ export const createPasswordUser = internalMutation({
     const now = Date.now();
     const email = args.email.trim().toLowerCase();
 
+    // Admin invites and roster sync already create an "invited" row for the
+    // email: signup claims it by adding the password, once. Anything else
+    // that exists (activated, another institution, a password already set)
+    // is someone else's account.
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", email))
       .first();
-    if (existingUser !== null) throw new ConvexError("account_exists");
+    if (existingUser !== null) {
+      const claimable =
+        existingUser.status === "invited" && existingUser.institutionId === args.institutionId;
+      const existingPassword = claimable
+        ? await ctx.db
+            .query("password_credentials")
+            .withIndex("by_user", (q) => q.eq("userId", existingUser._id))
+            .first()
+        : null;
+      if (!claimable || existingPassword !== null) throw new ConvexError("account_exists");
+    }
 
     const normalizedUsn = args.usn.trim().toUpperCase();
     const existingUsn = await ctx.db
@@ -230,32 +245,38 @@ export const createPasswordUser = internalMutation({
         q.eq("institutionId", args.institutionId).eq("usn", normalizedUsn),
       )
       .first();
-    if (existingUsn !== null) {
+    if (existingUsn !== null && existingUsn._id !== existingUser?._id) {
       throw new ConvexError("usn_taken");
     }
 
-    const recentSignups = (
-      await ctx.db
-        .query("users")
-        .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
-        .collect()
-    ).filter((user) => user.createdAt >= now - SIGNUP_WINDOW_MS).length;
-    if (recentSignups >= MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR) {
-      throw new ConvexError("signup_rate_limited");
-    }
+    let userId: Id<"users">;
+    if (existingUser !== null) {
+      userId = existingUser._id;
+      await ctx.db.patch(userId, { name: args.name.trim(), usn: normalizedUsn });
+    } else {
+      const recentSignups = (
+        await ctx.db
+          .query("users")
+          .withIndex("by_institution", (q) => q.eq("institutionId", args.institutionId))
+          .collect()
+      ).filter((user) => user.createdAt >= now - SIGNUP_WINDOW_MS).length;
+      if (recentSignups >= MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR) {
+        throw new ConvexError("signup_rate_limited");
+      }
 
-    const userId = await ctx.db.insert("users", {
-      institutionId: args.institutionId,
-      email,
-      name: args.name.trim(),
-      usn: normalizedUsn,
-      // The invite's role is authoritative when signup is invite-gated.
-      role: args.role ?? "student",
-      // Self-signup lands invited; the invite redemption (passkey enrollment
-      // or admin re-invite) is what proves the mailbox and activates.
-      status: args.status ?? "active",
-      createdAt: now,
-    });
+      userId = await ctx.db.insert("users", {
+        institutionId: args.institutionId,
+        email,
+        name: args.name.trim(),
+        usn: normalizedUsn,
+        // The invite's role is authoritative when signup is invite-gated.
+        role: args.role ?? "student",
+        // Self-signup lands invited; the invite redemption (passkey enrollment
+        // or admin re-invite) is what proves the mailbox and activates.
+        status: args.status ?? "active",
+        createdAt: now,
+      });
+    }
     await ctx.db.insert("password_credentials", {
       userId,
       hash: args.passwordHash,

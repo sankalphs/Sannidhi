@@ -1,4 +1,9 @@
-export { ANOMALY_ALERT_THRESHOLD, REVIEW_ALERT_KINDS, deriveAlerts } from "./alerts";
+export {
+  ANOMALY_ALERT_THRESHOLD,
+  REVIEW_ALERT_KINDS,
+  canReviewStudentAlert,
+  deriveAlerts,
+} from "./alerts";
 export type { DerivedAlert, ReviewAlertKind } from "./alerts";
 export {
   PROXY_LOOKBACK_DAYS,

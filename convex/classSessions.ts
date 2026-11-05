@@ -128,13 +128,18 @@ export const listMySchedule = query({
     const now = Date.now();
     const today = institutionDayOfWeek(now);
 
-    const slots = await ctx.db.query("timetable_slots").collect();
+    // Today's slots assigned to the caller, plus unassigned ones they may claim.
+    const [mine, unassigned] = await Promise.all(
+      [caller._id, undefined].map((facultyId) =>
+        ctx.db
+          .query("timetable_slots")
+          .withIndex("by_faculty_day", (q) => q.eq("facultyId", facultyId).eq("dayOfWeek", today))
+          .collect(),
+      ),
+    );
     const rows: ScheduleRow[] = [];
 
-    for (const slot of slots) {
-      if (slot.dayOfWeek !== today) continue;
-      if (slot.facultyId !== undefined && slot.facultyId !== caller._id) continue;
-
+    for (const slot of [...mine, ...unassigned]) {
       const section = await ctx.db.get(slot.sectionId);
       if (section === null) continue;
       const course = await ctx.db.get(section.courseId);
@@ -188,6 +193,9 @@ export const startFromSlot = mutation({
 
     const slot = await ctx.db.get(args.slotId);
     if (slot === null) throw new ConvexError("timetable slot not found");
+    if (slot.facultyId !== undefined && slot.facultyId !== caller._id) {
+      throw new ConvexError("unauthorized");
+    }
     const section = await ctx.db.get(slot.sectionId);
     if (section === null) throw new ConvexError("section not found");
     const course = await ctx.db.get(section.courseId);

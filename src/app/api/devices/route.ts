@@ -21,9 +21,14 @@ export async function POST(request: Request) {
   }
 
   const action = body.action;
-  if (action !== "verify" && action !== "verify-successor" && action !== "activate") {
+  if (
+    action !== "verify" &&
+    action !== "reissue-code" &&
+    action !== "verify-successor" &&
+    action !== "activate"
+  ) {
     return NextResponse.json(
-      { error: "action must be verify, verify-successor or activate" },
+      { error: "action must be verify, reissue-code, verify-successor or activate" },
       { status: 400 },
     );
   }
@@ -46,6 +51,10 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "code must be six digits" }, { status: 400 });
       }
       const result = await client.mutation(api.devices.verifyPossession, { ...args, code });
+      return NextResponse.json(result);
+    }
+    if (action === "reissue-code") {
+      const result = await client.mutation(api.devices.reissuePossessionCode, args);
       return NextResponse.json(result);
     }
     if (action === "verify-successor") {

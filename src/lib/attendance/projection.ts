@@ -1,12 +1,15 @@
 export const DEFAULT_ATTENDANCE_THRESHOLD_PERCENT = 75;
 
-export type AttendanceRecordState = "verified" | "flagged" | "pending" | "rejected" | "corrected";
+/** "absent" is never stored: it is synthesized for closed sessions a student left no event in (see isAbsence). */
+export type AttendanceRecordState =
+  "verified" | "flagged" | "pending" | "rejected" | "corrected" | "absent";
 
 export type AttendanceSummary = {
   totalHeld: number;
   verifiedCount: number;
   flaggedCount: number;
   pendingCount: number;
+  /** Rejected check-ins plus missed (absent) classes. */
   rejectedCount: number;
   percentage: number;
   mustAttend: number;
@@ -18,6 +21,22 @@ export function projectAttendanceState(state: string): AttendanceRecordState {
   if (state === "session_verified" || state === "verified") return "verified";
   if (state === "flagged" || state === "rejected" || state === "corrected") return state;
   return "pending";
+}
+
+/**
+ * Absences are never written as events. A student was absent from a class
+ * session when it has closed, it started at or after they enrolled in its
+ * section, and they left no attendance event for it. Student history,
+ * trajectory analytics and admin reports all count absences by this rule.
+ */
+export function isAbsence(args: {
+  session: { status: string; startedAt: number };
+  enrolledAt: number;
+  attended: boolean;
+}): boolean {
+  return (
+    args.session.status === "closed" && args.session.startedAt >= args.enrolledAt && !args.attended
+  );
 }
 
 function round1(value: number): number {
@@ -41,7 +60,7 @@ export function summarizeAttendance(
     if (record.state === "verified" || record.state === "corrected") verifiedCount += 1;
     else if (record.state === "flagged") flaggedCount += 1;
     else if (record.state === "pending") pendingCount += 1;
-    else if (record.state === "rejected") rejectedCount += 1;
+    else if (record.state === "rejected" || record.state === "absent") rejectedCount += 1;
   }
 
   const totalHeld = records.filter((record) => record.state !== "pending").length;
