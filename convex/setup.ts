@@ -62,6 +62,7 @@ async function issueAdminInviteFor(
     name: args.name,
     role: "admin",
     expiresAt,
+    allowExistingAccount: true,
   });
   return {
     institutionId: args.institutionId,
