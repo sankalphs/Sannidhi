@@ -263,7 +263,7 @@ test("step-up: static presentation flags spoof and faculty overrides", async ({ 
   const row = facultyPage.getByTestId(`board-row-${rowId}`);
   await expect(row).toContainText(/flagged/i, { timeout: 30_000 });
   // Reason codes render as friendly labels; the raw code rides in the title.
-  await expect(row).toContainText(/face spoof suspected/i, { timeout: 30_000 });
+  await expect(row).toContainText(/camera saw a photo\/screen/i, { timeout: 30_000 });
 
   await overrideViaDialog(rowId, "Verified in person after reviewing the spoof flag.");
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {
