@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
+import { formatInstitutionDate, formatInstitutionDateTime } from "@/lib/format/datetime";
 
 const MIN_REASON_LENGTH = 10;
 const MAX_REASON_LENGTH = 1000;
@@ -20,16 +21,8 @@ const TYPE_LABELS: Record<string, string> = {
   on_duty: "On-duty",
 };
 
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleString("en-IN", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function formatDay(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-IN", { dateStyle: "medium" });
-}
+const formatDate = formatInstitutionDateTime;
+const formatDay = formatInstitutionDate;
 
 function RequestStatusBadge({ status }: { status: "submitted" | "approved" | "dismissed" }) {
   if (status === "submitted") return <Badge variant="secondary">submitted</Badge>;
