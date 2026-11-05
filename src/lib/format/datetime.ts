@@ -56,3 +56,16 @@ export function formatInstitutionDateTime(
 ): string {
   return (options.seconds === true ? DATE_TIME_SECONDS : DATE_TIME).format(timestamp);
 }
+
+/** Asia/Kolkata has no DST, so the institution's UTC offset is fixed. */
+const INSTITUTION_UTC_OFFSET = "+05:30";
+
+/**
+ * Epoch ms of institution-clock midnight for a "YYYY-MM-DD" key (what an
+ * `<input type="date">` yields), or undefined for an empty/invalid key.
+ */
+export function institutionDayStartMs(dateKey: string): number | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return undefined;
+  const ms = Date.parse(`${dateKey}T00:00:00${INSTITUTION_UTC_OFFSET}`);
+  return Number.isNaN(ms) ? undefined : ms;
+}

@@ -1,24 +1,24 @@
 "use client";
 
 import { api } from "../../../../../convex/_generated/api";
-import { useConvex, useQuery } from "convex/react";
+import { useConvex } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { ChevronDown, ChevronRight, Loader2, ScrollText, ShieldCheck } from "lucide-react";
-import { Component, type ReactNode, useEffect, useState } from "react";
+import { Loader2, ScrollText, ShieldCheck } from "lucide-react";
+import { Component, type FormEvent, type ReactNode, useState } from "react";
 
-import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Decision } from "@/lib/decision";
-import { formatInstitutionDateTime } from "@/lib/format/datetime";
-import { LEDGER_CATEGORY_LABEL, ledgerDisplayCategory } from "@/lib/format/ledger";
+import { Input } from "@/components/ui/input";
+import { institutionDayStartMs } from "@/lib/format/datetime";
+import {
+  LEDGER_CATEGORY_LABEL,
+  LEDGER_DISPLAY_CATEGORIES,
+  type LedgerDisplayCategory,
+} from "@/lib/format/ledger";
 
-type DecisionOutcome = Decision["outcome"];
-
-type LedgerSnapshot = FunctionReturnType<typeof api.ledger.listLedgerEvents>;
-type LedgerEvent = LedgerSnapshot["events"][number];
+import { AttendanceList, LedgerList } from "./history-lists";
 
 type ChainWindow = FunctionReturnType<typeof api.ledger.verifyChain>;
 type ChainStatus =
@@ -63,12 +63,8 @@ async function walkChain(fetchPage: FetchChainPage, actorToken: string): Promise
   }
 }
 
-const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
-  accept: "accept",
-  step_up: "step-up",
-  flag: "flag",
-  reject: "reject",
-};
+const MAX_CHAIN_WINDOWS = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 class LedgerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -89,42 +85,6 @@ class LedgerErrorBoundary extends Component<{ children: ReactNode }, { error: Er
     }
     return this.props.children;
   }
-}
-
-const OUTCOME_VALUES: readonly string[] = ["accept", "step_up", "flag", "reject"];
-const CATEGORY_VALUES: readonly string[] = ["identity", "device", "presence", "person"];
-const MAX_LEDGER_PAGES = 20;
-const MAX_CHAIN_WINDOWS = 8;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isValidSignal(signal: unknown): signal is Decision["evidence"]["signals"][number] {
-  if (!isRecord(signal)) return false;
-  if (typeof signal.source !== "string" || typeof signal.status !== "string") return false;
-  if (!CATEGORY_VALUES.includes(signal.category as string)) return false;
-  return signal.detail === undefined || typeof signal.detail === "string";
-}
-
-function extractDecision(payload: unknown): Decision | null {
-  if (!isRecord(payload) || !isRecord(payload.decision)) return null;
-  const decision = payload.decision;
-  if (typeof decision.outcome !== "string" || !OUTCOME_VALUES.includes(decision.outcome)) {
-    return null;
-  }
-  if (
-    !Array.isArray(decision.reasonCodes) ||
-    !decision.reasonCodes.every((code) => typeof code === "string")
-  ) {
-    return null;
-  }
-  if (typeof decision.policyVersion !== "string" || typeof decision.decidedAt !== "number") {
-    return null;
-  }
-  if (!isRecord(decision.evidence) || !Array.isArray(decision.evidence.signals)) return null;
-  if (!decision.evidence.signals.every(isValidSignal)) return null;
-  return decision as Decision;
 }
 
 export function LedgerEventsView({ actorToken }: { actorToken: string }) {
@@ -176,63 +136,84 @@ function ChainStatusBadge({
   );
 }
 
+type View = "ledger" | "attendance";
+
+const ATTENDANCE_STATES = [
+  ["verified", "Verified"],
+  ["flagged", "Flagged"],
+  ["rejected", "Rejected"],
+  ["step_up", "Step-up"],
+  ["corrected", "Corrected"],
+] as const;
+type AttendanceState = (typeof ATTENDANCE_STATES)[number][0];
+
+/** What the filter form holds; empty strings mean "any". Dates are institution-clock days. */
+type FilterDraft = {
+  category: LedgerDisplayCategory | "";
+  type: string;
+  state: AttendanceState | "";
+  person: string;
+  from: string;
+  to: string;
+};
+
+const EMPTY_FILTERS: FilterDraft = {
+  category: "",
+  type: "",
+  state: "",
+  person: "",
+  from: "",
+  to: "",
+};
+
+/** Query arguments shared by both lists; omits empty fields so the defaults apply. */
+function sharedFilters(draft: FilterDraft) {
+  const fromMs = institutionDayStartMs(draft.from);
+  const toStart = institutionDayStartMs(draft.to);
+  return {
+    ...(draft.person.trim() ? { person: draft.person.trim() } : {}),
+    ...(fromMs !== undefined ? { fromMs } : {}),
+    ...(toStart !== undefined ? { toMs: toStart + DAY_MS } : {}),
+  };
+}
+
+const SELECT_CLASS =
+  "border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
+
 function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   const convex = useConvex();
-  const eventsResult = useQuery(api.ledger.listLedgerEvents, { actorToken, limit: 100 });
-  const [olderEvents, setOlderEvents] = useState<LedgerEvent[]>([]);
-  const [expandedSeqs, setExpandedSeqs] = useState<ReadonlySet<number>>(new Set());
+  const [view, setView] = useState<View>("ledger");
+  const [draft, setDraft] = useState<FilterDraft>(EMPTY_FILTERS);
+  const [applied, setApplied] = useState<FilterDraft>(EMPTY_FILTERS);
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
   const [verifyingAttendanceChain, setVerifyingAttendanceChain] = useState(false);
   const [attendanceChainStatus, setAttendanceChainStatus] = useState<ChainStatus | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setOlderEvents([]);
-    async function loadOlder() {
-      if (eventsResult === undefined || eventsResult.nextCursor === undefined) return;
-      const collected: LedgerEvent[] = [];
-      let cursorSeq: number | undefined = eventsResult.nextCursor;
-      try {
-        for (let page = 0; page < MAX_LEDGER_PAGES && cursorSeq !== undefined; page += 1) {
-          const result: LedgerSnapshot = await convex.query(api.ledger.listLedgerEvents, {
-            actorToken,
-            limit: 100,
-            ...(cursorSeq !== undefined ? { cursorSeq } : {}),
-          });
-          collected.push(...result.events);
-          cursorSeq = result.nextCursor;
-        }
-      } catch {
-        return;
-      }
-      if (!cancelled) setOlderEvents(collected);
-    }
-    void loadOlder();
-    return () => {
-      cancelled = true;
-    };
-  }, [convex, actorToken, eventsResult]);
+  const ledgerFilters = {
+    ...sharedFilters(applied),
+    ...(applied.category ? { category: applied.category } : {}),
+    ...(applied.type.trim() ? { type: applied.type.trim() } : {}),
+  };
+  const attendanceFilters = {
+    ...sharedFilters(applied),
+    ...(applied.state ? { state: applied.state } : {}),
+  };
+  const activeFilters = view === "ledger" ? ledgerFilters : attendanceFilters;
+  const filtered = Object.keys(activeFilters).length > 0;
 
-  const seenSeqs = new Set<number>();
-  const events = [...(eventsResult?.events ?? []), ...olderEvents]
-    .filter((event) => {
-      if (seenSeqs.has(event.seq)) return false;
-      seenSeqs.add(event.seq);
-      return true;
-    })
-    .sort((a, b) => b.seq - a.seq);
+  function update<K extends keyof FilterDraft>(key: K, value: FilterDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
 
-  function toggleExpanded(seq: number) {
-    setExpandedSeqs((current) => {
-      const next = new Set(current);
-      if (next.has(seq)) {
-        next.delete(seq);
-      } else {
-        next.add(seq);
-      }
-      return next;
-    });
+  function apply(event: FormEvent) {
+    event.preventDefault();
+    setApplied(draft);
+  }
+
+  function reset() {
+    setDraft(EMPTY_FILTERS);
+    setApplied(EMPTY_FILTERS);
   }
 
   async function handleVerifyChain() {
@@ -270,7 +251,7 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
         <div className="flex flex-col items-start gap-2 rounded-xl border p-4">
           <p className="text-sm font-medium">Ledger events</p>
           <p className="text-muted-foreground text-xs leading-relaxed">
-            The administrative and security events listed below, in one hash chain.
+            Administrative, security and session events, in one hash chain.
           </p>
           <Button
             variant="outline"
@@ -292,8 +273,8 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
         <div className="flex flex-col items-start gap-2 rounded-xl border p-4">
           <p className="text-sm font-medium">Attendance records</p>
           <p className="text-muted-foreground text-xs leading-relaxed">
-            Every check-in state change (verified, flagged, corrected…), kept in a separate chain —
-            so its count differs from the ledger&apos;s.
+            Every check-in decision (verified, flagged, corrected…), kept in a separate chain — so
+            its count differs from the ledger&apos;s.
           </p>
           <Button
             variant="outline"
@@ -313,149 +294,128 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
           />
         </div>
       </section>
-      {eventsResult === undefined ? (
-        <EmptyState
-          icon={Loader2}
-          title="Loading ledger events"
-          description="Fetching the append-only event trail."
-        />
-      ) : events.length === 0 ? (
-        <EmptyState
-          icon={ScrollText}
-          title="No ledger events yet"
-          description="Events appear here as soon as attendance decisions and administrative actions are recorded."
-        />
-      ) : (
-        <ol className="divide-y rounded-xl border" aria-label="Ledger events, newest first">
-          {events.map((event) => (
-            <LedgerRow
-              key={event._id}
-              event={event}
-              expanded={expandedSeqs.has(event.seq)}
-              onToggle={() => toggleExpanded(event.seq)}
-            />
-          ))}
-        </ol>
-      )}
-    </div>
-  );
-}
 
-function LedgerRow({
-  event,
-  expanded,
-  onToggle,
-}: {
-  event: LedgerEvent;
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const decision = extractDecision(event.payload);
-  return (
-    <li className="flex flex-col gap-3 px-3 py-3 sm:px-4">
-      <div data-testid={`ledger-row-${event.seq}`} className="flex items-start gap-3">
-        <span className="text-muted-foreground w-10 shrink-0 pt-0.5 font-mono text-xs tabular-nums">
-          #{event.seq}
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <Badge variant="outline">
-              {LEDGER_CATEGORY_LABEL[ledgerDisplayCategory(event.category, event.type)]}
-            </Badge>
-            <code className="font-mono text-xs break-all">{event.type}</code>
-          </div>
-          <p className="text-muted-foreground flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-            <time dateTime={new Date(event.createdAt).toISOString()} className="tabular-nums">
-              {formatInstitutionDateTime(event.createdAt, { seconds: true })}
-            </time>
-            {event.subjectName !== null ? <span>Subject: {event.subjectName}</span> : null}
-            {event.actorName !== null ? <span>By: {event.actorName}</span> : null}
-          </p>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-expanded={expanded}
-          aria-label={expanded ? `Collapse event ${event.seq}` : `Expand event ${event.seq}`}
-          data-testid={`ledger-toggle-${event.seq}`}
-          onClick={onToggle}
-        >
-          {expanded ? <ChevronDown /> : <ChevronRight />}
-        </Button>
-      </div>
-      {expanded ? (
-        <div
-          data-testid={`ledger-evidence-${event.seq}`}
-          className="bg-muted/40 flex min-w-0 flex-col gap-3 rounded-lg border p-3 sm:p-4"
-        >
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <span className="text-muted-foreground text-xs font-medium uppercase">Event hash</span>
-            <code
-              className="max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono text-xs"
-              title={event.eventHash}
+      <div className="flex flex-col gap-4">
+        <div className="bg-muted/50 flex w-fit gap-1 rounded-lg p-1" role="group" aria-label="Show">
+          {(
+            [
+              ["ledger", "Ledger events"],
+              ["attendance", "Attendance records"],
+            ] as const
+          ).map(([value, label]) => (
+            <Button
+              key={value}
+              size="sm"
+              variant={view === value ? "secondary" : "ghost"}
+              aria-pressed={view === value}
+              data-testid={`history-view-${value}`}
+              onClick={() => setView(value)}
             >
-              {event.eventHash.slice(0, 24)}…
-            </code>
-          </div>
-          {decision !== null ? <DecisionEvidence decision={decision} /> : null}
-          <pre className="max-h-72 max-w-full overflow-auto rounded-md border p-3 font-mono text-xs leading-relaxed">
-            {JSON.stringify(event.payload, null, 2)}
-          </pre>
-        </div>
-      ) : null}
-    </li>
-  );
-}
-
-function DecisionEvidence({ decision }: { decision: Decision }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-3">
-      <VerdictStamp verdict={OUTCOME_VERDICT[decision.outcome]} />
-      {decision.reasonCodes.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-1">
-          {decision.reasonCodes.map((code) => (
-            <span
-              key={code}
-              className="text-muted-foreground rounded-md border px-1.5 py-0.5 font-mono text-[11px]"
-            >
-              {code}
-            </span>
+              {label}
+            </Button>
           ))}
         </div>
-      ) : null}
-      <div className="max-w-full overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-muted-foreground border-b text-left text-xs font-medium">
-              <th scope="col" className="pr-4 pb-1.5">
+
+        <form
+          onSubmit={apply}
+          className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-3"
+          aria-label="Filters"
+        >
+          {view === "ledger" ? (
+            <>
+              <label className="flex flex-col gap-1.5 text-xs font-medium">
                 Category
-              </th>
-              <th scope="col" className="pr-4 pb-1.5">
-                Source
-              </th>
-              <th scope="col" className="pr-4 pb-1.5">
-                Status
-              </th>
-              <th scope="col" className="pb-1.5">
-                Detail
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {decision.evidence.signals.map((signal, index) => (
-              <tr key={`${signal.source}-${index}`} className="border-b last:border-b-0">
-                <td className="py-1.5 pr-4">{signal.category}</td>
-                <td className="py-1.5 pr-4 font-mono text-xs">{signal.source}</td>
-                <td className="py-1.5 pr-4">{signal.status}</td>
-                <td className="text-muted-foreground py-1.5">{signal.detail ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                <select
+                  className={SELECT_CLASS}
+                  value={draft.category}
+                  onChange={(event) =>
+                    update("category", event.target.value as FilterDraft["category"])
+                  }
+                >
+                  <option value="">All categories</option>
+                  {LEDGER_DISPLAY_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {LEDGER_CATEGORY_LABEL[category]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs font-medium">
+                Event type
+                <Input
+                  value={draft.type}
+                  placeholder="e.g. stepup, invite"
+                  onChange={(event) => update("type", event.target.value)}
+                />
+              </label>
+            </>
+          ) : (
+            <label className="flex flex-col gap-1.5 text-xs font-medium">
+              Decision
+              <select
+                className={SELECT_CLASS}
+                value={draft.state}
+                onChange={(event) => update("state", event.target.value as FilterDraft["state"])}
+              >
+                <option value="">All decisions</option>
+                {ATTENDANCE_STATES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="flex flex-col gap-1.5 text-xs font-medium">
+            Person
+            <Input
+              value={draft.person}
+              placeholder="Name or email"
+              onChange={(event) => update("person", event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-medium">
+            From
+            <Input
+              type="date"
+              value={draft.from}
+              onChange={(event) => update("from", event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-medium">
+            To
+            <Input
+              type="date"
+              value={draft.to}
+              onChange={(event) => update("to", event.target.value)}
+            />
+          </label>
+          <div className="flex items-end gap-2">
+            <Button type="submit" size="sm" data-testid="history-apply-filters">
+              Apply filters
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={reset}>
+              Reset
+            </Button>
+          </div>
+        </form>
+
+        {view === "ledger" ? (
+          <LedgerList
+            key={JSON.stringify(ledgerFilters)}
+            actorToken={actorToken}
+            filters={ledgerFilters}
+            filtered={filtered}
+          />
+        ) : (
+          <AttendanceList
+            key={JSON.stringify(attendanceFilters)}
+            actorToken={actorToken}
+            filters={attendanceFilters}
+            filtered={filtered}
+          />
+        )}
       </div>
-      <p className="text-muted-foreground text-xs">
-        Policy: <span className="font-mono">{decision.policyVersion}</span>
-      </p>
     </div>
   );
 }
