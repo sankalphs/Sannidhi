@@ -176,7 +176,11 @@ export function RosterSyncPanel({
         ) : null}
       </div>
 
+      <label htmlFor="roster-csv" className="text-sm font-medium">
+        Roster CSV
+      </label>
       <textarea
+        id="roster-csv"
         value={csvText}
         onChange={(event) => setCsvText(event.target.value)}
         rows={6}

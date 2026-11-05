@@ -110,7 +110,11 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               }}
             />
           </label>
+          <label htmlFor="invite-csv" className="text-sm font-medium">
+            CSV rows
+          </label>
           <textarea
+            id="invite-csv"
             value={csvText}
             onChange={(event) => setCsvText(event.target.value)}
             rows={6}
@@ -153,18 +157,30 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
               replaces their old link.
             </p>
           </div>
+          <label htmlFor="invite-email" className="text-sm font-medium">
+            Email
+          </label>
           <Input
+            id="invite-email"
             type="email"
             placeholder="email@sit.edu.in"
             value={singleEmail}
             onChange={(event) => setSingleEmail(event.target.value)}
           />
+          <label htmlFor="invite-name" className="text-sm font-medium">
+            Full name
+          </label>
           <Input
-            placeholder="Full name"
+            id="invite-name"
+            placeholder="Ananya Sharma"
             value={singleName}
             onChange={(event) => setSingleName(event.target.value)}
           />
+          <label htmlFor="invite-role" className="text-sm font-medium">
+            Role
+          </label>
           <select
+            id="invite-role"
             value={singleRole}
             onChange={(event) => setSingleRole(event.target.value as Role)}
             className="border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]"
@@ -213,7 +229,8 @@ export function ImportPanel({ institutionId, existingEmails, appUrl }: ImportPan
             <h2 className="font-semibold">Invite links — shown only once</h2>
           </div>
           <p className="text-muted-foreground text-sm">
-            Copy these now. The raw tokens are never stored; only their hashes are kept.
+            Copy these now — Sannidhi does not email them, and they cannot be shown again. If one
+            gets lost, use Copy new link on the Users page.
           </p>
           <ul className="flex flex-col gap-2">
             {created.map((invite) => (
