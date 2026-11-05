@@ -192,7 +192,7 @@ test.afterAll(async () => {
   resetFixtures();
 });
 
-test("step-up: animated capture completes the challenge and verifies", async () => {
+test("step-up: a passed camera check cannot clear a location mismatch", async () => {
   test.setTimeout(180_000);
 
   // Fresh session: the resume path may land on a session where an earlier
@@ -205,12 +205,14 @@ test("step-up: animated capture completes the challenge and verifies", async () 
 
   await expectStepUpStarted(studentPage);
   await captureFace(studentPage);
-  await expect(studentPage.getByTestId("stepup-result")).toContainText(/verified/i, {
+  // The step-up was triggered by a far-away location; the camera check
+  // passes, but presence is still unresolved, so faculty decide.
+  await expect(studentPage.getByTestId("stepup-result")).toContainText(/faculty review/i, {
     timeout: 90_000,
   });
 
   const rowId = await studentRowId();
-  await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {
+  await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/flagged/i, {
     timeout: 30_000,
   });
 
