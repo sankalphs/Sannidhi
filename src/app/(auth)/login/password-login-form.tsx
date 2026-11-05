@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { classifyIdentifier } from "@/lib/auth/password-policy";
 
-export function PasswordLoginForm() {
+export function PasswordLoginForm({ next }: { next: string | null }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,7 +43,7 @@ export function PasswordLoginForm() {
       if (!response.ok) {
         throw new Error(payload.error ?? "Could not sign in. Try again shortly.");
       }
-      router.push(payload.redirect ?? "/");
+      router.push(next ?? payload.redirect ?? "/");
       router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Could not sign in. Try again shortly.");

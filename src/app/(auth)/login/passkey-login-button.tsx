@@ -34,7 +34,7 @@ function passkeysUnsupported(): boolean {
   return typeof window === "undefined" || !window.PublicKeyCredential;
 }
 
-export function PasskeyLoginButton() {
+export function PasskeyLoginButton({ next }: { next: string | null }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +78,7 @@ export function PasskeyLoginButton() {
         throw new Error(payload?.error ?? "Passkey verification failed");
       }
       const result = (await verifyResponse.json()) as { redirect?: string };
-      router.push(result.redirect ?? "/");
+      router.push(next ?? result.redirect ?? "/");
       router.refresh();
     } catch (cause) {
       setError(

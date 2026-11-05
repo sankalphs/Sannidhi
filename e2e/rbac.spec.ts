@@ -1,10 +1,9 @@
 import { expect, test } from "@playwright/test";
 
-test("unauthenticated users are bounced from guarded surfaces to the landing page", async ({
-  page,
-}) => {
-  await page.goto("/student");
-  await expect(page).toHaveURL("http://localhost:3000/");
+test("unauthenticated users are sent to sign-in with a return path", async ({ page }) => {
+  await page.goto("/student/history");
+  await expect(page).toHaveURL("http://localhost:3000/login?next=%2Fstudent%2Fhistory");
+  await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });
 
 test("a student dev session reaches the student shell but is redirected away from admin", async ({
