@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { runPasskeyStepUp } from "@/lib/client/passkey-step-up";
 import { postJson } from "@/lib/client/post-json";
+import { DEVICE_LABEL_MAX_LENGTH } from "@/lib/devices/lifecycle";
+import { REPLACEMENT_REASON_MAX_LENGTH } from "@/lib/devices/replacement";
 
 import {
   DEVICE_STATE_BADGE_VARIANT,
@@ -284,6 +286,7 @@ export function DeviceManager({
             <textarea
               className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
               placeholder="Why does this device need replacement?"
+              maxLength={REPLACEMENT_REASON_MAX_LENGTH}
               value={reason}
               onChange={(event) => setReason(event.target.value)}
             />
@@ -368,6 +371,7 @@ export function DeviceManager({
             <span className="sr-only">Device label</span>
             <Input
               placeholder='Device label, e.g. "Pixel 9"'
+              maxLength={DEVICE_LABEL_MAX_LENGTH}
               value={label}
               onChange={(event) => setLabel(event.target.value)}
             />

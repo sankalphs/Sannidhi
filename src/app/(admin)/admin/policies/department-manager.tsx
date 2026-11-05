@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CODE_MAX_LENGTH, NAME_MAX_LENGTH } from "@/lib/catalog-limits";
 import { describeConvexError } from "@/lib/client/describe-error";
 
 type DepartmentRow = {
@@ -102,6 +103,7 @@ export function DepartmentManager({
           <Input
             className="w-28"
             placeholder="CSE"
+            maxLength={CODE_MAX_LENGTH}
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
@@ -111,6 +113,7 @@ export function DepartmentManager({
           <Input
             className="w-64"
             placeholder="Computer Science & Engineering"
+            maxLength={NAME_MAX_LENGTH}
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
@@ -152,6 +155,7 @@ export function DepartmentManager({
                         <Input
                           className="h-8 w-48"
                           placeholder="New name"
+                          maxLength={NAME_MAX_LENGTH}
                           value={renames[department.id] ?? ""}
                           onChange={(event) =>
                             setRenames((current) => ({

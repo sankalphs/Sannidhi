@@ -10,6 +10,7 @@ import { requireActorUserWithActiveSession } from "./lib/actor";
 
 const MAX_REASON_LENGTH = 1000;
 const MIN_REASON_LENGTH = 10;
+const MAX_REVIEW_NOTE_LENGTH = 1000;
 const MAX_LISTED_REQUESTS = 50;
 const MAX_PENDING_REQUESTS = 10;
 const MAX_LISTED_CORRECTIONABLE_EVENTS = 30;
@@ -425,6 +426,9 @@ export const reviewRequest = mutation({
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
     const reviewer = await requireReviewer(ctx, args.actorToken);
+    if (args.note !== undefined && args.note.trim().length > MAX_REVIEW_NOTE_LENGTH) {
+      throw new ConvexError(`Review notes are limited to ${MAX_REVIEW_NOTE_LENGTH} characters`);
+    }
 
     const request = await ctx.db.get(args.requestId);
     if (request === null) throw new ConvexError("request_not_found");

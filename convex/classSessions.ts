@@ -18,6 +18,7 @@ import { requireActorUser } from "./lib/actor";
 import { resolveSessionPolicy } from "./lib/policyContext";
 
 const DEFAULT_WINDOW_MINUTES = 45;
+const MAX_MANUAL_REASON_LENGTH = 1000;
 
 /** Sessions run in minutes, not seconds or hours — clamp hostile/nonsense input. */
 function resolveWindowMinutes(raw: number | undefined): number {
@@ -472,6 +473,9 @@ export const verifyManually = mutation({
 
     const trimmed = args.reason.trim();
     if (trimmed.length < 10) throw new ConvexError("reason_too_short");
+    if (trimmed.length > MAX_MANUAL_REASON_LENGTH) {
+      throw new ConvexError(`Reason is limited to ${MAX_MANUAL_REASON_LENGTH} characters`);
+    }
 
     // Manual verification is bound to the live window: a closed session or an
     // expired window has no verifiable present to attest to.
