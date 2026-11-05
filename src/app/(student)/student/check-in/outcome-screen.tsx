@@ -121,7 +121,7 @@ function failureCopy(
       return {
         headline: "Already checked in",
         message:
-          "Your attendance for this class is already settled. Finish any pending verification from the dashboard prompt.",
+          "Your attendance for this class is already settled. Any pending check for this class appears on this page.",
       };
     }
     if (reason.endsWith("_mismatch")) return MISMATCH_COPY;
