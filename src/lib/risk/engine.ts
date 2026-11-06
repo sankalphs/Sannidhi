@@ -14,6 +14,7 @@ export const RISK_REASON_CODES = {
   deviceUntrusted: "device_untrusted",
   deviceMissing: "device_missing",
   locationMismatch: "location_mismatch",
+  presenceUnresolvedAfterStepup: "presence_unresolved_after_stepup",
   personSpoofSuspected: "person_spoof_suspected",
   personFaceMismatch: "person_face_mismatch",
   personCheckInconclusive: "person_check_inconclusive",
@@ -149,9 +150,25 @@ export function decide(input: RiskInput): Decision {
       }
     }
 
-    if (weaknesses.length > 0) {
+    // A passed camera check is weak evidence about who holds the phone and none
+    // about where it is: it clears device weaknesses, but a location mismatch
+    // it was asked to settle goes to faculty review instead of accept.
+    const personVerified = signals.some(
+      (signal) => signal.category === "person" && signal.status === "verified",
+    );
+    const remaining = personVerified
+      ? weaknesses.filter(
+          (code) =>
+            code !== RISK_REASON_CODES.deviceUntrusted && code !== RISK_REASON_CODES.deviceMissing,
+        )
+      : weaknesses;
+
+    if (personVerified && remaining.includes(RISK_REASON_CODES.locationMismatch)) {
+      outcome = "flag";
+      reasonCodes.push(RISK_REASON_CODES.presenceUnresolvedAfterStepup, ...remaining);
+    } else if (remaining.length > 0) {
       outcome = "step_up";
-      reasonCodes.push(...weaknesses);
+      reasonCodes.push(...remaining);
     } else {
       outcome = "accept";
     }

@@ -239,9 +239,9 @@ export function TimetableManager({
                 {group.slots.map((slot) => (
                   <li
                     key={slot.id}
-                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 text-sm"
+                    className="flex items-center justify-between gap-2 px-4 py-2 text-sm"
                   >
-                    <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-3 gap-y-1">
                       <span className="font-mono text-xs tabular-nums">
                         {formatTimeOfDay(slot.startMinutes)}–{formatTimeOfDay(slot.endMinutes)}
                       </span>

@@ -93,8 +93,8 @@ export default async function AdminAccessRequestsPage() {
               <tbody className="divide-y">
                 {requests.map((request) => (
                   <tr key={request.id} data-testid="access-request-row">
-                    <td className="px-4 py-2 font-medium">{request.institution}</td>
-                    <td className="px-4 py-2">
+                    <td className="cell-wrap px-4 py-2 font-medium">{request.institution}</td>
+                    <td className="cell-wrap px-4 py-2">
                       <div className="flex flex-col">
                         <span>{request.name}</span>
                         <span className="text-muted-foreground font-mono text-xs">
@@ -103,8 +103,8 @@ export default async function AdminAccessRequestsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-2">{ROLE_LABELS[request.requestedRole]}</td>
-                    <td className="text-muted-foreground max-w-56 truncate px-4 py-2 text-xs">
-                      {request.note ?? "—"}
+                    <td className="text-muted-foreground px-4 py-2 text-xs">
+                      <div className="max-w-56 truncate">{request.note ?? "—"}</div>
                     </td>
                     <td className="text-muted-foreground px-4 py-2 font-mono text-xs">
                       {formatDate(request.submittedAt)}

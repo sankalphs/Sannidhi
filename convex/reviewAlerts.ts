@@ -19,6 +19,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MAX_ALERTS_PER_LIST = 200;
+const MAX_RESOLUTION_NOTE_LENGTH = 1000;
 const ALERT_CREATED_TYPE = "analytics.review_alert_created";
 const ALERT_RESOLVED_TYPE = "analytics.review_alert_resolved";
 
@@ -265,6 +266,9 @@ export const resolveReviewAlert = mutation({
   },
   handler: async (ctx, args) => {
     const caller = await requireAnalyticsAuthority(ctx, args.actorToken);
+    if (args.note !== undefined && args.note.trim().length > MAX_RESOLUTION_NOTE_LENGTH) {
+      throw new ConvexError(`Notes are limited to ${MAX_RESOLUTION_NOTE_LENGTH} characters`);
+    }
     const alert = await ctx.db.get(args.alertId);
     if (alert === null) throw new ConvexError("alert_not_found");
     if (alert.institutionId !== caller.institutionId) throw new ConvexError("unauthorized");

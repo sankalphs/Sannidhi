@@ -1,3 +1,9 @@
+import {
+  CODE_MAX_LENGTH,
+  EMAIL_MAX_LENGTH,
+  NAME_MAX_LENGTH,
+  TITLE_MAX_LENGTH,
+} from "../catalog-limits";
 import type { ParsedRoster, RosterIssue, RosterRow } from "./types";
 import { enrollmentKey } from "./keys";
 
@@ -12,6 +18,19 @@ export const ROSTER_CSV_HEADERS = [
   "student_name",
   "usn",
 ] as const;
+
+/** Longest accepted value per column; parseRosterCsv and the sync API both enforce it. */
+export const ROSTER_FIELD_MAX_LENGTH: Record<(typeof ROSTER_CSV_HEADERS)[number], number> = {
+  department_code: CODE_MAX_LENGTH,
+  department_name: NAME_MAX_LENGTH,
+  course_code: CODE_MAX_LENGTH,
+  course_title: TITLE_MAX_LENGTH,
+  section_name: NAME_MAX_LENGTH,
+  term: CODE_MAX_LENGTH,
+  student_email: EMAIL_MAX_LENGTH,
+  student_name: NAME_MAX_LENGTH,
+  usn: CODE_MAX_LENGTH,
+};
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -170,6 +189,13 @@ export function parseRosterCsv(text: string): ParsedRoster {
         invalid = true;
       }
     }
+    ROSTER_CSV_HEADERS.forEach((column, index) => {
+      const max = ROSTER_FIELD_MAX_LENGTH[column];
+      if (value(index).length > max) {
+        fail(column, `${column} is longer than ${max} characters`);
+        invalid = true;
+      }
+    });
     if (invalid) continue;
 
     if (!EMAIL_PATTERN.test(row.studentEmail)) {

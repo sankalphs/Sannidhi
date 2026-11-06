@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 
-export function errorResponse(error: unknown, fallbackMessage = "Request failed") {
-  const message = error instanceof Error ? error.message : fallbackMessage;
-  const status = /unauthorized|challenge invalid|not recognized/i.test(message) ? 403 : 400;
-  if (/secret|token/i.test(message) && /invalid|missing/i.test(message)) {
-    return NextResponse.json({ error: fallbackMessage }, { status });
-  }
-  return NextResponse.json({ error: message }, { status });
+import { convexRouteErrorResponse } from "@/lib/api/route-errors";
+
+/** Auth-route catch block: authored Convex errors become human copy, anything else a generic 500. */
+export function errorResponse(
+  error: unknown,
+  fallbackMessage = "Something went wrong. Please try again.",
+) {
+  return convexRouteErrorResponse("auth", error, fallbackMessage);
 }
 
 export async function readJsonBody(request: Request): Promise<Record<string, unknown> | null> {

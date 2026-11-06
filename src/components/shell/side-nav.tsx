@@ -65,8 +65,8 @@ export function SideNav({ nav, className, variant = "board", onNavigate }: SideN
               "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
               variant === "board"
                 ? active
-                  ? "bg-chalk text-chalk-foreground font-medium"
-                  : "text-primary-foreground/75 hover:bg-primary-foreground/10 hover:text-primary-foreground"
+                  ? "bg-chalk text-chalk-foreground dark:bg-sidebar-primary dark:text-sidebar-primary-foreground font-medium"
+                  : "text-primary-foreground/75 hover:bg-primary-foreground/10 hover:text-primary-foreground dark:text-sidebar-foreground/75 dark:hover:bg-sidebar-accent dark:hover:text-sidebar-accent-foreground"
                 : active
                   ? "bg-accent text-accent-foreground font-medium"
                   : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",

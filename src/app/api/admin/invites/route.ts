@@ -19,18 +19,32 @@ async function getAdminSession(): Promise<SessionPayload | null> {
 
 type InviteInput = { email?: unknown; name?: unknown; role?: unknown };
 
-function parseInvites(value: unknown): { email: string; name: string; role: Role }[] | null {
-  if (!Array.isArray(value) || value.length === 0) return null;
-  const invites: { email: string; name: string; role: Role }[] = [];
+type ParsedInvite = { email: string; name: string; role: Role };
+
+/** Validates the invite rows, naming the first problem in words an admin can fix. */
+function parseInvites(value: unknown): { invites: ParsedInvite[] } | { error: string } {
+  if (!Array.isArray(value) || value.length === 0) {
+    return { error: "Add at least one person to invite." };
+  }
+  const invites: ParsedInvite[] = [];
   for (const item of value) {
-    if (typeof item !== "object" || item === null) return null;
-    const { email, name, role } = item as InviteInput;
-    if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) return null;
-    if (typeof name !== "string" || name.trim().length === 0) return null;
-    if (typeof role !== "string" || !ROLES.includes(role as Role)) return null;
+    const { email, name, role } = (
+      typeof item === "object" && item !== null ? item : {}
+    ) as InviteInput;
+    if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
+      const shown =
+        typeof email === "string" && email.trim().length > 0 ? `"${email.trim()}"` : "An email";
+      return { error: `${shown} is not a valid email address. Use the form name@example.com.` };
+    }
+    if (typeof name !== "string" || name.trim().length === 0) {
+      return { error: `Add a name for ${email.trim()}.` };
+    }
+    if (typeof role !== "string" || !ROLES.includes(role as Role)) {
+      return { error: `Choose a valid role for ${email.trim()}.` };
+    }
     invites.push({ email: email.trim().toLowerCase(), name: name.trim(), role: role as Role });
   }
-  return invites;
+  return { invites };
 }
 
 function errorResponse(error: unknown) {
@@ -59,13 +73,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing institutionId" }, { status: 400 });
   }
 
-  const invites = parseInvites(body.invites ?? body.rows);
-  if (invites === null) {
-    return NextResponse.json(
-      { error: "invites must be a non-empty array of {email, name, role}" },
-      { status: 400 },
-    );
+  const parsed = parseInvites(body.invites ?? body.rows);
+  if ("error" in parsed) {
+    return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
+  const { invites } = parsed;
   let ttlDays: number | undefined;
   if (body.ttlDays !== undefined) {
     if (typeof body.ttlDays !== "number") {
@@ -136,7 +148,7 @@ export async function PATCH(request: Request) {
 
   const email = body.email;
   if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
-    return NextResponse.json({ error: "Missing email" }, { status: 400 });
+    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
 
   try {

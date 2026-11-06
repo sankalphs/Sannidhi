@@ -13,6 +13,7 @@ import {
   deviceTrustSignal,
   faceMatchSignal,
   identitySessionSignal,
+  stepUpCarriedSignals,
   type FaceMatchOutcome,
 } from "../src/lib/risk";
 import { internal } from "./_generated/api";
@@ -353,14 +354,22 @@ export const completeWithFace = mutation({
     const personSignal = faceMatchSignal(personOutcome(classification));
     const session = await ctx.db.get(challenge.sessionId);
     if (session === null) return { kind: "gone" as const };
+    // The check-in that triggered this step-up carries its location evidence
+    // forward: a camera check alone cannot clear a presence failure.
+    const origin =
+      challenge.originEventId !== undefined ? await ctx.db.get(challenge.originEventId) : null;
     const decision = decide({
-      signals: [...(await sessionSignals(ctx, caller._id, challenge.sessionId)), personSignal],
+      signals: [
+        ...(await sessionSignals(ctx, caller._id, challenge.sessionId)),
+        ...stepUpCarriedSignals(origin?.decision),
+        personSignal,
+      ],
       anomalies: { recentSecurityFailures: 0 },
       now,
       policy: await resolveSessionPolicy(ctx, session),
     });
 
-    if (classification.verdict === "match") {
+    if (classification.verdict === "match" && decision.outcome === "accept") {
       await appendAttendanceEvent(ctx, {
         institutionId: session.institutionId,
         studentId: caller._id,
@@ -395,7 +404,11 @@ export const completeWithFace = mutation({
       state: "flagged",
       decision,
     });
-    await ctx.db.patch(challenge._id, { status: "failed", resolvedAt: now });
+    const passedButUnresolved = classification.verdict === "match";
+    await ctx.db.patch(challenge._id, {
+      status: passedButUnresolved ? "escalated" : "failed",
+      resolvedAt: now,
+    });
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
       institutionId: session.institutionId,
       category: "attendance",
@@ -404,7 +417,7 @@ export const completeWithFace = mutation({
       subjectUserId: caller._id,
       payload: {
         challengeId: challenge._id,
-        outcome: "failed",
+        outcome: passedButUnresolved ? "escalated" : "failed",
         reasonCodes: decision.reasonCodes,
         decision,
       },

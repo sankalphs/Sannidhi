@@ -16,6 +16,7 @@ import {
   manualAttestationSignals,
   outcomeToAttendanceState,
   resolveRiskPolicy,
+  stepUpCarriedSignals,
   type LocationOutcome,
   type ResolvedRiskPolicy,
   type RiskInput,
@@ -150,6 +151,82 @@ describe("person evidence (face match)", () => {
     );
     expect(unavailable.outcome).toBe("accept");
     expect(unavailable.reasonCodes).toEqual([]);
+  });
+});
+
+describe("step-up completion with a passed camera check", () => {
+  const faceMatch = faceMatchSignal({ verdict: "match", similarity: 0.95 });
+
+  it("accepts when the step-up was opened by a weak device", () => {
+    const decision = decide(
+      cleanInput({ signals: [...withBaseDevice({ state: "new" }), faceMatch] }),
+    );
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([]);
+  });
+
+  it("accepts when the step-up was opened by a missing device", () => {
+    const decision = decide(cleanInput({ signals: [...withBaseDevice(null), faceMatch] }));
+    expect(decision.outcome).toBe("accept");
+    expect(decision.reasonCodes).toEqual([]);
+  });
+
+  it("flags instead of accepting when the step-up was opened by a location mismatch", () => {
+    const origin = decide(
+      cleanInput({
+        signals: [
+          identitySessionSignal(),
+          challengePresenceSignal("session_1"),
+          deviceTrustSignal({ state: "active" }),
+          geolocationSignal({ verdict: "mismatch", distanceMeters: 940 }),
+        ],
+      }),
+    );
+    expect(origin.outcome).toBe("step_up");
+
+    const completion = decide(
+      cleanInput({
+        signals: [
+          identitySessionSignal(),
+          deviceTrustSignal({ state: "active" }),
+          challengePresenceSignal("session_1"),
+          ...stepUpCarriedSignals(origin),
+          faceMatch,
+        ],
+      }),
+    );
+    expect(completion.outcome).toBe("flag");
+    expect(completion.reasonCodes).toEqual([
+      RISK_REASON_CODES.presenceUnresolvedAfterStepup,
+      RISK_REASON_CODES.locationMismatch,
+    ]);
+  });
+
+  it("clears the device weakness but still flags a combined device + location step-up", () => {
+    const signals = [
+      identitySessionSignal(),
+      challengePresenceSignal("session_1"),
+      deviceTrustSignal({ state: "enrolled" }),
+      geolocationSignal({ verdict: "mismatch", distanceMeters: 700 }),
+      faceMatch,
+    ];
+    const decision = decide(cleanInput({ signals }));
+    expect(decision.outcome).toBe("flag");
+    expect(decision.reasonCodes).toEqual([
+      RISK_REASON_CODES.presenceUnresolvedAfterStepup,
+      RISK_REASON_CODES.locationMismatch,
+    ]);
+  });
+
+  it("stepUpCarriedSignals keeps only the origin's geolocation evidence", () => {
+    const geo = geolocationSignal({ verdict: "mismatch", distanceMeters: 940 });
+    const origin = decide(cleanInput({ signals: [...withBaseDevice({ state: "new" }), geo] }));
+    expect(stepUpCarriedSignals(origin)).toEqual([
+      geolocationSignal({ verdict: "consistent", distanceMeters: 42 }),
+      geo,
+    ]);
+    expect(stepUpCarriedSignals(null)).toEqual([]);
+    expect(stepUpCarriedSignals(undefined)).toEqual([]);
   });
 });
 

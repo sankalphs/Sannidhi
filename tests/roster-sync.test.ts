@@ -49,6 +49,19 @@ describe("normalizeRosterRows", () => {
     ]);
   });
 
+  it("drops rows with over-long fields", () => {
+    const { rows, issues } = normalizeRosterRows([
+      row({ courseCode: "C".repeat(25) }),
+      row({ studentName: "n".repeat(121), studentEmail: "b@sit.edu.in" }),
+      row({ courseTitle: "t".repeat(160), studentEmail: "c@sit.edu.in" }),
+    ]);
+    expect(issues).toEqual([
+      { row: 1, field: "course_code", message: "is longer than 24 characters" },
+      { row: 2, field: "student_name", message: "is longer than 120 characters" },
+    ]);
+    expect(rows).toHaveLength(1);
+  });
+
   it("treats blank term and usn as undefined", () => {
     const { rows, issues } = normalizeRosterRows([row({ term: "   ", studentUsn: "" })]);
     expect(issues).toEqual([]);

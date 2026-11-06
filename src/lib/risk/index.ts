@@ -30,6 +30,7 @@ export {
   geolocationSignal,
   identitySessionSignal,
   manualAttestationSignals,
+  stepUpCarriedSignals,
 } from "./signals";
 export type { FaceMatchOutcome } from "./signals";
 export {

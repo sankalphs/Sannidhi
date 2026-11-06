@@ -77,6 +77,7 @@ test("an exemption request reaches the faculty queue and approval is recorded", 
     await expect(queueRow).toBeVisible({ timeout: 30_000 });
     await expect(queueRow.getByText("Exemption", { exact: true })).toBeVisible();
     await queueRow.getByTestId("approve-dispute").click();
+    await queueRow.getByTestId("confirm-approve-dispute").click();
     await expect(queueRow).toBeHidden({ timeout: 30_000 });
 
     await studentPage.reload();

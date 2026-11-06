@@ -1,8 +1,12 @@
 import { ConvexError, v } from "convex/values";
 
 import type { ActorTokenClaims } from "../src/lib/auth/actor-token";
-import { checkReplacementEligibility, REPLACEMENT_DECISIONS } from "../src/lib/devices/replacement";
-import { assertTransition } from "../src/lib/devices/lifecycle";
+import {
+  checkReplacementEligibility,
+  REPLACEMENT_DECISIONS,
+  REPLACEMENT_REASON_MAX_LENGTH,
+} from "../src/lib/devices/replacement";
+import { assertTransition, DEVICE_LABEL_MAX_LENGTH } from "../src/lib/devices/lifecycle";
 import {
   checkPossessionUsable,
   generatePossessionCode,
@@ -21,7 +25,8 @@ import {
   requireFreshAuth,
 } from "./lib/actor";
 
-const MAX_LABEL_LENGTH = 80;
+/** Admin suspend/revoke reasons are free text stamped on the device and its ledger event. */
+const MAX_STATE_REASON_LENGTH = 500;
 const MAX_LISTED_DEVICES = 200;
 
 type DeviceDoc = Doc<"devices">;
@@ -195,8 +200,11 @@ export const registerDevice = mutation({
     const user = claims.user;
     if (user.status === "suspended") throw new ConvexError("account suspended");
 
-    const label = args.label.trim().slice(0, MAX_LABEL_LENGTH);
+    const label = args.label.trim();
     if (label.length === 0) throw new ConvexError("label required");
+    if (label.length > DEVICE_LABEL_MAX_LENGTH) {
+      throw new ConvexError(`Device label is limited to ${DEVICE_LABEL_MAX_LENGTH} characters`);
+    }
 
     const now = Date.now();
     const deviceId = await ctx.db.insert("devices", {
@@ -405,10 +413,17 @@ export const activateDevice = mutation({
   },
 });
 
+function assertStateReason(reason: string | undefined): void {
+  if (reason !== undefined && reason.length > MAX_STATE_REASON_LENGTH) {
+    throw new ConvexError(`Reason is limited to ${MAX_STATE_REASON_LENGTH} characters`);
+  }
+}
+
 export const suspendDevice = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices"), reason: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const claims = await requireAdminActor(ctx, args.actorToken);
+    assertStateReason(args.reason);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertSameInstitution(
       await requireAdminInstitution(ctx, args.actorToken),
@@ -440,6 +455,7 @@ export const revokeDevice = mutation({
   args: { actorToken: v.string(), deviceId: v.id("devices"), reason: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const claims = await requireAdminActor(ctx, args.actorToken);
+    assertStateReason(args.reason);
     const device = await getDeviceOrThrow(ctx, args.deviceId);
     assertSameInstitution(
       await requireAdminInstitution(ctx, args.actorToken),
@@ -528,6 +544,11 @@ export const requestReplacement = mutation({
       throw new ConvexError("unauthorized");
     }
 
+    if (args.reason.trim().length > REPLACEMENT_REASON_MAX_LENGTH) {
+      throw new ConvexError(
+        `Replacement reason is limited to ${REPLACEMENT_REASON_MAX_LENGTH} characters`,
+      );
+    }
     const pending = await findPendingRequestForDevice(ctx, device.userId, device._id);
 
     const eligibility = checkReplacementEligibility({

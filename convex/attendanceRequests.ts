@@ -11,6 +11,7 @@ import { requireActorUserWithActiveSession } from "./lib/actor";
 const MAX_REASON_LENGTH = 1000;
 const MIN_REASON_LENGTH = 10;
 const MAX_LISTED_REQUESTS = 50;
+const MAX_REVIEW_NOTE_LENGTH = 500;
 const MAX_PENDING_REQUESTS = 10;
 const MAX_LISTED_CORRECTIONABLE_EVENTS = 30;
 const MAX_LISTED_SESSIONS = 60;
@@ -425,6 +426,9 @@ export const reviewRequest = mutation({
   returns: v.object({ ok: v.boolean() }),
   handler: async (ctx, args) => {
     const reviewer = await requireReviewer(ctx, args.actorToken);
+    if (args.note !== undefined && args.note.trim().length > MAX_REVIEW_NOTE_LENGTH) {
+      throw new ConvexError(`Review notes are limited to ${MAX_REVIEW_NOTE_LENGTH} characters`);
+    }
 
     const request = await ctx.db.get(args.requestId);
     if (request === null) throw new ConvexError("request_not_found");
@@ -439,6 +443,8 @@ export const reviewRequest = mutation({
     }
 
     const reviewedAt = Date.now();
+    const reviewNote = args.note?.trim() ?? "";
+    const noteField = reviewNote.length > 0 ? { reviewNote } : {};
 
     if (args.decision === "dismissed") {
       await ctx.db.patch(request._id, {
@@ -446,6 +452,7 @@ export const reviewRequest = mutation({
         reviewedAt,
         reviewedByUserId: reviewer._id,
         decision: "dismissed",
+        ...noteField,
       });
       await ctx.runMutation(internal.ledger.appendLedgerEvent, {
         institutionId: request.institutionId,
@@ -472,6 +479,7 @@ export const reviewRequest = mutation({
         reviewedAt,
         reviewedByUserId: reviewer._id,
         decision: "approved",
+        ...noteField,
       });
       await ctx.runMutation(internal.ledger.appendLedgerEvent, {
         institutionId: request.institutionId,
@@ -507,6 +515,7 @@ export const reviewRequest = mutation({
       reviewedAt,
       reviewedByUserId: reviewer._id,
       decision: "approved",
+      ...noteField,
     });
 
     await appendAttendanceEvent(ctx, {
@@ -550,6 +559,7 @@ export const listMyRequests = query({
       status: requestStatusValidator,
       requestedAt: v.number(),
       reviewedAt: v.optional(v.number()),
+      reviewNote: v.optional(v.string()),
       eventId: v.optional(v.id("attendance_events")),
       courseCode: v.optional(v.string()),
       sessionStartedAt: v.optional(v.number()),
@@ -572,6 +582,7 @@ export const listMyRequests = query({
       status: "submitted" | "approved" | "dismissed";
       requestedAt: number;
       reviewedAt?: number;
+      reviewNote?: string;
       eventId?: Id<"attendance_events">;
       courseCode?: string;
       sessionStartedAt?: number;
@@ -586,6 +597,7 @@ export const listMyRequests = query({
         status: request.status,
         requestedAt: request.requestedAt,
         reviewedAt: request.reviewedAt,
+        ...(request.reviewNote !== undefined ? { reviewNote: request.reviewNote } : {}),
       };
       const session = request.sessionId !== undefined ? await ctx.db.get(request.sessionId) : null;
       const course = session !== null ? await ctx.db.get(session.courseId) : null;

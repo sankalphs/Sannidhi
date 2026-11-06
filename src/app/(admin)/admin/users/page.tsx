@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
+import { formatInstitutionDate } from "@/lib/format/datetime";
 
 import { CopyLinkButton } from "./copy-link-button";
 import { ImportPanel } from "./import-panel";
@@ -21,15 +22,6 @@ type InviteRow = FunctionReturnType<typeof api.invites.listInvites>[number];
 
 function formatRole(role: string): string {
   return role.replace("_", " ");
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-IN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "Asia/Kolkata",
-  });
 }
 
 /** Origin for invite links: the configured public URL, else the host this request came in on. */
@@ -173,7 +165,7 @@ export default async function AdminUsersPage() {
                     <InviteStatusBadge status={invite.status} />
                   </td>
                   <td className="text-muted-foreground px-4 py-2">
-                    {formatDate(invite.expiresAt)}
+                    {formatInstitutionDate(invite.expiresAt)}
                   </td>
                   <td className="px-4 py-2">
                     <span className="flex flex-wrap items-center justify-end gap-2">

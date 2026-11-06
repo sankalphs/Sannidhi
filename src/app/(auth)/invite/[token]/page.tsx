@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { api } from "../../../../../convex/_generated/api";
 import { getConvexClient } from "@/lib/convex/server-client";
+import { formatInstitutionDate } from "@/lib/format/datetime";
 
 import { PasskeyEnrollmentStep } from "./passkey-enrollment-step";
 
@@ -15,14 +16,6 @@ const REASON_COPY: Record<string, string> = {
 
 function formatRole(role: string): string {
   return role.replace("_", " ");
-}
-
-function formatDate(ms: number): string {
-  return new Date(ms).toLocaleDateString("en-IN", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
 }
 
 export default async function InviteRedemptionPage({
@@ -73,7 +66,7 @@ export default async function InviteRedemptionPage({
         <dt className="text-muted-foreground">Role</dt>
         <dd className="capitalize">{formatRole(result.role)}</dd>
         <dt className="text-muted-foreground">Link expires</dt>
-        <dd className="font-mono text-xs">{formatDate(result.expiresAt)}</dd>
+        <dd className="font-mono text-xs">{formatInstitutionDate(result.expiresAt)}</dd>
       </dl>
 
       <PasskeyEnrollmentStep token={token} />

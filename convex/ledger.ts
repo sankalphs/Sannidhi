@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 
 import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
+import { ledgerDisplayCategory } from "../src/lib/format/ledger";
 import { computeEventHash, type LedgerEventCategory } from "../src/lib/ledger/hash";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, query, type QueryCtx } from "./_generated/server";
@@ -78,36 +79,148 @@ async function safeGetUser(
   }
 }
 
+/** Per-query memo so a page of rows reads each user, section and course once. */
+function createLookup(ctx: QueryCtx) {
+  const users = new Map<string, Promise<Doc<"users"> | null>>();
+  const sections = new Map<string, Promise<{ courseCode: string; sectionName: string } | null>>();
+  return {
+    user(userId: Id<"users"> | undefined): Promise<Doc<"users"> | null> {
+      if (userId === undefined) return Promise.resolve(null);
+      if (!users.has(userId)) users.set(userId, safeGetUser(ctx, userId));
+      return users.get(userId)!;
+    },
+    section(sectionId: Id<"sections">) {
+      if (!sections.has(sectionId)) {
+        sections.set(
+          sectionId,
+          (async () => {
+            const section = await ctx.db.get(sectionId);
+            if (section === null) return null;
+            const course = await ctx.db.get(section.courseId);
+            return { courseCode: course?.code ?? "—", sectionName: section.name };
+          })(),
+        );
+      }
+      return sections.get(sectionId)!;
+    },
+  };
+}
+
+function matchesPerson(needle: string, ...people: (Doc<"users"> | null)[]): boolean {
+  return people.some(
+    (person) =>
+      person !== null &&
+      (person.name.toLowerCase().includes(needle) || person.email.toLowerCase().includes(needle)),
+  );
+}
+
+/** Rows read per page request before handing back a cursor, so sparse filters stay bounded. */
+const MAX_SCAN = 1000;
+
+/**
+ * Walks an index newest-first, keeping rows `keep` accepts until `limit` are
+ * kept or MAX_SCAN are read. `nextCursor` (pass back as `cursorSeq`) is set
+ * whenever older rows remain unread.
+ */
+async function scanNewestFirst<T extends { seq: number }>(
+  rows: AsyncIterable<T>,
+  limit: number,
+  keep: (row: T) => Promise<boolean>,
+): Promise<{ kept: T[]; nextCursor?: number }> {
+  const kept: T[] = [];
+  let scanned = 0;
+  for await (const row of rows) {
+    scanned += 1;
+    if (await keep(row)) kept.push(row);
+    if (kept.length >= limit || scanned >= MAX_SCAN) return { kept, nextCursor: row.seq };
+  }
+  return { kept };
+}
+
+const pageArgs = {
+  actorToken: v.string(),
+  limit: v.optional(v.number()),
+  cursorSeq: v.optional(v.number()),
+  /** Case-insensitive substring of a subject/actor (or student) name or email. */
+  person: v.optional(v.string()),
+  fromMs: v.optional(v.number()),
+  toMs: v.optional(v.number()),
+};
+
+async function requireLedgerReader(ctx: QueryCtx, actorToken: string): Promise<Doc<"users">> {
+  const caller = await requireActorUser(ctx, actorToken);
+  if (caller.role !== "admin" && caller.role !== "auditor") {
+    throw new ConvexError("unauthorized");
+  }
+  return caller;
+}
+
+function pageLimit(limit: number | undefined): number {
+  return Math.min(Math.max(1, Math.floor(limit ?? 100)), MAX_LEDGER_PAGE);
+}
+
+function inRange(at: number, fromMs: number | undefined, toMs: number | undefined): boolean {
+  return (fromMs === undefined || at >= fromMs) && (toMs === undefined || at < toMs);
+}
+
+/**
+ * One newest-first page of the institution's event ledger, optionally
+ * filtered by display category (incl. the derived "schedule"), type
+ * substring, person and createdAt range.
+ */
 export const listLedgerEvents = query({
   args: {
-    actorToken: v.string(),
-    limit: v.optional(v.number()),
-    cursorSeq: v.optional(v.number()),
+    ...pageArgs,
+    category: v.optional(
+      v.union(
+        v.literal("identity"),
+        v.literal("device"),
+        v.literal("attendance"),
+        v.literal("schedule"),
+      ),
+    ),
+    type: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const caller = await requireActorUser(ctx, args.actorToken);
-    if (caller.role !== "admin" && caller.role !== "auditor") {
-      throw new ConvexError("unauthorized");
-    }
-
-    const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 100)), MAX_LEDGER_PAGE);
+    const caller = await requireLedgerReader(ctx, args.actorToken);
+    const lookup = createLookup(ctx);
     const cursorSeq = args.cursorSeq;
+    const typeNeedle = args.type?.trim().toLowerCase() ?? "";
+    const personNeedle = args.person?.trim().toLowerCase() ?? "";
 
-    const rows = await ctx.db
-      .query("event_ledger")
-      .withIndex("by_institution_seq", (q) =>
-        cursorSeq !== undefined
-          ? q.eq("institutionId", caller.institutionId).lt("seq", cursorSeq)
-          : q.eq("institutionId", caller.institutionId),
-      )
-      .order("desc")
-      .take(limit);
+    const { kept, nextCursor } = await scanNewestFirst(
+      ctx.db
+        .query("event_ledger")
+        .withIndex("by_institution_seq", (q) =>
+          cursorSeq !== undefined
+            ? q.eq("institutionId", caller.institutionId).lt("seq", cursorSeq)
+            : q.eq("institutionId", caller.institutionId),
+        )
+        .order("desc"),
+      pageLimit(args.limit),
+      async (row) => {
+        if (!inRange(row.createdAt, args.fromMs, args.toMs)) return false;
+        if (
+          args.category !== undefined &&
+          ledgerDisplayCategory(row.category, row.type) !== args.category
+        ) {
+          return false;
+        }
+        if (typeNeedle.length > 0 && !row.type.toLowerCase().includes(typeNeedle)) return false;
+        if (personNeedle.length === 0) return true;
+        const [subject, actor] = await Promise.all([
+          lookup.user(row.subjectUserId),
+          lookup.user(row.actorUserId),
+        ]);
+        return matchesPerson(personNeedle, subject, actor);
+      },
+    );
 
     const events = await Promise.all(
-      rows.map(async (row) => {
+      kept.map(async (row) => {
         const [subject, actor] = await Promise.all([
-          safeGetUser(ctx, row.subjectUserId),
-          safeGetUser(ctx, row.actorUserId),
+          lookup.user(row.subjectUserId),
+          lookup.user(row.actorUserId),
         ]);
         return {
           _id: row._id,
@@ -124,10 +237,79 @@ export const listLedgerEvents = query({
       }),
     );
 
-    return {
-      events,
-      ...(events.length === limit ? { nextCursor: events[events.length - 1].seq } : {}),
-    };
+    return { events, ...(nextCursor !== undefined ? { nextCursor } : {}) };
+  },
+});
+
+const attendanceStateValidator = v.union(
+  v.literal("verified"),
+  v.literal("flagged"),
+  v.literal("rejected"),
+  v.literal("step_up"),
+  v.literal("corrected"),
+);
+
+/**
+ * One newest-first page of attendance_events — every check-in decision,
+ * including accepted ones that never reach the event ledger — with the
+ * student, course and decision reasons resolved for display.
+ */
+export const listAttendanceRecords = query({
+  args: { ...pageArgs, state: v.optional(attendanceStateValidator) },
+  handler: async (ctx, args) => {
+    const caller = await requireLedgerReader(ctx, args.actorToken);
+    const lookup = createLookup(ctx);
+    const cursorSeq = args.cursorSeq;
+    const personNeedle = args.person?.trim().toLowerCase() ?? "";
+
+    const { kept, nextCursor } = await scanNewestFirst(
+      ctx.db
+        .query("attendance_events")
+        .withIndex("by_institution_seq", (q) =>
+          cursorSeq !== undefined
+            ? q.eq("institutionId", caller.institutionId).lt("seq", cursorSeq)
+            : q.eq("institutionId", caller.institutionId),
+        )
+        .order("desc"),
+      pageLimit(args.limit),
+      async (row) => {
+        if (!inRange(row.capturedAt, args.fromMs, args.toMs)) return false;
+        if (args.state !== undefined && row.state !== args.state) return false;
+        if (personNeedle.length === 0) return true;
+        const [student, recorder] = await Promise.all([
+          lookup.user(row.studentId),
+          lookup.user(row.recordedByUserId),
+        ]);
+        return matchesPerson(personNeedle, student, recorder);
+      },
+    );
+
+    const records = await Promise.all(
+      kept.map(async (row) => {
+        const [student, recorder, section] = await Promise.all([
+          lookup.user(row.studentId),
+          lookup.user(row.recordedByUserId),
+          lookup.section(row.sectionId),
+        ]);
+        return {
+          _id: row._id,
+          seq: row.seq,
+          capturedAt: row.capturedAt,
+          state: row.state,
+          origin: row.origin,
+          studentName: student?.name ?? null,
+          studentEmail: student?.email ?? null,
+          recordedByName: recorder?.name ?? null,
+          courseCode: section?.courseCode ?? null,
+          sectionName: section?.sectionName ?? null,
+          note: row.note ?? null,
+          eventHash: row.eventHash,
+          decision: row.decision ?? null,
+        };
+      }),
+    );
+
+    return { records, ...(nextCursor !== undefined ? { nextCursor } : {}) };
   },
 });
 

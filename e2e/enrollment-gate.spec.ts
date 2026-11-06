@@ -34,7 +34,7 @@ test.describe("enrollment completion gate", () => {
     await devLogin(page, "student");
 
     await page.goto("/student/devices");
-    await expect(page.getByText("Biometric verification (optional)")).toBeVisible();
+    await expect(page.getByText("Camera check (optional)")).toBeVisible();
     await expect(
       page.getByText("Never stored: raw images or photographs of your face.", { exact: false }),
     ).toBeVisible();
