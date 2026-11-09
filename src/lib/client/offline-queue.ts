@@ -151,29 +151,40 @@ export async function mintBundle(
   });
 }
 
-/** Signs and appends one attestation; each record gets a fresh nonce so replays dedupe server-side. */
+/**
+ * Signs and appends one attestation; each record gets a fresh nonce so replays
+ * dedupe server-side. Signing runs under the queue lock with the bundle storage
+ * actually holds, because another tab may have minted (rotated the key) since
+ * this call's state was read.
+ */
 export async function enqueueStudent(
   state: OfflineQueueState,
   student: { id: string; name: string },
   sectionId: string,
   note: string,
 ): Promise<OfflineQueueState | null> {
-  const record = await signRecord(state.bundle.key, {
-    sessionId: state.bundle.sessionId,
-    sectionId,
-    studentId: student.id,
-    capturedAt: Date.now(),
-    nonce: crypto.randomUUID(),
-    ...(note.trim().length > 0 ? { note: note.trim() } : {}),
-  });
-  return withQueueLock(() => {
+  return withQueueLock(async () => {
     const stored = loadState(state.bundle.sessionId);
-    // Storage was wiped (sign-out) while we signed: persisting this record
-    // would restore student names after logout. Abandon the attestation.
+    // Storage was wiped (sign-out) or now holds another session's queue:
+    // persisting this record would restore stale student names.
     if (stored === null) return null;
-    const queued = stored.queued.filter((item) => item.studentId !== student.id);
+    const record = await signRecord(stored.bundle.key, {
+      sessionId: stored.bundle.sessionId,
+      sectionId,
+      studentId: student.id,
+      capturedAt: Date.now(),
+      nonce: crypto.randomUUID(),
+      ...(note.trim().length > 0 ? { note: note.trim() } : {}),
+    });
+    // Signing may have outlived a sign-out wipe or a mint in another tab
+    // when Web Locks are unavailable; the snapshot we read is no longer the
+    // truth, so abandon the attestation rather than persist stale state or a
+    // signature signed with a rotated-away key.
+    const current = loadState(stored.bundle.sessionId);
+    if (current === null || current.bundle.key !== stored.bundle.key) return null;
+    const queued = current.queued.filter((item) => item.studentId !== student.id);
     const next: OfflineQueueState = {
-      bundle: stored.bundle,
+      bundle: current.bundle,
       queued: [...queued, { ...record, studentName: student.name }],
     };
     saveState(next);
@@ -188,10 +199,10 @@ export async function removeFromQueue(
 ): Promise<OfflineQueueState | null> {
   return withQueueLock(() => {
     const stored = loadState(state.bundle.sessionId);
-    if (stored === null) {
-      clearStorageSynced();
-      return null;
-    }
+    // Missing storage means sign-out (or another session's queue took its
+    // place). Abort without clearing: the queue on disk may now belong to a
+    // different session that this stale tab must not destroy.
+    if (stored === null) return null;
     const queued = stored.queued.filter((record) => record.studentId !== studentId);
     if (queued.length === 0) {
       clearStorageSynced();
@@ -210,10 +221,9 @@ export async function dropSynced(
 ): Promise<OfflineQueueState | null> {
   return withQueueLock(() => {
     const stored = loadState(state.bundle.sessionId);
-    if (stored === null) {
-      clearStorageSynced();
-      return null;
-    }
+    // Same rule as removeFromQueue: never clear a queue this tab cannot
+    // account for — it may be another session's freshly minted bundle.
+    if (stored === null) return null;
     const queued = stored.queued.filter((record) => !syncedStudentIds.has(record.studentId));
     if (queued.length === 0) {
       clearStorageSynced();

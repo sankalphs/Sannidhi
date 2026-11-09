@@ -19,6 +19,8 @@ import type { Doc, Id } from "./_generated/dataModel";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MAX_ALERTS_PER_LIST = 200;
+/** Ceiling on alerts joined per status when department scope filters most of them out. */
+const MAX_ALERT_SCAN = MAX_ALERTS_PER_LIST * 5;
 const MAX_RESOLUTION_NOTE_LENGTH = 1000;
 const ALERT_CREATED_TYPE = "analytics.review_alert_created";
 const ALERT_RESOLVED_TYPE = "analytics.review_alert_resolved";
@@ -207,32 +209,21 @@ export const listReviewAlerts = query({
     const caller = await requireAnalyticsAuthority(ctx, args.actorToken);
     const limit = Math.min(Math.max(1, Math.floor(args.limit ?? 100)), MAX_ALERTS_PER_LIST);
 
-    // Three small index scans (one per status) so the inbox gets open alerts
-    // plus resolved history without a cross-status index range read. Each
-    // scan is bounded by the display limit so a huge backlog cannot be
-    // walked (and user-joined) just to be sliced away.
+    // Three scans (one per status) so the inbox gets open alerts plus resolved
+    // history without a cross-status range read. Each scan pages newest-first
+    // until enough alerts the caller may review are found — a department
+    // authority's inbox must not go empty because the newest alerts belong to
+    // other departments. The scan is capped so a huge backlog stays bounded.
     const statuses: Array<Doc<"review_alerts">["status"]> = ["open", "acknowledged", "dismissed"];
-    const rows: Array<Doc<"review_alerts">> = [];
+    const collected: ScopedAlert[] = [];
     for (const status of statuses) {
       if (args.status !== undefined && args.status !== status) continue;
-      const batch = await ctx.db
-        .query("review_alerts")
-        .withIndex("by_institution_status_detected", (q) =>
-          q.eq("institutionId", caller.institutionId).eq("status", status),
-        )
-        // Detected-newest first: the inbox shows latest alerts at the top.
-        .order("desc")
-        .take(limit);
-      rows.push(...batch);
+      collected.push(...(await scopedAlerts(ctx, caller, status, limit)));
     }
 
     const mapped = await Promise.all(
-      rows.map(async (row): Promise<ReviewAlertRow | null> => {
-        const [student, resolver] = await Promise.all([
-          safeUser(ctx, row.studentId),
-          safeUser(ctx, row.resolvedByUserId),
-        ]);
-        if (!canReviewStudentAlert(caller, student)) return null;
+      collected.map(async ({ row, student }): Promise<ReviewAlertRow> => {
+        const resolver = await safeUser(ctx, row.resolvedByUserId);
         return {
           id: row._id,
           kind: row.kind,
@@ -249,12 +240,49 @@ export const listReviewAlerts = query({
       }),
     );
 
-    return mapped
-      .filter((row): row is ReviewAlertRow => row !== null)
-      .sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt)
-      .slice(0, limit);
+    return mapped.sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt).slice(0, limit);
   },
 });
+
+type ScopedAlert = { row: Doc<"review_alerts">; student: Doc<"users"> | null };
+
+/**
+ * Newest-first alerts of one status that the caller may review, joined to
+ * their student. Pages past alerts outside the caller's departments rather
+ * than counting them toward the display limit.
+ */
+async function scopedAlerts(
+  ctx: QueryCtx,
+  caller: Doc<"users">,
+  status: Doc<"review_alerts">["status"],
+  wanted: number,
+): Promise<ScopedAlert[]> {
+  const found: ScopedAlert[] = [];
+  let cursor: string | null = null;
+  let scanned = 0;
+
+  while (found.length < wanted && scanned < MAX_ALERT_SCAN) {
+    const page = await ctx.db
+      .query("review_alerts")
+      .withIndex("by_institution_status_detected", (q) =>
+        q.eq("institutionId", caller.institutionId).eq("status", status),
+      )
+      .order("desc")
+      .paginate({ numItems: wanted, cursor });
+    scanned += page.page.length;
+
+    for (const row of page.page) {
+      const student = await safeUser(ctx, row.studentId);
+      if (!canReviewStudentAlert(caller, student)) continue;
+      found.push({ row, student });
+      if (found.length >= wanted) break;
+    }
+    if (page.isDone) break;
+    cursor = page.continueCursor;
+  }
+
+  return found;
+}
 
 function rank(row: ReviewAlertRow): number {
   return row.status === "open" ? 0 : 1;

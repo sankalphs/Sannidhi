@@ -187,6 +187,25 @@ describe("enqueueStudent", () => {
     await pending;
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
+
+  it("abandons an attestation when another tab rotates the key mid-sign", async () => {
+    const state = await freshQueue();
+    const rotated = { sessionId: "session_1", key: "b".repeat(64) };
+    const signSpy = vi.spyOn(crypto.subtle, "sign").mockImplementation(async () => {
+      // Another tab mints the same session while this signature is in flight.
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundle: rotated, queued: [] }));
+      return new ArrayBuffer(32);
+    });
+    try {
+      const next = await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n");
+      // The signature would be invalid against the rotated key: never persist it.
+      expect(next).toBeNull();
+      expect(readQueue("session_1")?.bundle).toEqual(rotated);
+      expect(readQueue("session_1")?.queued).toEqual([]);
+    } finally {
+      signSpy.mockRestore();
+    }
+  });
 });
 
 describe("dropSynced", () => {
@@ -279,6 +298,20 @@ describe("removeFromQueue", () => {
     window.localStorage.removeItem(STORAGE_KEY);
     expect(await removeFromQueue(state, "student_1")).toBeNull();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("never clears another session's freshly minted queue", async () => {
+    const state = requireState(
+      await enqueueStudent(await freshQueue(), { id: "student_1", name: "A" }, "section_1", "n"),
+    );
+    // Another tab mints a new session, replacing storage under this stale tab.
+    const otherBundle = { sessionId: "session_2", key: "b".repeat(64) };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundle: otherBundle, queued: [] }));
+
+    expect(await removeFromQueue(state, "student_1")).toBeNull();
+    expect(readQueue("session_2")?.bundle).toEqual(otherBundle);
+    expect(await dropSynced(state, new Set(["student_1"]))).toBeNull();
+    expect(readQueue("session_2")?.bundle).toEqual(otherBundle);
   });
 });
 
