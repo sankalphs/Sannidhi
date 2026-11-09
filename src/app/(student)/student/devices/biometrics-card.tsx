@@ -142,27 +142,32 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-lg font-semibold">
           <Fingerprint className="size-5" />
-          Biometric verification (optional)
+          Camera check (optional)
         </h2>
         <Badge variant={STATE_BADGE[state].variant}>{STATE_BADGE[state].label}</Badge>
       </div>
       <ul className="text-muted-foreground list-disc space-y-1 pl-5 text-sm">
         <li>
-          Stored with your consent: a record that you agreed (with its version) and a numeric face
-          template computed entirely on your device, used for matching during step-up verification.
+          What it is: a quick camera check some check-ins ask for. It compares a coarse brightness
+          pattern of your face with your enrollment. It cannot reliably tell people apart, so it
+          only helps your faculty member review a check-in; it is not biometric identification.
+        </li>
+        <li>
+          Stored with your consent: a record that you agreed (with its version) and the numeric
+          template computed entirely on your device, used for comparison during step-up checks.
         </li>
         <li>
           Never stored: raw images or photographs of your face. Frames are read on-device and
           discarded immediately; only the resulting numbers travel to the server.
         </li>
         <li>
-          Consent is optional. It only matters once the institution enables biometric step-up
-          verification for a class session.
+          Consent is optional. It only matters when a check-in asks for an extra step; without it,
+          you can ask your faculty member to verify you instead.
         </li>
         <li>
-          Withdraw anytime; withdrawal stops all future biometric checks immediately and deletes
-          your stored face template. Past consent and audit entries are retained until the
-          institutional retention period removes them.
+          Withdraw anytime; withdrawal stops all future camera checks immediately and deletes your
+          stored face template. Past consent and audit entries are retained until the institutional
+          retention period removes them.
         </li>
       </ul>
       {error ? (

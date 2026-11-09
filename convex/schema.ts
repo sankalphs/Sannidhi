@@ -413,6 +413,8 @@ export default defineSchema({
     reviewedAt: v.optional(v.number()),
     reviewedByUserId: v.optional(v.id("users")),
     decision: v.optional(v.union(v.literal("approved"), v.literal("dismissed"))),
+    /** Optional reviewer note shown to the student (e.g. why a request was dismissed). */
+    reviewNote: v.optional(v.string()),
   })
     .index("by_student_requested", ["studentId", "requestedAt"])
     .index("by_student_status_requested", ["studentId", "status", "requestedAt"])

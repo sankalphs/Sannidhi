@@ -105,9 +105,13 @@ export default async function AdminPage() {
   return (
     <div className="flex flex-col gap-8">
       <PageHeader
-        eyebrow="Admin panel"
-        title="Admin dashboard"
-        description="Directory, academics, and policy controls for your institution."
+        eyebrow={role === "admin" ? "Admin panel" : "Department authority panel"}
+        title={role === "admin" ? "Admin dashboard" : "Department dashboard"}
+        description={
+          role === "admin"
+            ? "Directory, academics, and policy controls for your institution."
+            : "Academics, schedules, and reports for the departments you oversee."
+        }
       />
 
       <section className="flex flex-col gap-3">

@@ -9,6 +9,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CODE_MAX_LENGTH, NAME_MAX_LENGTH } from "@/lib/catalog-limits";
 import { describeConvexError } from "@/lib/client/describe-error";
 
 type DepartmentRow = {
@@ -101,6 +102,7 @@ export function DepartmentManager({
           <Input
             className="w-28"
             placeholder="CSE"
+            maxLength={CODE_MAX_LENGTH}
             value={code}
             onChange={(event) => setCode(event.target.value)}
           />
@@ -110,6 +112,7 @@ export function DepartmentManager({
           <Input
             className="w-64"
             placeholder="Computer Science & Engineering"
+            maxLength={NAME_MAX_LENGTH}
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
@@ -128,7 +131,7 @@ export function DepartmentManager({
       ) : null}
 
       {departments.length > 0 ? (
-        <div className="overflow-x-auto rounded-xl border">
+        <div className="relative overflow-x-auto rounded-xl border">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-muted-foreground text-left text-xs tracking-wide uppercase">
               <tr>
@@ -142,7 +145,7 @@ export function DepartmentManager({
               {departments.map((department) => (
                 <tr key={department.id}>
                   <td className="px-4 py-2 font-mono text-xs">{department.code}</td>
-                  <td className="px-4 py-2">{department.name}</td>
+                  <td className="cell-wrap px-4 py-2">{department.name}</td>
                   <td className="text-muted-foreground px-4 py-2">{department.courseCount}</td>
                   <td className="px-4 py-2">
                     <span className="flex items-center gap-2">
@@ -151,6 +154,7 @@ export function DepartmentManager({
                         <Input
                           className="h-8 w-48"
                           placeholder="New name"
+                          maxLength={NAME_MAX_LENGTH}
                           value={renames[department.id] ?? ""}
                           onChange={(event) =>
                             setRenames((current) => ({

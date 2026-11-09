@@ -1,22 +1,24 @@
 "use client";
 
 import { api } from "../../../../../convex/_generated/api";
-import { useConvex, useQuery } from "convex/react";
+import { useConvex } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { ChevronDown, ChevronRight, Loader2, ScrollText, ShieldCheck } from "lucide-react";
-import { Component, type ReactNode, useEffect, useRef, useState, Fragment } from "react";
+import { Loader2, ScrollText, ShieldCheck } from "lucide-react";
+import { Component, type FormEvent, type ReactNode, useState } from "react";
 
-import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
 import { EmptyState } from "@/components/shell/empty-state";
 import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { Decision } from "@/lib/decision";
+import { Input } from "@/components/ui/input";
+import { institutionDayStartMs } from "@/lib/format/datetime";
+import {
+  LEDGER_CATEGORY_LABEL,
+  LEDGER_DISPLAY_CATEGORIES,
+  type LedgerDisplayCategory,
+} from "@/lib/format/ledger";
 
-type DecisionOutcome = Decision["outcome"];
-
-type LedgerSnapshot = FunctionReturnType<typeof api.ledger.listLedgerEvents>;
-type LedgerEvent = LedgerSnapshot["events"][number];
+import { AttendanceList, LedgerList } from "./history-lists";
 
 type ChainWindow = FunctionReturnType<typeof api.ledger.verifyChain>;
 type ChainStatus =
@@ -61,12 +63,8 @@ async function walkChain(fetchPage: FetchChainPage, actorToken: string): Promise
   }
 }
 
-const OUTCOME_VERDICT: Record<DecisionOutcome, Verdict> = {
-  accept: "accept",
-  step_up: "step-up",
-  flag: "flag",
-  reject: "reject",
-};
+const MAX_CHAIN_WINDOWS = 8;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 class LedgerErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };
@@ -89,50 +87,6 @@ class LedgerErrorBoundary extends Component<{ children: ReactNode }, { error: Er
   }
 }
 
-function formatClock(timestamp: number): string {
-  const date = new Date(timestamp);
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
-}
-
-const OUTCOME_VALUES: readonly string[] = ["accept", "step_up", "flag", "reject"];
-const CATEGORY_VALUES: readonly string[] = ["identity", "device", "presence", "person"];
-const MAX_LEDGER_PAGES = 20;
-const MAX_CHAIN_WINDOWS = 8;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function isValidSignal(signal: unknown): signal is Decision["evidence"]["signals"][number] {
-  if (!isRecord(signal)) return false;
-  if (typeof signal.source !== "string" || typeof signal.status !== "string") return false;
-  if (!CATEGORY_VALUES.includes(signal.category as string)) return false;
-  return signal.detail === undefined || typeof signal.detail === "string";
-}
-
-function extractDecision(payload: unknown): Decision | null {
-  if (!isRecord(payload) || !isRecord(payload.decision)) return null;
-  const decision = payload.decision;
-  if (typeof decision.outcome !== "string" || !OUTCOME_VALUES.includes(decision.outcome)) {
-    return null;
-  }
-  if (
-    !Array.isArray(decision.reasonCodes) ||
-    !decision.reasonCodes.every((code) => typeof code === "string")
-  ) {
-    return null;
-  }
-  if (typeof decision.policyVersion !== "string" || typeof decision.decidedAt !== "number") {
-    return null;
-  }
-  if (!isRecord(decision.evidence) || !Array.isArray(decision.evidence.signals)) return null;
-  if (!decision.evidence.signals.every(isValidSignal)) return null;
-  return decision as Decision;
-}
-
 export function LedgerEventsView({ actorToken }: { actorToken: string }) {
   return (
     <LedgerErrorBoundary>
@@ -145,10 +99,12 @@ function ChainStatusBadge({
   status,
   testId,
   label,
+  noun,
 }: {
   status: ChainStatus | null;
   testId: string;
   label: string;
+  noun: string;
 }) {
   if (status === null) return null;
   if (status.state === "valid") {
@@ -157,7 +113,7 @@ function ChainStatusBadge({
         data-testid={testId}
         className="border-verdict-accept/35 bg-verdict-accept/10 text-verdict-accept"
       >
-        {label} valid · {status.count} events
+        {label} valid · {status.count} {noun}
       </Badge>
     );
   }
@@ -167,7 +123,7 @@ function ChainStatusBadge({
         data-testid={testId}
         className="border-amber-500/40 bg-amber-500/10 whitespace-normal text-amber-600 dark:text-amber-400"
       >
-        {label} partially verified · first {status.count} events valid, walk limit reached
+        {label} partially verified · first {status.count} {noun} valid, walk limit reached
       </Badge>
     );
   }
@@ -180,82 +136,84 @@ function ChainStatusBadge({
   );
 }
 
+type View = "ledger" | "attendance";
+
+const ATTENDANCE_STATES = [
+  ["verified", "Verified"],
+  ["flagged", "Flagged"],
+  ["rejected", "Rejected"],
+  ["step_up", "Step-up"],
+  ["corrected", "Corrected"],
+] as const;
+type AttendanceState = (typeof ATTENDANCE_STATES)[number][0];
+
+/** What the filter form holds; empty strings mean "any". Dates are institution-clock days. */
+type FilterDraft = {
+  category: LedgerDisplayCategory | "";
+  type: string;
+  state: AttendanceState | "";
+  person: string;
+  from: string;
+  to: string;
+};
+
+const EMPTY_FILTERS: FilterDraft = {
+  category: "",
+  type: "",
+  state: "",
+  person: "",
+  from: "",
+  to: "",
+};
+
+/** Query arguments shared by both lists; omits empty fields so the defaults apply. */
+function sharedFilters(draft: FilterDraft) {
+  const fromMs = institutionDayStartMs(draft.from);
+  const toStart = institutionDayStartMs(draft.to);
+  return {
+    ...(draft.person.trim() ? { person: draft.person.trim() } : {}),
+    ...(fromMs !== undefined ? { fromMs } : {}),
+    ...(toStart !== undefined ? { toMs: toStart + DAY_MS } : {}),
+  };
+}
+
+const SELECT_CLASS =
+  "border-input dark:bg-input/30 focus-visible:border-ring focus-visible:ring-ring/50 h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px]";
+
 function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
   const convex = useConvex();
-  const eventsResult = useQuery(api.ledger.listLedgerEvents, { actorToken, limit: 100 });
-  const [olderEvents, setOlderEvents] = useState<LedgerEvent[]>([]);
-  const [expandedSeqs, setExpandedSeqs] = useState<ReadonlySet<number>>(new Set());
+  const [view, setView] = useState<View>("ledger");
+  const [draft, setDraft] = useState<FilterDraft>(EMPTY_FILTERS);
+  const [applied, setApplied] = useState<FilterDraft>(EMPTY_FILTERS);
   const [verifyingChain, setVerifyingChain] = useState(false);
   const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
   const [verifyingAttendanceChain, setVerifyingAttendanceChain] = useState(false);
   const [attendanceChainStatus, setAttendanceChainStatus] = useState<ChainStatus | null>(null);
 
-  // Page 1 is live: every check-in pushes a new row into it. The older-pages
-  // walk only needs to re-run when the page boundary (cursor) actually moves,
-  // so live updates never flicker older rows away. Stale overlap is harmless:
-  // seenSeqs dedupes and the sort is by seq. The cache is keyed by the caller:
-  // rows fetched for one actor/institution must never render for another.
-  const olderCursor = eventsResult?.nextCursor;
-  const olderEventsRef = useRef<{
-    actorToken: string;
-    cursor: number | undefined;
-    events: LedgerEvent[];
-  } | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    // No older pages (or a fresh caller): show nothing stale.
-    if (olderCursor === undefined || olderEventsRef.current?.actorToken !== actorToken) {
-      olderEventsRef.current = null;
-      setOlderEvents([]);
-      if (olderCursor === undefined) return;
-    }
-    async function loadOlder() {
-      if (olderEventsRef.current?.cursor === olderCursor) return;
-      const collected: LedgerEvent[] = [];
-      let cursorSeq: number | undefined = olderCursor;
-      try {
-        for (let page = 0; page < MAX_LEDGER_PAGES && cursorSeq !== undefined; page += 1) {
-          const result: LedgerSnapshot = await convex.query(api.ledger.listLedgerEvents, {
-            actorToken,
-            limit: 100,
-            ...(cursorSeq !== undefined ? { cursorSeq } : {}),
-          });
-          collected.push(...result.events);
-          cursorSeq = result.nextCursor;
-        }
-      } catch {
-        return;
-      }
-      if (!cancelled) {
-        olderEventsRef.current = { actorToken, cursor: olderCursor, events: collected };
-        setOlderEvents(collected);
-      }
-    }
-    void loadOlder();
-    return () => {
-      cancelled = true;
-    };
-  }, [convex, actorToken, olderCursor]);
+  const ledgerFilters = {
+    ...sharedFilters(applied),
+    ...(applied.category ? { category: applied.category } : {}),
+    ...(applied.type.trim() ? { type: applied.type.trim() } : {}),
+  };
+  const attendanceFilters = {
+    ...sharedFilters(applied),
+    ...(applied.state ? { state: applied.state } : {}),
+  };
+  const activeFilters = view === "ledger" ? ledgerFilters : attendanceFilters;
+  const filtered = Object.keys(activeFilters).length > 0;
 
-  const seenSeqs = new Set<number>();
-  const events = [...(eventsResult?.events ?? []), ...olderEvents]
-    .filter((event) => {
-      if (seenSeqs.has(event.seq)) return false;
-      seenSeqs.add(event.seq);
-      return true;
-    })
-    .sort((a, b) => b.seq - a.seq);
+  function update<K extends keyof FilterDraft>(key: K, value: FilterDraft[K]) {
+    setDraft((current) => ({ ...current, [key]: value }));
+  }
 
-  function toggleExpanded(seq: number) {
-    setExpandedSeqs((current) => {
-      const next = new Set(current);
-      if (next.has(seq)) {
-        next.delete(seq);
-      } else {
-        next.add(seq);
-      }
-      return next;
-    });
+  function apply(event: FormEvent) {
+    event.preventDefault();
+    setApplied(draft);
+  }
+
+  function reset() {
+    setDraft(EMPTY_FILTERS);
+    setApplied(EMPTY_FILTERS);
   }
 
   async function handleVerifyChain() {
@@ -288,203 +246,176 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
         eyebrow="Auditor panel"
         title="Event ledger"
         description="Tamper-evident chain of attendance events with the full decision trail behind each verdict."
-        actions={
-          <div className="flex flex-wrap items-center gap-2 sm:max-w-md sm:justify-end">
-            <ChainStatusBadge status={chainStatus} testId="chain-status" label="Chain" />
+      />
+      <section className="grid gap-3 sm:grid-cols-2" aria-label="Chain integrity">
+        <div className="flex flex-col items-start gap-2 rounded-xl border p-4">
+          <p className="text-sm font-medium">Ledger events</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Administrative, security and session events, in one hash chain.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="verify-chain"
+            onClick={() => void handleVerifyChain()}
+            disabled={verifyingChain}
+          >
+            {verifyingChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+            Verify ledger events
+          </Button>
+          <ChainStatusBadge
+            status={chainStatus}
+            testId="chain-status"
+            label="Ledger chain"
+            noun="ledger events"
+          />
+        </div>
+        <div className="flex flex-col items-start gap-2 rounded-xl border p-4">
+          <p className="text-sm font-medium">Attendance records</p>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            Every check-in decision (verified, flagged, corrected…), kept in a separate chain — so
+            its count differs from the ledger&apos;s.
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="verify-attendance-chain"
+            onClick={() => void handleVerifyAttendanceChain()}
+            disabled={verifyingAttendanceChain}
+          >
+            {verifyingAttendanceChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
+            Verify attendance records
+          </Button>
+          <ChainStatusBadge
+            status={attendanceChainStatus}
+            testId="attendance-chain-status"
+            label="Attendance chain"
+            noun="attendance records"
+          />
+        </div>
+      </section>
+
+      <div className="flex flex-col gap-4">
+        <div className="bg-muted/50 flex w-fit gap-1 rounded-lg p-1" role="group" aria-label="Show">
+          {(
+            [
+              ["ledger", "Ledger events"],
+              ["attendance", "Attendance records"],
+            ] as const
+          ).map(([value, label]) => (
             <Button
-              variant="outline"
-              data-testid="verify-chain"
-              onClick={() => void handleVerifyChain()}
-              disabled={verifyingChain}
+              key={value}
+              size="sm"
+              variant={view === value ? "secondary" : "ghost"}
+              aria-pressed={view === value}
+              data-testid={`history-view-${value}`}
+              onClick={() => setView(value)}
             >
-              {verifyingChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-              Verify chain
+              {label}
             </Button>
-            <ChainStatusBadge
-              status={attendanceChainStatus}
-              testId="attendance-chain-status"
-              label="Attendance chain"
+          ))}
+        </div>
+
+        <form
+          onSubmit={apply}
+          className="grid gap-3 rounded-xl border p-4 sm:grid-cols-2 lg:grid-cols-3"
+          aria-label="Filters"
+        >
+          {view === "ledger" ? (
+            <>
+              <label className="flex flex-col gap-1.5 text-xs font-medium">
+                Category
+                <select
+                  className={SELECT_CLASS}
+                  value={draft.category}
+                  onChange={(event) =>
+                    update("category", event.target.value as FilterDraft["category"])
+                  }
+                >
+                  <option value="">All categories</option>
+                  {LEDGER_DISPLAY_CATEGORIES.map((category) => (
+                    <option key={category} value={category}>
+                      {LEDGER_CATEGORY_LABEL[category]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs font-medium">
+                Event type
+                <Input
+                  value={draft.type}
+                  placeholder="e.g. stepup, invite"
+                  onChange={(event) => update("type", event.target.value)}
+                />
+              </label>
+            </>
+          ) : (
+            <label className="flex flex-col gap-1.5 text-xs font-medium">
+              Decision
+              <select
+                className={SELECT_CLASS}
+                value={draft.state}
+                onChange={(event) => update("state", event.target.value as FilterDraft["state"])}
+              >
+                <option value="">All decisions</option>
+                {ATTENDANCE_STATES.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="flex flex-col gap-1.5 text-xs font-medium">
+            Person
+            <Input
+              value={draft.person}
+              placeholder="Name or email"
+              onChange={(event) => update("person", event.target.value)}
             />
-            <Button
-              variant="outline"
-              data-testid="verify-attendance-chain"
-              onClick={() => void handleVerifyAttendanceChain()}
-              disabled={verifyingAttendanceChain}
-            >
-              {verifyingAttendanceChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
-              Verify attendance chain
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-medium">
+            From
+            <Input
+              type="date"
+              value={draft.from}
+              onChange={(event) => update("from", event.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-xs font-medium">
+            To
+            <Input
+              type="date"
+              value={draft.to}
+              onChange={(event) => update("to", event.target.value)}
+            />
+          </label>
+          <div className="flex items-end gap-2">
+            <Button type="submit" size="sm" data-testid="history-apply-filters">
+              Apply filters
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={reset}>
+              Reset
             </Button>
           </div>
-        }
-      />
-      {eventsResult === undefined ? (
-        <EmptyState
-          icon={Loader2}
-          title="Loading ledger events"
-          description="Fetching the append-only event trail."
-        />
-      ) : events.length === 0 ? (
-        <EmptyState
-          icon={ScrollText}
-          title="No ledger events yet"
-          description="Events appear here as soon as attendance decisions and administrative actions are recorded."
-        />
-      ) : (
-        <div className="-mx-6 overflow-x-auto px-6">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-muted-foreground border-b text-left text-xs font-medium">
-                <th scope="col" className="pr-4 pb-2">
-                  Seq
-                </th>
-                <th scope="col" className="pr-4 pb-2">
-                  Time
-                </th>
-                <th scope="col" className="pr-4 pb-2">
-                  Category
-                </th>
-                <th scope="col" className="pr-4 pb-2">
-                  Type
-                </th>
-                <th scope="col" className="pr-4 pb-2">
-                  Subject
-                </th>
-                <th scope="col" className="pr-4 pb-2">
-                  Actor
-                </th>
-                <th scope="col" className="pb-2">
-                  <span className="sr-only">Expand</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {events.map((event) => {
-                const expanded = expandedSeqs.has(event.seq);
-                const decision = extractDecision(event.payload);
-                return (
-                  <Fragment key={event._id}>
-                    <tr
-                      data-testid={`ledger-row-${event.seq}`}
-                      className="border-b last:border-b-0"
-                    >
-                      <td className="py-2.5 pr-4 font-mono tabular-nums">{event.seq}</td>
-                      <td
-                        className="text-muted-foreground py-2.5 pr-4 tabular-nums"
-                        suppressHydrationWarning
-                      >
-                        {formatClock(event.createdAt)}
-                      </td>
-                      <td className="py-2.5 pr-4">{event.category}</td>
-                      <td className="py-2.5 pr-4 font-mono text-xs">{event.type}</td>
-                      <td className="py-2.5 pr-4">
-                        {event.subjectName ?? <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {event.actorName ?? <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-expanded={expanded}
-                          aria-label={
-                            expanded ? `Collapse event ${event.seq}` : `Expand event ${event.seq}`
-                          }
-                          data-testid={`ledger-toggle-${event.seq}`}
-                          onClick={() => toggleExpanded(event.seq)}
-                        >
-                          {expanded ? <ChevronDown /> : <ChevronRight />}
-                        </Button>
-                      </td>
-                    </tr>
-                    {expanded ? (
-                      <tr className="border-b last:border-b-0">
-                        <td colSpan={7} className="bg-muted/40 px-2 py-4">
-                          <div
-                            data-testid={`ledger-evidence-${event.seq}`}
-                            className="bg-card flex flex-col gap-3 rounded-lg border p-4"
-                          >
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-muted-foreground text-xs font-medium uppercase">
-                                Event hash
-                              </span>
-                              <code
-                                className="max-w-full truncate rounded-md border px-1.5 py-0.5 font-mono text-xs"
-                                title={event.eventHash}
-                              >
-                                {event.eventHash.slice(0, 24)}…
-                              </code>
-                            </div>
-                            {decision !== null ? (
-                              <div className="flex flex-col gap-3">
-                                <VerdictStamp verdict={OUTCOME_VERDICT[decision.outcome]} />
-                                {decision.reasonCodes.length > 0 ? (
-                                  <div className="flex flex-wrap items-center gap-1">
-                                    {decision.reasonCodes.map((code) => (
-                                      <span
-                                        key={code}
-                                        className="text-muted-foreground rounded-md border px-1.5 py-0.5 font-mono text-[11px]"
-                                      >
-                                        {code}
-                                      </span>
-                                    ))}
-                                  </div>
-                                ) : null}
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="text-muted-foreground border-b text-left text-xs font-medium">
-                                      <th scope="col" className="pr-4 pb-1.5">
-                                        Category
-                                      </th>
-                                      <th scope="col" className="pr-4 pb-1.5">
-                                        Source
-                                      </th>
-                                      <th scope="col" className="pr-4 pb-1.5">
-                                        Status
-                                      </th>
-                                      <th scope="col" className="pb-1.5">
-                                        Detail
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {decision.evidence.signals.map((signal, index) => (
-                                      <tr
-                                        key={`${signal.source}-${index}`}
-                                        className="border-b last:border-b-0"
-                                      >
-                                        <td className="py-1.5 pr-4">{signal.category}</td>
-                                        <td className="py-1.5 pr-4 font-mono text-xs">
-                                          {signal.source}
-                                        </td>
-                                        <td className="py-1.5 pr-4">{signal.status}</td>
-                                        <td className="text-muted-foreground py-1.5">
-                                          {signal.detail ?? "—"}
-                                        </td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                                <p className="text-muted-foreground text-xs">
-                                  Policy:{" "}
-                                  <span className="font-mono">{decision.policyVersion}</span>
-                                </p>
-                              </div>
-                            ) : null}
-                            <pre className="max-h-72 overflow-auto rounded-md border p-3 font-mono text-xs leading-relaxed">
-                              {JSON.stringify(event.payload, null, 2)}
-                            </pre>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : null}
-                  </Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+        </form>
+
+        {view === "ledger" ? (
+          <LedgerList
+            key={JSON.stringify(ledgerFilters)}
+            actorToken={actorToken}
+            filters={ledgerFilters}
+            filtered={filtered}
+          />
+        ) : (
+          <AttendanceList
+            key={JSON.stringify(attendanceFilters)}
+            actorToken={actorToken}
+            filters={attendanceFilters}
+            filtered={filtered}
+          />
+        )}
+      </div>
     </div>
   );
 }

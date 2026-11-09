@@ -135,7 +135,7 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border p-4">
+    <section className="flex flex-col gap-3 rounded-xl border p-3 sm:p-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">
           {MONTH_NAMES[view.monthIndex]} {view.year}
@@ -159,7 +159,7 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-7 gap-1 text-center text-xs">
+      <div className="grid grid-cols-7 gap-0.5 text-center text-xs sm:gap-1">
         {WEEKDAY_LABELS.map((label) => (
           <div
             key={label}
@@ -175,7 +175,7 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
               key={cell.dateKey}
               data-testid={`calendar-day-${cell.dateKey}`}
               className={cn(
-                "flex min-h-16 flex-col items-stretch gap-1 rounded-md border p-1 text-left",
+                "flex min-h-16 min-w-0 flex-col items-stretch gap-1 rounded-md border p-0.5 text-left sm:p-1",
                 !cell.inMonth && "bg-muted/40 opacity-50",
                 cell.dateKey === today && "ring-primary ring-2",
               )}
@@ -188,7 +188,7 @@ function MonthCalendar({ records }: { records: HistoryViewRecord[] }) {
                   key={`${record.courseCode}-${record.state}-${index}`}
                   title={`${record.courseCode} · ${STATE_LEGEND_LABELS[record.state]}`}
                   className={cn(
-                    "truncate rounded border px-1 text-[10px] leading-4 font-medium",
+                    "rounded border px-px text-[10px] leading-4 font-medium break-all sm:truncate sm:px-1",
                     STATE_CHIP_CLASSES[record.state],
                   )}
                 >

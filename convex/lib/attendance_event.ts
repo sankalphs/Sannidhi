@@ -14,10 +14,14 @@ import { computeEventHash } from "../../src/lib/ledger/hash";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
+/**
+ * Ledger types that count as security anomalies in the risk engine. A
+ * malformed paste is a typo, not an attack: it stays logged (and rate-limited)
+ * but never raises a student's risk.
+ */
 export const SECURITY_ANOMALY_EVENT_TYPES = [
   "challenge_replayed",
   "wrong_session_challenge",
-  "malformed_challenge",
 ] as const;
 
 export const RATE_LIMIT_EVENT_TYPES = [

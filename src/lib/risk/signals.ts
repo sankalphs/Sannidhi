@@ -1,4 +1,4 @@
-import type { EvidenceSignal } from "@/lib/decision";
+import type { Decision, EvidenceSignal } from "@/lib/decision";
 import type { DeviceState } from "@/lib/devices/lifecycle";
 
 import type { LocationOutcome } from "./presence";
@@ -114,6 +114,17 @@ export function faceMatchSignal(outcome: FaceMatchOutcome): EvidenceSignal {
     case "inconclusive":
       return { category: "person", source: "face_match", status: "weak", detail: "inconclusive" };
   }
+}
+
+/**
+ * Location evidence from the decision that opened a step-up, to be passed into
+ * the completion decision alongside the face signal so a passed camera check
+ * cannot silently clear a location mismatch.
+ */
+export function stepUpCarriedSignals(origin: Decision | null | undefined): EvidenceSignal[] {
+  return (origin?.evidence.signals ?? []).filter(
+    (signal) => signal.category === "presence" && signal.source === "geolocation",
+  );
 }
 
 export function manualAttestationSignals(reason: string): EvidenceSignal[] {

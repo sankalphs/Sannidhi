@@ -98,15 +98,15 @@ export default async function AdminDevicesPage() {
               <tbody className="divide-y">
                 {pendingRequests.map((request) => (
                   <tr key={request._id}>
-                    <td className="px-4 py-2">
+                    <td className="cell-wrap px-4 py-2">
                       <span className="font-medium">{request.studentName}</span>
                       <span className="text-muted-foreground block font-mono text-xs">
                         {request.studentEmail}
                       </span>
                     </td>
-                    <td className="px-4 py-2">{request.oldDeviceLabel}</td>
-                    <td className="text-muted-foreground max-w-md truncate px-4 py-2">
-                      {request.reason}
+                    <td className="cell-wrap px-4 py-2">{request.oldDeviceLabel}</td>
+                    <td className="text-muted-foreground px-4 py-2">
+                      <div className="max-w-md truncate">{request.reason}</div>
                     </td>
                     <td className="text-muted-foreground px-4 py-2 text-xs">
                       {formatDate(request.requestedAt)}
@@ -141,13 +141,13 @@ export default async function AdminDevicesPage() {
               <tbody className="divide-y">
                 {devices.map((device) => (
                   <tr key={device._id}>
-                    <td className="px-4 py-2">
+                    <td className="cell-wrap px-4 py-2">
                       <span className="font-medium">{device.ownerName}</span>
                       <span className="text-muted-foreground block font-mono text-xs">
                         {device.ownerEmail}
                       </span>
                     </td>
-                    <td className="px-4 py-2">{device.label}</td>
+                    <td className="cell-wrap px-4 py-2">{device.label}</td>
                     <td className="px-4 py-2">
                       <DeviceStateBadge state={device.state} />
                     </td>

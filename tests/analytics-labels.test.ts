@@ -4,9 +4,15 @@ import { formatReasonCode, REASON_LABELS } from "@/lib/analytics/labels";
 
 describe("formatReasonCode", () => {
   it("maps known reason codes to their labels", () => {
-    expect(formatReasonCode("person_spoof_suspected")).toBe("Face spoof suspected");
-    expect(formatReasonCode("person_face_mismatch")).toBe("Face mismatch");
-    expect(formatReasonCode("device_distrusted")).toBe("Distrusted device");
+    expect(formatReasonCode("person_spoof_suspected")).toBe(
+      "Possible proxy (camera saw a photo/screen)",
+    );
+    expect(formatReasonCode("person_face_mismatch")).toBe("Possible proxy (camera check mismatch)");
+    expect(formatReasonCode("device_distrusted")).toBe("Suspended or revoked device");
+    expect(formatReasonCode("device_untrusted")).toBe("Device not yet active");
+    expect(formatReasonCode("presence_unresolved_after_stepup")).toBe(
+      "Location unresolved after step-up",
+    );
     expect(formatReasonCode("spot_recheck_missed")).toBe("Missed spot re-check");
     expect(formatReasonCode("attendance_below_threshold")).toBe("Attendance below threshold");
   });

@@ -16,9 +16,10 @@ type UserActionsProps = {
   isSelf: boolean;
 };
 
-type Change = { status: "active" | "suspended" } | { role: Role };
+type Change = { status: "active" | "suspended" } | { role: Role } | { remove: true };
 
 function describe(change: Change, name: string): string {
+  if ("remove" in change) return `Remove ${name} and revoke their invite?`;
   if ("role" in change) return `Make ${name} ${change.role.replace("_", " ")} and sign them out?`;
   return change.status === "suspended"
     ? `Suspend ${name} and sign them out?`
@@ -27,7 +28,9 @@ function describe(change: Change, name: string): string {
 
 /**
  * Per-row role and status controls for the Users directory. Every change is
- * two-step: pick it, then confirm. Your own row offers neither.
+ * two-step: pick it, then confirm. Your own row offers neither. People who
+ * never activated can be removed outright; the server refuses if they have
+ * any history.
  */
 export function UserActions({ userId, name, role, status, isSelf }: UserActionsProps) {
   const router = useRouter();
@@ -43,9 +46,9 @@ export function UserActions({ userId, name, role, status, isSelf }: UserActionsP
     setError(null);
     try {
       const response = await fetch("/api/admin/users", {
-        method: "PATCH",
+        method: "remove" in change ? "DELETE" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, ...change }),
+        body: JSON.stringify("remove" in change ? { userId } : { userId, ...change }),
       });
       const data = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(data.error ?? "Update failed");
@@ -63,7 +66,11 @@ export function UserActions({ userId, name, role, status, isSelf }: UserActionsP
       <span className="flex flex-wrap items-center justify-end gap-2">
         <span className="text-xs">{describe(change, name)}</span>
         <Button
-          variant={"status" in change && change.status === "suspended" ? "destructive" : "default"}
+          variant={
+            "remove" in change || ("status" in change && change.status === "suspended")
+              ? "destructive"
+              : "default"
+          }
           size="xs"
           disabled={pending}
           onClick={confirm}
@@ -101,6 +108,11 @@ export function UserActions({ userId, name, role, status, isSelf }: UserActionsP
       {statusChangeRefusal(status, "active", isSelf) === null ? (
         <Button variant="outline" size="xs" onClick={() => setChange({ status: "active" })}>
           Reactivate
+        </Button>
+      ) : null}
+      {status === "invited" ? (
+        <Button variant="outline" size="xs" onClick={() => setChange({ remove: true })}>
+          Remove
         </Button>
       ) : null}
     </span>

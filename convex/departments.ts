@@ -2,6 +2,7 @@ import { ConvexError, v } from "convex/values";
 
 import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import { CODE_MAX_LENGTH, NAME_MAX_LENGTH } from "../src/lib/catalog-limits";
 import { mutation, query } from "./_generated/server";
 import { assertSameInstitution, requireAdminUser, requireAnalyticsAuthority } from "./lib/actor";
 
@@ -90,6 +91,13 @@ export const listDepartments = query({
   },
 });
 
+function assertDepartmentName(name: string): void {
+  if (name.length === 0) throw new ConvexError("Department name is required");
+  if (name.length > NAME_MAX_LENGTH) {
+    throw new ConvexError(`Department name is limited to ${NAME_MAX_LENGTH} characters`);
+  }
+}
+
 /** Departments live in one flat namespace per institution: codes are unique and uppercase. */
 export const createDepartment = mutation({
   args: {
@@ -102,7 +110,10 @@ export const createDepartment = mutation({
     const code = args.code.trim().toUpperCase();
     const name = args.name.trim();
     if (code.length === 0) throw new ConvexError("Department code is required");
-    if (name.length === 0) throw new ConvexError("Department name is required");
+    if (code.length > CODE_MAX_LENGTH) {
+      throw new ConvexError(`Department code is limited to ${CODE_MAX_LENGTH} characters`);
+    }
+    assertDepartmentName(name);
 
     const existing = await ctx.db
       .query("departments")
@@ -143,7 +154,7 @@ export const renameDepartment = mutation({
     assertSameInstitution(caller.institutionId, department.institutionId);
 
     const name = args.name.trim();
-    if (name.length === 0) throw new ConvexError("Department name is required");
+    assertDepartmentName(name);
 
     await ctx.db.patch(args.departmentId, { name });
 

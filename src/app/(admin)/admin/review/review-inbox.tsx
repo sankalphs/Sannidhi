@@ -32,7 +32,7 @@ const KIND_BADGES: Record<
   { label: string; variant: "secondary" | "destructive" | "outline" }
 > = {
   low_attendance: { label: "Low attendance", variant: "secondary" },
-  proxy_attempt: { label: "Proxy attempt", variant: "destructive" },
+  proxy_attempt: { label: "Flagged check-ins", variant: "destructive" },
   verification_anomaly: { label: "Verification anomaly", variant: "outline" },
 };
 
@@ -174,7 +174,7 @@ export function ReviewInbox({
             <tbody className="divide-y">
               {rows.map((row) => (
                 <tr key={row.id} data-testid="review-alert-row" data-kind={row.kind}>
-                  <td className="px-4 py-2">
+                  <td className="cell-wrap px-4 py-2">
                     <div className="flex flex-col">
                       <span className="font-medium">
                         {row.studentName ?? <span className="text-muted-foreground">—</span>}

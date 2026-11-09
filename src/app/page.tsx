@@ -9,7 +9,10 @@ import { Button } from "@/components/ui/button";
 
 const VERDICTS: { verdict: Verdict; description: string }[] = [
   { verdict: "accept", description: "Evidence is strong. The student is checked in." },
-  { verdict: "step-up", description: "Evidence is thin. Liveness or face match is requested." },
+  {
+    verdict: "step-up",
+    description: "Evidence is thin. A quick camera check or faculty review is requested.",
+  },
   { verdict: "flag", description: "Something is off. A faculty member reviews the attempt." },
   { verdict: "reject", description: "Replay or tampering detected. The attempt is refused." },
 ];
@@ -19,7 +22,7 @@ const STEPS = [
     number: "1",
     title: "Start the session",
     description:
-      "Faculty open the timetable and tap once. A rotating QR appears — it refreshes every few seconds, so screenshots and replays are worthless.",
+      "Faculty open the timetable and tap once. A QR appears and refreshes every 30 seconds; each code expires within a minute, and check-ins are weighed against the phone's location when it's shared.",
   },
   {
     number: "2",
@@ -84,14 +87,14 @@ const PANELS = [
 
 const TRUST = [
   {
-    title: "Passkeys, not passwords",
+    title: "Passkeys first",
     description:
-      "Accounts activate with a passkey bound to the student's own device. Nothing to phish, nothing to share.",
+      "Accounts activate with a passkey bound to the student's own device. A USN or email password stays available as a fallback for shared devices.",
   },
   {
     title: "Challenges that expire",
     description:
-      "Session QRs rotate every few seconds behind single-use nonces. A screenshot from last week proves nothing.",
+      "Session QRs refresh every 30 seconds and expire within a minute, and each student can check in once per session. A forwarded screenshot is still weighed against the phone's location.",
   },
   {
     title: "A ledger that remembers",
@@ -101,7 +104,7 @@ const TRUST = [
   {
     title: "Verification in proportion",
     description:
-      "Strong checks run only when risk demands them. Routine check-ins stay fast, and biometrics are opt-in with consent.",
+      "Strong checks run only when risk demands them. Routine check-ins stay fast, and the camera check is opt-in, with consent.",
   },
 ];
 
@@ -135,7 +138,7 @@ export default function Home() {
                 </Button>
               </div>
               <p className="text-muted-foreground/80 font-mono text-xs tracking-[0.1em] uppercase">
-                No passwords · No shared secrets · No blind trust
+                Passkeys first · Codes that expire · No blind trust
               </p>
             </div>
             <LiveSessionDemo />

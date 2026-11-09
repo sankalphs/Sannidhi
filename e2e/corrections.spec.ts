@@ -72,6 +72,7 @@ test("student disputes a check-in and the recording faculty corrects it without 
     await expect(queueRow).toBeVisible({ timeout: 30_000 });
     await expect(queueRow.getByText(/was (verified|flagged|rejected)/)).toBeVisible();
     await queueRow.getByTestId("approve-dispute").click();
+    await queueRow.getByTestId("confirm-approve-dispute").click();
     await expect(queueRow).toBeHidden({ timeout: 30_000 });
 
     // The original stays visible to the student, now marked corrected.

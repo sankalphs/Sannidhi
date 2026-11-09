@@ -1,4 +1,5 @@
 import type { RosterIssue, RosterRow } from "../../src/lib/roster/types";
+import { ROSTER_FIELD_MAX_LENGTH } from "../../src/lib/roster/csv";
 import { enrollmentKey } from "../../src/lib/roster/keys";
 
 /** Row-count cap enforced by the rosterSync handlers, not by normalizeRosterRows. */
@@ -10,7 +11,7 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
  * Defensive re-normalization for rows that reached the sync API without going
  * through parseRosterCsv: trims every field, uppercases codes, lowercases
  * emails, treats empty term/usn as undefined, drops rows with blank required
- * fields or invalid emails (matching parseRosterCsv), and collapses exact
+ * fields, over-long fields, or invalid emails (matching parseRosterCsv), and collapses exact
  * duplicate enrollments. A source-CSV row number carried on the row
  * (sourceRow) is passed through untouched. Issue row numbers are 1-based
  * positions in the submitted array. Row-count capping stays with the handlers;
@@ -40,7 +41,7 @@ export function normalizeRosterRows(rows: RosterRow[]): {
       ...(raw.sourceRow !== undefined ? { sourceRow: raw.sourceRow } : {}),
     };
 
-    const required: [keyof RosterRow, string][] = [
+    const required: [keyof RosterRow, keyof typeof ROSTER_FIELD_MAX_LENGTH][] = [
       ["departmentCode", "department_code"],
       ["departmentName", "department_name"],
       ["courseCode", "course_code"],
@@ -53,6 +54,15 @@ export function normalizeRosterRows(rows: RosterRow[]): {
     for (const [field, column] of required) {
       if ((row[field] as string).length === 0) {
         issues.push({ row: index + 1, field: column, message: "is required" });
+        invalid = true;
+      }
+    }
+    const bounded: typeof required = [...required, ["term", "term"], ["studentUsn", "usn"]];
+    for (const [field, column] of bounded) {
+      const value = row[field];
+      const max = ROSTER_FIELD_MAX_LENGTH[column];
+      if (typeof value === "string" && value.length > max) {
+        issues.push({ row: index + 1, field: column, message: `is longer than ${max} characters` });
         invalid = true;
       }
     }

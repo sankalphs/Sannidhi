@@ -3,8 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { VerdictStamp, type Verdict } from "@/components/marketing/verdict-stamp";
+import { SESSION_CHALLENGE_ROTATION_HINT_MS } from "@/lib/session-challenge";
 
-const ROTATE_MS = 8000;
+// Same cadence as the real session QR, so the preview never oversells it.
+const ROTATE_MS = SESSION_CHALLENGE_ROTATION_HINT_MS;
+const ROTATE_SECONDS = ROTATE_MS / 1000;
 const FEED_TICK_MS = 2600;
 const MAX_FEED_ROWS = 5;
 const QR_SIZE = 21;
@@ -190,7 +193,7 @@ export function LiveSessionDemo() {
               viewBox={`0 0 ${QR_SIZE} ${QR_SIZE}`}
               className="size-28 sm:size-32"
               role="img"
-              aria-label="Animated preview of a rotating session QR code"
+              aria-label="Animated preview of a refreshing session QR code"
               shapeRendering="crispEdges"
             >
               <rect width={QR_SIZE} height={QR_SIZE} fill="white" />
@@ -224,13 +227,13 @@ export function LiveSessionDemo() {
                 key={token}
                 className="bg-chalk h-full rounded-full motion-reduce:[animation:none]"
                 style={{
-                  animation: "demo-countdown 8s linear forwards",
+                  animation: `demo-countdown ${ROTATE_SECONDS}s linear forwards`,
                   transformOrigin: "left",
                 }}
               />
             </div>
             <span className="font-mono text-[10px] tracking-[0.1em] uppercase opacity-60">
-              Rotates every 8s
+              New code every {ROTATE_SECONDS}s
             </span>
           </div>
         </div>

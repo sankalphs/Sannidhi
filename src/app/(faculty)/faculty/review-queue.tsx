@@ -3,13 +3,15 @@
 import { api } from "../../../../convex/_generated/api";
 import type { Id } from "../../../../convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 import { describeConvexError, type ErrorTranslation } from "@/lib/client/describe-error";
 
 const PREVIOUS_STATE_BADGES: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
@@ -28,6 +30,7 @@ function formatDate(ms: number): string {
   return new Date(ms).toLocaleString("en-IN", {
     dateStyle: "medium",
     timeStyle: "short",
+    timeZone: INSTITUTION_TIME_ZONE,
   });
 }
 
@@ -37,7 +40,10 @@ const ERROR_TRANSLATIONS: ErrorTranslation = [
   { match: "event_already_corrected", message: "The disputed record has already been corrected." },
   { match: "event_not_correctionable", message: "The disputed record can no longer be corrected." },
   { match: "event_not_found", message: "The disputed record can no longer be corrected." },
+  { match: "note_too_long", message: "Keep the note under 500 characters." },
 ];
+
+type Confirming = { requestId: Id<"attendance_requests">; decision: "approved" | "dismissed" };
 
 function describeError(cause: unknown): string {
   return describeConvexError(
@@ -53,13 +59,29 @@ export function ReviewQueue({ actorToken }: { actorToken: string }) {
   const reviewRequest = useMutation(api.attendanceRequests.reviewRequest);
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Approve and dismiss are final, so each takes a second, explicit click.
+  const [confirming, setConfirming] = useState<Confirming | null>(null);
+  const [note, setNote] = useState("");
 
-  async function decide(requestId: Id<"attendance_requests">, decision: "approved" | "dismissed") {
+  function startConfirm(next: Confirming | null) {
+    setConfirming(next);
+    setNote("");
+    setError(null);
+  }
+
+  async function decide({ requestId, decision }: Confirming) {
     if (pendingRequestId !== null) return;
     setPendingRequestId(requestId);
     setError(null);
     try {
-      await reviewRequest({ actorToken, requestId, decision });
+      const trimmed = note.trim();
+      await reviewRequest({
+        actorToken,
+        requestId,
+        decision,
+        ...(decision === "dismissed" && trimmed.length > 0 ? { note: trimmed } : {}),
+      });
+      startConfirm(null);
       router.refresh();
     } catch (cause) {
       setError(describeError(cause));
@@ -123,25 +145,70 @@ export function ReviewQueue({ actorToken }: { actorToken: string }) {
                     : ""}
                 </p>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button
-                  size="sm"
-                  disabled={pendingRequestId !== null}
-                  data-testid="approve-dispute"
-                  onClick={() => void decide(request.requestId, "approved")}
-                >
-                  Approve
-                </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={pendingRequestId !== null}
-                  data-testid="dismiss-dispute"
-                  onClick={() => void decide(request.requestId, "dismissed")}
-                >
-                  Dismiss
-                </Button>
-              </div>
+              {confirming?.requestId === request.requestId ? (
+                <div className="flex shrink-0 flex-col gap-2 sm:w-64">
+                  {confirming.decision === "dismissed" ? (
+                    <Input
+                      aria-label="Note to the student (optional)"
+                      placeholder="Note to the student (optional)"
+                      data-testid="dismiss-note"
+                      maxLength={500}
+                      value={note}
+                      onChange={(event) => setNote(event.target.value)}
+                    />
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant={confirming.decision === "dismissed" ? "destructive" : "default"}
+                      disabled={pendingRequestId !== null}
+                      data-testid={
+                        confirming.decision === "dismissed"
+                          ? "confirm-dismiss-dispute"
+                          : "confirm-approve-dispute"
+                      }
+                      onClick={() => void decide(confirming)}
+                    >
+                      {pendingRequestId === request.requestId ? (
+                        <Loader2 className="animate-spin" />
+                      ) : null}
+                      {confirming.decision === "dismissed" ? "Confirm dismiss" : "Confirm approve"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={pendingRequestId !== null}
+                      onClick={() => startConfirm(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    size="sm"
+                    disabled={pendingRequestId !== null}
+                    data-testid="approve-dispute"
+                    onClick={() =>
+                      startConfirm({ requestId: request.requestId, decision: "approved" })
+                    }
+                  >
+                    Approve
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pendingRequestId !== null}
+                    data-testid="dismiss-dispute"
+                    onClick={() =>
+                      startConfirm({ requestId: request.requestId, decision: "dismissed" })
+                    }
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              )}
             </li>
           ))}
         </ul>
