@@ -185,32 +185,32 @@ describe("mintBundle / readQueue", () => {
     expect(await verifySignature("c".repeat(64), signed)).toBe(true);
   });
 
-  it("does not invalidate the winning mint's records when a stalled mint adopts its key", async () => {
+  it("keeps the winner's records when a stalled mint returns the adopted key", async () => {
     await freshQueue();
     const stalled = deferred<typeof BUNDLE>();
     const stalledMint = mintBundle(() => stalled.promise);
     await tick();
     expireMintLease();
 
-    // Mint B wins the race; the server rotates to its key.
-    const winning = await mintBundle(async () => ({ sessionId: "session_1", key: "b".repeat(64) }));
-    expect(winning?.bundle.key).toBe("b".repeat(64));
+    // A competing mint wins; the server adopts the session's existing key.
+    const winning = await mintBundle(async () => BUNDLE);
+    expect(winning?.bundle.key).toBe(BUNDLE.key);
 
     const queued = requireState(
       await enqueueStudent(winning!, { id: "student_1", name: "A" }, "section_1", "n"),
     );
     expect(queued.queued).toHaveLength(1);
 
-    // The stalled mint's request lands later; the server adopts B's key and
-    // the client discards the duplicate result instead of overwriting B.
-    stalled.resolve({ sessionId: "session_1", key: "b".repeat(64) });
+    // The stalled request lands later and gets the same key back; the client
+    // discards the duplicate result instead of overwriting the winner.
+    stalled.resolve(BUNDLE);
     expect(await stalledMint).toBeNull();
 
     const stored = readQueue("session_1");
-    expect(stored?.bundle.key).toBe("b".repeat(64));
+    expect(stored?.bundle.key).toBe(BUNDLE.key);
     const [{ studentName, ...signed }] = stored?.queued ?? [];
     expect(studentName).toBe("A");
-    expect(await verifySignature("b".repeat(64), signed)).toBe(true);
+    expect(await verifySignature(BUNDLE.key, signed)).toBe(true);
   });
 
   it("retries a transient storage failure so re-signed records survive", async () => {
@@ -224,8 +224,8 @@ describe("mintBundle / readQueue", () => {
     );
     expect(queued.queued).toHaveLength(1);
 
-    // The server key rotates while localStorage is briefly full; the save
-    // retries, so the record is persisted under the new key, not left dead.
+    // The server adopts the existing key, but localStorage is briefly full;
+    // the save retries, so the record is persisted, not lost.
     const realSetItem = Storage.prototype.setItem;
     let failures = 1;
     const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
@@ -240,17 +240,53 @@ describe("mintBundle / readQueue", () => {
       realSetItem.call(this, key, value);
     });
     try {
-      pendingMint.resolve({ sessionId: "session_1", key: "c".repeat(64) });
+      pendingMint.resolve(BUNDLE);
       const minted = await minting;
-      expect(minted?.bundle.key).toBe("c".repeat(64));
+      expect(minted?.bundle.key).toBe(BUNDLE.key);
       const [{ studentName, ...signed }] = minted?.queued ?? [];
       expect(studentName).toBe("A");
-      expect(await verifySignature("c".repeat(64), signed)).toBe(true);
+      expect(await verifySignature(BUNDLE.key, signed)).toBe(true);
     } finally {
       setItemSpy.mockRestore();
     }
-    expect(readQueue("session_1")?.bundle.key).toBe("c".repeat(64));
+    expect(readQueue("session_1")?.bundle.key).toBe(BUNDLE.key);
     expect(readQueue("session_1")?.queued).toHaveLength(1);
+  });
+
+  it("leaves the queue valid when even the retried save fails on an adopted key", async () => {
+    const state = await freshQueue();
+    const pendingMint = deferred<typeof BUNDLE>();
+    const minting = mintBundle(() => pendingMint.promise);
+    await tick();
+    expireMintLease();
+    const queued = requireState(
+      await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n"),
+    );
+    expect(queued.queued).toHaveLength(1);
+
+    // Both writes fail. The server did not rotate (it adopted the key the
+    // records are signed with), so storage still holds a valid bundle.
+    const realSetItem = Storage.prototype.setItem;
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === STORAGE_KEY) throw new Error("quota exceeded");
+      realSetItem.call(this, key, value);
+    });
+    try {
+      pendingMint.resolve(BUNDLE);
+      await expect(minting).rejects.toThrow("quota exceeded");
+    } finally {
+      setItemSpy.mockRestore();
+    }
+
+    const stored = readQueue("session_1");
+    expect(stored?.bundle.key).toBe(BUNDLE.key);
+    const [{ studentName, ...signed }] = stored?.queued ?? [];
+    expect(studentName).toBe("A");
+    expect(await verifySignature(BUNDLE.key, signed)).toBe(true);
   });
 });
 

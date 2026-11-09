@@ -46,6 +46,20 @@ export function isOfflineSyncOpen(windowEndsAt: number, now: number): boolean {
   return now <= windowEndsAt + OFFLINE_SYNC_GRACE_MS;
 }
 
+/**
+ * The key a mint hands back. An active session keeps the key it already has,
+ * so a concurrent device, tab, or in-flight record never loses its bundle;
+ * only a session without a key gets a fresh one. Closing or restarting the
+ * session clears the key, which is where rotation happens.
+ */
+export function resolveMintKey(
+  current: string | undefined,
+  create: () => string,
+): { key: string; rotate: boolean } {
+  if (current !== undefined) return { key: current, rotate: false };
+  return { key: create(), rotate: true };
+}
+
 function bytesToHex(bytes: Uint8Array): string {
   let hex = "";
   for (const byte of bytes) {

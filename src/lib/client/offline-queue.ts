@@ -207,20 +207,17 @@ function bumpQueueEpoch(): void {
  * session's. Returns null when the device already holds unsynced records, a
  * mint is in flight, or the mint lost a race with a sign-out/competing mint.
  *
- * `mint` receives the key this device currently believes is current, so the
- * server can detect a competing mint and hand back the winning key instead of
- * rotating a second time.
+ * The server adopts an active session's existing key, so a mint only creates
+ * a key when the session has none; re-authorising never invalidates records.
  */
 export async function mintBundle(
-  mint: (knownKey: string | undefined) => Promise<OfflineBundle>,
+  mint: () => Promise<OfflineBundle>,
 ): Promise<OfflineQueueState | null> {
   const token = crypto.randomUUID();
   let epoch: string | null = null;
-  let knownKey: string | undefined;
   const leased = await withQueueLock(() => {
     if (mintLeaseActive() || hasAnyUnsyncedRecords()) return false;
     epoch = queueEpoch();
-    knownKey = parseState()?.bundle.key;
     window.localStorage.setItem(
       MINTING_KEY,
       JSON.stringify({ token, startedAt: Date.now() } satisfies MintLease),
@@ -230,7 +227,7 @@ export async function mintBundle(
   if (!leased) return null;
 
   try {
-    const bundle = await mint(knownKey);
+    const bundle = await mint();
     return await withQueueLock(async () => {
       // Sign-out clears the lease and bumps the epoch; another tab's mint
       // replaces the lease with its own token. Either way this bundle is
