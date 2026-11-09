@@ -167,7 +167,7 @@ export function OfflineKit({
       });
       if (state === null) {
         setError(
-          "This device still has unsynced offline records. Sync them (open that session) before authorizing again.",
+          "Could not authorize offline capture right now. Sync any queued records, or wait a moment and try again.",
         );
         return;
       }

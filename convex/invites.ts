@@ -63,12 +63,14 @@ async function listPendingInvites(
   institutionId: Id<"institutions">,
   email: string,
 ): Promise<Doc<"invites">[]> {
+  // Index on pending first: an address accumulates historical invites, and
+  // collecting them all to filter would eventually exceed the read budget.
   const candidates = await ctx.db
     .query("invites")
-    .withIndex("by_email", (q) => q.eq("email", email))
+    .withIndex("by_email_status", (q) => q.eq("email", email).eq("status", "pending"))
     .collect();
   return candidates
-    .filter((invite) => invite.institutionId === institutionId && invite.status === "pending")
+    .filter((invite) => invite.institutionId === institutionId)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -271,13 +273,11 @@ export const reissueInvite = mutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", email))
       .first();
-    const [latestInvite] = await ctx.db
-      .query("invites")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .filter((q) => q.eq(q.field("institutionId"), admin.institutionId))
-      .order("desc")
-      .take(1);
-    const role = user?.role ?? latestInvite?.role;
+    // An existing account keeps its role. Without one, only a still-pending
+    // invite may supply the role — a revoked or accepted historical invite
+    // must not mint a fresh user and working link.
+    const pending = user === null ? await listPendingInvites(ctx, admin.institutionId, email) : [];
+    const role = user?.role ?? pending[0]?.role;
     if (role === undefined) throw new ConvexError("invite not found");
     if (user !== null) assertSameInstitution(admin.institutionId, user.institutionId);
 

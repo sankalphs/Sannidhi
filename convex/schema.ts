@@ -176,7 +176,8 @@ export default defineSchema({
   })
     .index("by_tokenHash", ["tokenHash"])
     .index("by_institution_status", ["institutionId", "status"])
-    .index("by_email", ["email"]),
+    .index("by_email", ["email"])
+    .index("by_email_status", ["email", "status"]),
 
   passkey_credentials: defineTable({
     userId: v.id("users"),

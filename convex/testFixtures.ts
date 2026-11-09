@@ -5,7 +5,12 @@ import type { MutationCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { hashInviteToken } from "../src/lib/invites/token";
 import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
-import { institutionDayOfWeek, institutionMinutesOfDay } from "../src/lib/attendance/timezone";
+import {
+  institutionDateKey,
+  institutionDayOfWeek,
+  institutionInstant,
+  institutionMinutesOfDay,
+} from "../src/lib/attendance/timezone";
 import { computeEventHash } from "../src/lib/ledger/hash";
 import { RISK_POLICY_VERSION } from "../src/lib/risk/types";
 import type { Decision } from "../src/lib/decision";
@@ -529,12 +534,14 @@ async function backfillTermHistory(
       // closest to termEnd so recent-week analytics stories land in-window.
       const nominalStart =
         termEnd - (TERM_WEEKS - 1 - week) * MS_PER_WEEK - sectionIndex * MS_PER_DAY;
-      const startedDate = new Date(nominalStart);
-      startedDate.setHours(0, 0, 0, 0);
-      startedDate.setMinutes(SECTION_START_MINUTES[sectionIndex]);
-      // The 24h normalization can pull a session inside the 26h safety gap;
-      // shift whole days until every planned session clears it.
-      let sessionStart = startedDate.getTime();
+      // Build the slot on the institution's wall clock, not the host's: a
+      // 09:00 IST class must be 09:00 IST even when this script runs on UTC.
+      let sessionStart = institutionInstant(
+        institutionDateKey(nominalStart),
+        SECTION_START_MINUTES[sectionIndex],
+      );
+      // Normalization can pull a session inside the 26h safety gap; shift
+      // whole days until every planned session clears it.
       while (now - sessionStart < BACKFILL_NEWEST_AGE_MS) {
         sessionStart -= MS_PER_DAY;
       }

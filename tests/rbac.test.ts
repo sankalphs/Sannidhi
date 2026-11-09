@@ -98,4 +98,10 @@ describe("safeNextPath", () => {
     expect(safeNextPath("//evil.example")).toBeNull();
     expect(safeNextPath("/\\evil.example")).toBeNull();
   });
+
+  it("drops control characters that could smuggle another origin", () => {
+    expect(safeNextPath("/\t/evil.example")).toBeNull();
+    expect(safeNextPath("/\n/evil.example")).toBeNull();
+    expect(safeNextPath("/student\r\nSet-Cookie: x")).toBeNull();
+  });
 });

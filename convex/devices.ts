@@ -28,6 +28,8 @@ import {
 /** Admin suspend/revoke reasons are free text stamped on the device and its ledger event. */
 const MAX_STATE_REASON_LENGTH = 500;
 const MAX_LISTED_DEVICES = 200;
+/** Recent possession-code rows that can still be live; older rows are already dead. */
+const POSSESSION_REISSUE_SCAN = 32;
 
 type DeviceDoc = Doc<"devices">;
 type ReplacementRequestDoc = Doc<"replacement_requests">;
@@ -119,15 +121,16 @@ function assertOwnerOrAdmin(claims: ActorTokenClaims, device: DeviceDoc): void {
   if (claims.userId !== device.userId) throw new ConvexError("unauthorized");
 }
 
+/** Newest verification row for a device; possession TTLs increase with issue time. */
 async function findLatestVerification(
   ctx: MutationCtx,
   deviceId: Id<"devices">,
 ): Promise<Doc<"device_verifications"> | null> {
-  const rows = await ctx.db
+  return ctx.db
     .query("device_verifications")
     .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
-    .collect();
-  return rows.sort((a, b) => b.expiresAt - a.expiresAt)[0] ?? null;
+    .order("desc")
+    .first();
 }
 
 async function findActiveDevice(
@@ -163,7 +166,8 @@ async function findPendingRequestForDevice(
 /**
  * Stores a fresh possession code for `deviceId` and returns the plaintext once.
  * Any earlier unconsumed code for the device is expired first, so only the
- * newest code can ever verify.
+ * newest code can ever verify. Only recent rows can still be unexpired, so the
+ * scan is bounded; older rows are already dead and are left alone.
  */
 async function issuePossessionCode(
   ctx: MutationCtx,
@@ -173,7 +177,8 @@ async function issuePossessionCode(
   const prior = await ctx.db
     .query("device_verifications")
     .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
-    .collect();
+    .order("desc")
+    .take(POSSESSION_REISSUE_SCAN);
   for (const row of prior) {
     if (row.consumedAt === undefined && row.expiresAt > now) {
       await ctx.db.patch(row._id, { expiresAt: now });

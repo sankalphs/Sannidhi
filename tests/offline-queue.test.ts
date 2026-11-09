@@ -17,6 +17,14 @@ import {
 const STORAGE_KEY = "sannidhi.offline-queue";
 const BUNDLE = { sessionId: "session_1", key: "a".repeat(64) };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
+}
+
 function requireState(state: OfflineQueueState | null): OfflineQueueState {
   if (state === null) throw new Error("expected queue state");
   return state;
@@ -87,6 +95,37 @@ describe("mintBundle / readQueue", () => {
     expect(minted).toBeNull();
     // The original record — and the key that signs it — survives.
     expect(readQueue("session_1")?.queued).toHaveLength(1);
+  });
+
+  it("leases the device while a mint is in flight: no mint or attestation slips in", async () => {
+    const state = await freshQueue();
+    const pendingMint = deferred<typeof BUNDLE>();
+    const minting = mintBundle(() => pendingMint.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(
+      await mintBundle(async () => ({ sessionId: "session_1", key: "b".repeat(64) })),
+    ).toBeNull();
+    expect(
+      await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n"),
+    ).toBeNull();
+
+    pendingMint.resolve({ sessionId: "session_1", key: "c".repeat(64) });
+    const minted = await minting;
+    expect(minted?.bundle.key).toBe("c".repeat(64));
+  });
+
+  it("discards a mint that completes after sign-out", async () => {
+    await freshQueue();
+    const pendingMint = deferred<typeof BUNDLE>();
+    const minting = mintBundle(() => pendingMint.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await clearQueue();
+    pendingMint.resolve({ sessionId: "session_1", key: "c".repeat(64) });
+
+    expect(await minting).toBeNull();
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 });
 

@@ -23,6 +23,9 @@ const STORAGE_KEY = "sannidhi.offline-queue";
 const QUEUE_LOCK_NAME = "sannidhi.offline-queue.lock";
 /** BroadcastChannel announcing a queue wipe so live tabs drop their in-memory copies. */
 const QUEUE_CLEARED_CHANNEL = "sannidhi.offline-queue.cleared";
+/** Short lease marking a mint in flight; blocks attestations and other mints. */
+const MINTING_KEY = "sannidhi.offline-queue.minting";
+const MINT_LEASE_MS = 30_000;
 
 export type QueuedRecord = SignedOfflineRecord & { studentName: string };
 
@@ -100,11 +103,13 @@ async function withQueueLock<T>(action: () => T | Promise<T>): Promise<T> {
 /**
  * Wipes the queue under the lock and broadcasts the wipe. The lock means an
  * in-flight mutation cannot restore storage after it; the broadcast means
- * live tabs drop their in-memory copies.
+ * live tabs drop their in-memory copies. The mint lease goes too: a pending
+ * mint's result is discarded by its own storage-snapshot check.
  */
 export async function clearQueue(): Promise<void> {
   await withQueueLock(() => {
     window.localStorage.removeItem(STORAGE_KEY);
+    window.localStorage.removeItem(MINTING_KEY);
   });
   broadcastCleared();
 }
@@ -132,23 +137,56 @@ export function hasAnyUnsyncedRecords(): boolean {
   }
 }
 
+function mintLeaseActive(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(MINTING_KEY);
+    if (raw === null) return false;
+    const startedAt = Number(raw);
+    if (!Number.isFinite(startedAt) || Date.now() - startedAt > MINT_LEASE_MS) {
+      // A crashed tab's lease expires instead of deadlocking the device.
+      window.localStorage.removeItem(MINTING_KEY);
+      return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Mints a fresh bundle and replaces the stored queue with it. The empty-queue
- * check, the server key rotation, and the replacement all run under the queue
- * lock, so a concurrent attestation can neither be destroyed by the replacement
- * nor signed with a key the server just rotated away. Returns null when the
- * device still holds unsynced records.
+ * Mints a fresh bundle and replaces the stored queue with it. The server call
+ * must not hold the queue lock — a Convex mutation that hangs offline would
+ * block attestations and sign-out — so the lease does the work instead:
+ * attestations and other mints refuse while it is held, and the result is
+ * saved only when the stored queue is exactly what the mint started from.
+ * Returns null when the device still holds unsynced records or a mint is
+ * already in flight.
  */
 export async function mintBundle(
   mint: () => Promise<OfflineBundle>,
 ): Promise<OfflineQueueState | null> {
-  return withQueueLock(async () => {
-    if (hasAnyUnsyncedRecords()) return null;
-    const bundle = await mint();
-    const state: OfflineQueueState = { bundle, queued: [] };
-    saveState(state);
-    return state;
+  const leased = await withQueueLock(() => {
+    if (mintLeaseActive() || hasAnyUnsyncedRecords()) return false;
+    window.localStorage.setItem(MINTING_KEY, String(Date.now()));
+    return true;
   });
+  if (!leased) return null;
+
+  const before = window.localStorage.getItem(STORAGE_KEY);
+  try {
+    const bundle = await mint();
+    return await withQueueLock(() => {
+      // Sign-out, another mint, or an attestation while we waited changes
+      // storage: discard the bundle rather than overwrite live state.
+      if (window.localStorage.getItem(STORAGE_KEY) !== before) return null;
+      const state: OfflineQueueState = { bundle, queued: [] };
+      saveState(state);
+      return state;
+    });
+  } finally {
+    window.localStorage.removeItem(MINTING_KEY);
+  }
 }
 
 /**
@@ -164,6 +202,9 @@ export async function enqueueStudent(
   note: string,
 ): Promise<OfflineQueueState | null> {
   return withQueueLock(async () => {
+    // A mint is rotating the session key; a record signed now would be
+    // invalidated with the old key. Refuse rather than queue a dead record.
+    if (mintLeaseActive()) return null;
     const stored = loadState(state.bundle.sessionId);
     // Storage was wiped (sign-out) or now holds another session's queue:
     // persisting this record would restore stale student names.

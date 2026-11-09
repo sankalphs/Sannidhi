@@ -39,7 +39,13 @@ const STATE_BADGE: Record<
   "face-enrolled": { label: "Face enrolled", variant: "default" },
 };
 
-export function BiometricsCard({ initialRecord }: { initialRecord: BiometricRecordView | null }) {
+export function BiometricsCard({
+  initialRecord,
+  studentId,
+}: {
+  initialRecord: BiometricRecordView | null;
+  studentId: string;
+}) {
   const router = useRouter();
   const [record, setRecord] = useState<BiometricRecordView | null>(initialRecord);
   useEffect(() => {
@@ -49,7 +55,10 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
   const [capturing, setCapturing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // A scan held back because replacing a template needs a fresh passkey step-up.
-  const [pendingEmbedding, setPendingEmbedding] = useState<number[] | null>(null);
+  // Bound to the student who captured it: another sign-in in this tab must not
+  // be able to enroll that scan for a different account.
+  const [pending, setPending] = useState<{ studentId: string; embedding: number[] } | null>(null);
+  const pendingEmbedding = pending !== null && pending.studentId === studentId ? pending : null;
   const state = deriveBiometricUiState(record);
 
   async function postAction(body: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -77,7 +86,7 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
       setRecord(data.record as BiometricRecordView);
     }
     setCapturing(false);
-    setPendingEmbedding(null);
+    setPending(null);
     router.refresh();
   }
 
@@ -90,7 +99,7 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
       const message = cause instanceof Error ? cause.message : "Request failed";
       if (/identity re-verification required/i.test(message)) {
         setCapturing(false);
-        setPendingEmbedding(embedding);
+        setPending({ studentId, embedding });
       } else {
         setError(message);
       }
@@ -105,7 +114,7 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
     setBusy(true);
     try {
       await runPasskeyStepUp();
-      await enrollFace(pendingEmbedding);
+      await enrollFace(pendingEmbedding.embedding);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Identity re-verification failed");
     } finally {
@@ -119,6 +128,8 @@ export function BiometricsCard({ initialRecord }: { initialRecord: BiometricReco
     try {
       await postAction({ action: "withdraw" });
       setRecord(null);
+      // A scan waiting on passkey verification must not survive withdrawal.
+      setPending(null);
       setCapturing(false);
       router.refresh();
     } catch (cause) {

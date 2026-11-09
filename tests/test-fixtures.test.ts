@@ -15,6 +15,7 @@ describe("convex/testFixtures.ts", () => {
   it("gates every entry point behind SANNIDHI_TEST_FIXTURES", () => {
     expect(source).toContain('process.env.SANNIDHI_TEST_FIXTURES === "1"');
     const resetBody = source.slice(source.indexOf("export const reset"));
+    expect(resetBody.indexOf("fixturesEnabled()")).toBeGreaterThanOrEqual(0);
     expect(resetBody.indexOf("fixturesEnabled()")).toBeLessThan(resetBody.indexOf("deleteRows"));
     const actorBody = source.slice(source.indexOf("export const getFixtureActor"));
     expect(actorBody.indexOf("fixturesEnabled()")).toBeLessThan(actorBody.indexOf("ctx.db"));
