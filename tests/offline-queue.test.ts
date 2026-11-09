@@ -418,8 +418,9 @@ describe("clearQueue", () => {
     const seen: string[] = [];
     const unsubscribe = subscribeQueueCleared(() => seen.push("cleared"));
     await clearQueue();
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(seen).toEqual(["cleared"]);
+    // BroadcastChannel delivery is a task, not a microtask; poll instead of
+    // assuming a single tick is enough.
+    await vi.waitFor(() => expect(seen).toEqual(["cleared"]));
     unsubscribe();
   });
 });
