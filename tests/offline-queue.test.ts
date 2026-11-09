@@ -13,6 +13,7 @@ import {
   subscribeQueueCleared,
   type OfflineQueueState,
 } from "@/lib/client/offline-queue";
+import { verifySignature } from "@/lib/offline/bundle";
 
 const STORAGE_KEY = "sannidhi.offline-queue";
 const BUNDLE = { sessionId: "session_1", key: "a".repeat(64) };
@@ -126,6 +127,54 @@ describe("mintBundle / readQueue", () => {
 
     expect(await minting).toBeNull();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("discards a mint that started on empty storage and outlived a sign-out", async () => {
+    // No queue at all: the old snapshot check could not tell "still empty"
+    // from "wiped while we were away". The lease token and epoch can.
+    const pendingMint = deferred<typeof BUNDLE>();
+    const minting = mintBundle(() => pendingMint.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    await clearQueue();
+    pendingMint.resolve({ sessionId: "session_1", key: "c".repeat(64) });
+
+    expect(await minting).toBeNull();
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it("re-signs records queued after its lease expired instead of invalidating them", async () => {
+    const state = await freshQueue();
+    const pendingMint = deferred<typeof BUNDLE>();
+    const minting = mintBundle(() => pendingMint.promise);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    // A stalled mint's lease expires, so another attestation is allowed in
+    // with the key the server is about to rotate away.
+    const lease = JSON.parse(
+      window.localStorage.getItem("sannidhi.offline-queue.minting") ?? "{}",
+    ) as {
+      token: string;
+      startedAt: number;
+    };
+    window.localStorage.setItem(
+      "sannidhi.offline-queue.minting",
+      JSON.stringify({ ...lease, startedAt: Date.now() - 31_000 }),
+    );
+    const queued = requireState(
+      await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n"),
+    );
+    expect(queued.queued).toHaveLength(1);
+
+    pendingMint.resolve({ sessionId: "session_1", key: "c".repeat(64) });
+    const minted = await minting;
+    expect(minted?.bundle.key).toBe("c".repeat(64));
+    expect(minted?.queued).toHaveLength(1);
+
+    // The record survived, now signed with the rotated key.
+    const [{ studentName, ...signed }] = minted?.queued ?? [];
+    expect(studentName).toBe("A");
+    expect(await verifySignature("c".repeat(64), signed)).toBe(true);
   });
 });
 

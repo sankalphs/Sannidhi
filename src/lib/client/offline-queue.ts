@@ -26,6 +26,8 @@ const QUEUE_CLEARED_CHANNEL = "sannidhi.offline-queue.cleared";
 /** Short lease marking a mint in flight; blocks attestations and other mints. */
 const MINTING_KEY = "sannidhi.offline-queue.minting";
 const MINT_LEASE_MS = 30_000;
+/** Sign-out generation marker: a mint spanning a wipe discards its bundle. */
+const EPOCH_KEY = "sannidhi.offline-queue.epoch";
 
 export type QueuedRecord = SignedOfflineRecord & { studentName: string };
 
@@ -49,27 +51,13 @@ function isQueuedRecord(value: unknown): value is QueuedRecord {
   );
 }
 
+/**
+ * Loads the queue only when it belongs to `sessionId`; a queue for another
+ * session is not this caller's to read or mutate.
+ */
 function loadState(sessionId: string): OfflineQueueState | null {
-  if (typeof window === "undefined") return null;
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return null;
-    const parsed = JSON.parse(raw) as Partial<OfflineQueueState> | null;
-    if (
-      parsed === null ||
-      parsed.bundle?.sessionId !== sessionId ||
-      typeof parsed.bundle.key !== "string" ||
-      !Array.isArray(parsed.queued)
-    ) {
-      return null;
-    }
-    // Malformed records are dropped, not fatal: one tampered row must not
-    // brick the whole queue's sync loop.
-    const queued = parsed.queued.filter(isQueuedRecord);
-    return { bundle: parsed.bundle, queued };
-  } catch {
-    return null;
-  }
+  const state = parseState();
+  return state !== null && state.bundle.sessionId === sessionId ? state : null;
 }
 
 function saveState(state: OfflineQueueState): void {
@@ -110,8 +98,30 @@ export async function clearQueue(): Promise<void> {
   await withQueueLock(() => {
     window.localStorage.removeItem(STORAGE_KEY);
     window.localStorage.removeItem(MINTING_KEY);
+    bumpQueueEpoch();
   });
   broadcastCleared();
+}
+
+/** Parses the stored queue without the session filter (drops malformed records). */
+function parseState(): OfflineQueueState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as Partial<OfflineQueueState> | null;
+    if (
+      parsed === null ||
+      typeof parsed.bundle?.sessionId !== "string" ||
+      typeof parsed.bundle.key !== "string" ||
+      !Array.isArray(parsed.queued)
+    ) {
+      return null;
+    }
+    return { bundle: parsed.bundle, queued: parsed.queued.filter(isQueuedRecord) };
+  } catch {
+    return null;
+  }
 }
 
 /** Loads the queue for one session; other sessions' queues are discarded (one live class window). */
@@ -125,33 +135,50 @@ export function readQueue(sessionId: string): OfflineQueueState | null {
  * the key for) whatever is stored, so any queued record blocks it.
  */
 export function hasAnyUnsyncedRecords(): boolean {
-  if (typeof window === "undefined") return false;
+  return (parseState()?.queued.length ?? 0) > 0;
+}
+
+type MintLease = { token: string; startedAt: number };
+
+/** The stored mint lease, if any (expiry is decided by mintLeaseActive). */
+function readMintLease(): MintLease | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return false;
-    const parsed = JSON.parse(raw) as Partial<OfflineQueueState> | null;
-    if (parsed === null || typeof parsed.bundle?.sessionId !== "string") return false;
-    return Array.isArray(parsed.queued) && parsed.queued.some(isQueuedRecord);
+    const raw = window.localStorage.getItem(MINTING_KEY);
+    if (raw === null) return null;
+    const parsed = JSON.parse(raw) as Partial<MintLease> | null;
+    if (typeof parsed?.token !== "string" || typeof parsed.startedAt !== "number") {
+      window.localStorage.removeItem(MINTING_KEY);
+      return null;
+    }
+    return { token: parsed.token, startedAt: parsed.startedAt };
   } catch {
-    return false;
+    return null;
   }
 }
 
+/**
+ * Whether a mint is still within its lease. An expired lease blocks nothing —
+ * it just stays in storage so its owner can still recognise itself when the
+ * stalled mint finally resolves.
+ */
 function mintLeaseActive(): boolean {
-  if (typeof window === "undefined") return false;
+  const lease = readMintLease();
+  return lease !== null && Date.now() - lease.startedAt <= MINT_LEASE_MS;
+}
+
+/** Bumped on sign-out, so a mint started before it can tell the queue was wiped. */
+function queueEpoch(): string | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = window.localStorage.getItem(MINTING_KEY);
-    if (raw === null) return false;
-    const startedAt = Number(raw);
-    if (!Number.isFinite(startedAt) || Date.now() - startedAt > MINT_LEASE_MS) {
-      // A crashed tab's lease expires instead of deadlocking the device.
-      window.localStorage.removeItem(MINTING_KEY);
-      return false;
-    }
-    return true;
+    return window.localStorage.getItem(EPOCH_KEY);
   } catch {
-    return false;
+    return null;
   }
+}
+
+function bumpQueueEpoch(): void {
+  window.localStorage.setItem(EPOCH_KEY, crypto.randomUUID());
 }
 
 /**
@@ -166,26 +193,58 @@ function mintLeaseActive(): boolean {
 export async function mintBundle(
   mint: () => Promise<OfflineBundle>,
 ): Promise<OfflineQueueState | null> {
+  const token = crypto.randomUUID();
+  let epoch: string | null = null;
   const leased = await withQueueLock(() => {
     if (mintLeaseActive() || hasAnyUnsyncedRecords()) return false;
-    window.localStorage.setItem(MINTING_KEY, String(Date.now()));
+    epoch = queueEpoch();
+    window.localStorage.setItem(
+      MINTING_KEY,
+      JSON.stringify({ token, startedAt: Date.now() } satisfies MintLease),
+    );
     return true;
   });
   if (!leased) return null;
 
-  const before = window.localStorage.getItem(STORAGE_KEY);
   try {
     const bundle = await mint();
-    return await withQueueLock(() => {
-      // Sign-out, another mint, or an attestation while we waited changes
-      // storage: discard the bundle rather than overwrite live state.
-      if (window.localStorage.getItem(STORAGE_KEY) !== before) return null;
-      const state: OfflineQueueState = { bundle, queued: [] };
+    return await withQueueLock(async () => {
+      // Sign-out clears the lease and bumps the epoch; another tab's mint
+      // replaces the lease with its own token. Either way this bundle is
+      // stale — even if storage was empty before and is empty again now.
+      if (readMintLease()?.token !== token || queueEpoch() !== epoch) return null;
+      const current = parseState();
+      if (current === null) {
+        const state: OfflineQueueState = { bundle, queued: [] };
+        saveState(state);
+        return state;
+      }
+      // Another session's queue took storage: never overwrite it.
+      if (current.bundle.sessionId !== bundle.sessionId) return null;
+      // Our own queue — possibly records queued after the lease expired. Their
+      // old signatures die with the rotated key, so re-sign them with it.
+      const queued: QueuedRecord[] = [];
+      for (const record of current.queued) {
+        const { studentName } = record;
+        queued.push({
+          ...(await signRecord(bundle.key, {
+            sessionId: record.sessionId,
+            sectionId: record.sectionId,
+            studentId: record.studentId,
+            capturedAt: record.capturedAt,
+            nonce: record.nonce,
+            ...(record.note !== undefined ? { note: record.note } : {}),
+          })),
+          studentName,
+        });
+      }
+      const state: OfflineQueueState = { bundle, queued };
       saveState(state);
       return state;
     });
   } finally {
-    window.localStorage.removeItem(MINTING_KEY);
+    // Only release our own lease; a newer mint may own it by now.
+    if (readMintLease()?.token === token) window.localStorage.removeItem(MINTING_KEY);
   }
 }
 
