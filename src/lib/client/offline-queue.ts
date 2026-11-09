@@ -73,6 +73,19 @@ function saveState(state: OfflineQueueState): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+/** Wipes storage synchronously — for callers already holding the queue lock. */
+function clearStorageSynced(): void {
+  window.localStorage.removeItem(STORAGE_KEY);
+}
+
+function broadcastCleared(): void {
+  try {
+    new BroadcastChannel(QUEUE_CLEARED_CHANNEL).postMessage("cleared");
+  } catch {
+    // BroadcastChannel can be unavailable; the wipe itself already happened.
+  }
+}
+
 /**
  * Runs a mutation under a cross-tab lock when the browser supports Web Locks
  * (all modern ones do); without it we fall back to best-effort merge, same
@@ -84,15 +97,16 @@ async function withQueueLock<T>(action: () => T | Promise<T>): Promise<T> {
   return locks.request(QUEUE_LOCK_NAME, { mode: "exclusive" }, () => action());
 }
 
-export function clearQueue(): void {
-  window.localStorage.removeItem(STORAGE_KEY);
-  // Tell live tabs to drop their in-memory copies so a stale OfflineKit
-  // cannot write queued student names back into storage after sign-out.
-  try {
-    new BroadcastChannel(QUEUE_CLEARED_CHANNEL).postMessage("cleared");
-  } catch {
-    // BroadcastChannel can be unavailable; the wipe itself already happened.
-  }
+/**
+ * Wipes the queue under the lock and broadcasts the wipe. The lock means an
+ * in-flight mutation cannot restore storage after it; the broadcast means
+ * live tabs drop their in-memory copies.
+ */
+export async function clearQueue(): Promise<void> {
+  await withQueueLock(() => {
+    window.localStorage.removeItem(STORAGE_KEY);
+  });
+  broadcastCleared();
 }
 
 /** Loads the queue for one session; other sessions' queues are discarded (one live class window). */
@@ -119,16 +133,22 @@ export function hasAnyUnsyncedRecords(): boolean {
 }
 
 /**
- * Replaces the stored queue with a fresh bundle — must run under the queue
- * lock so it cannot race another tab's enqueue mid-flight.
+ * Mints a fresh bundle and replaces the stored queue with it. The empty-queue
+ * check, the server key rotation, and the replacement all run under the queue
+ * lock, so a concurrent attestation can neither be destroyed by the replacement
+ * nor signed with a key the server just rotated away. Returns null when the
+ * device still holds unsynced records.
  */
-export async function rememberBundle(
-  sessionId: string,
-  bundle: OfflineBundle,
-): Promise<OfflineQueueState> {
-  const state: OfflineQueueState = { bundle, queued: [] };
-  await withQueueLock(() => saveState(state));
-  return state;
+export async function mintBundle(
+  mint: () => Promise<OfflineBundle>,
+): Promise<OfflineQueueState | null> {
+  return withQueueLock(async () => {
+    if (hasAnyUnsyncedRecords()) return null;
+    const bundle = await mint();
+    const state: OfflineQueueState = { bundle, queued: [] };
+    saveState(state);
+    return state;
+  });
 }
 
 /** Signs and appends one attestation; each record gets a fresh nonce so replays dedupe server-side. */
@@ -137,7 +157,7 @@ export async function enqueueStudent(
   student: { id: string; name: string },
   sectionId: string,
   note: string,
-): Promise<OfflineQueueState> {
+): Promise<OfflineQueueState | null> {
   const record = await signRecord(state.bundle.key, {
     sessionId: state.bundle.sessionId,
     sectionId,
@@ -147,12 +167,13 @@ export async function enqueueStudent(
     ...(note.trim().length > 0 ? { note: note.trim() } : {}),
   });
   return withQueueLock(() => {
-    // Re-read under the lock so a concurrently-queued record from another
-    // tab survives this write, and return the merged reality.
     const stored = loadState(state.bundle.sessionId);
-    const queued = (stored ?? state).queued.filter((item) => item.studentId !== student.id);
+    // Storage was wiped (sign-out) while we signed: persisting this record
+    // would restore student names after logout. Abandon the attestation.
+    if (stored === null) return null;
+    const queued = stored.queued.filter((item) => item.studentId !== student.id);
     const next: OfflineQueueState = {
-      bundle: state.bundle,
+      bundle: stored.bundle,
       queued: [...queued, { ...record, studentName: student.name }],
     };
     saveState(next);
@@ -167,13 +188,16 @@ export async function removeFromQueue(
 ): Promise<OfflineQueueState | null> {
   return withQueueLock(() => {
     const stored = loadState(state.bundle.sessionId);
-    const current = stored ?? state;
-    const queued = current.queued.filter((record) => record.studentId !== studentId);
-    if (queued.length === 0) {
-      clearQueue();
+    if (stored === null) {
+      clearStorageSynced();
       return null;
     }
-    const next: OfflineQueueState = { bundle: current.bundle, queued };
+    const queued = stored.queued.filter((record) => record.studentId !== studentId);
+    if (queued.length === 0) {
+      clearStorageSynced();
+      return null;
+    }
+    const next: OfflineQueueState = { bundle: stored.bundle, queued };
     saveState(next);
     return next;
   });
@@ -186,13 +210,16 @@ export async function dropSynced(
 ): Promise<OfflineQueueState | null> {
   return withQueueLock(() => {
     const stored = loadState(state.bundle.sessionId);
-    const current = stored ?? state;
-    const queued = current.queued.filter((record) => !syncedStudentIds.has(record.studentId));
-    if (queued.length === 0) {
-      clearQueue();
+    if (stored === null) {
+      clearStorageSynced();
       return null;
     }
-    const next: OfflineQueueState = { bundle: current.bundle, queued };
+    const queued = stored.queued.filter((record) => !syncedStudentIds.has(record.studentId));
+    if (queued.length === 0) {
+      clearStorageSynced();
+      return null;
+    }
+    const next: OfflineQueueState = { bundle: stored.bundle, queued };
     saveState(next);
     return next;
   });

@@ -161,7 +161,7 @@ export const completeRegistration = internalMutation({
       .query("passkey_credentials")
       .withIndex("by_credentialId", (q) => q.eq("credentialId", args.credentialId))
       .collect();
-    const existing = existingRows[0];
+    const existing = existingRows[0] ?? null;
     if (existingRows.length > 1) {
       throw new Error("duplicate credential records");
     }

@@ -13,9 +13,8 @@ import { describeConvexError, type ErrorTranslation } from "@/lib/client/describ
 import {
   dropSynced,
   enqueueStudent,
-  hasAnyUnsyncedRecords,
+  mintBundle,
   readQueue,
-  rememberBundle,
   removeFromQueue,
   settledStudentIds,
   subscribeQueueCleared,
@@ -154,24 +153,23 @@ export function OfflineKit({
 
   async function handleMint() {
     if (minting) return;
-    // Minting replaces the device queue and rotates the server key, so ANY
-    // still-unsynced record — this session's or another's — blocks it.
-    if (hasAnyUnsyncedRecords()) {
-      setError(
-        "This device still has unsynced offline records. Sync them (open that session) before authorizing again.",
-      );
-      return;
-    }
     setMinting(true);
     setError(null);
     try {
-      const bundle = await mintOfflineBundle({ actorToken, sessionId });
-      // Re-check under the queue lock: a concurrently-queued record must not
-      // be silently destroyed by the bundle overwrite.
-      const state = await rememberBundle(sessionId, {
-        sessionId: bundle.sessionId,
-        key: bundle.key,
+      // Minting replaces the device queue and rotates the server key. The
+      // lock-held check inside mintBundle refuses when ANY unsynced record
+      // exists — this session's or another's — so no queued attestation is
+      // silently destroyed by the replacement.
+      const state = await mintBundle(async () => {
+        const bundle = await mintOfflineBundle({ actorToken, sessionId });
+        return { sessionId: bundle.sessionId, key: bundle.key };
       });
+      if (state === null) {
+        setError(
+          "This device still has unsynced offline records. Sync them (open that session) before authorizing again.",
+        );
+        return;
+      }
       setQueue(state);
     } catch (cause) {
       setError(

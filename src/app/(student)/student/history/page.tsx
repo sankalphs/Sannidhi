@@ -50,8 +50,10 @@ async function loadStudentHistory(): Promise<HistoryLoadResult> {
 
 export default async function StudentHistoryPage() {
   // Authentication first: the enrollment gate reads as fully-locked when
-  // signed out, which would mask the sign-in state with enrollment steps.
-  const session = await getActiveSession();
+  // anonymous, which would mask the sign-in state with enrollment steps.
+  // Enrollment-only sessions (invite redemption in progress) still get the
+  // lock state below — they are mid-onboarding, not anonymous.
+  const session = await getActiveSession({ allowEnrollment: true });
 
   if (session === null) {
     return (

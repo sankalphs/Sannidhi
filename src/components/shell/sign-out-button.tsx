@@ -25,7 +25,7 @@ export function SignOutButton({
       // Signed offline records carry student names; leaving them behind on a
       // shared classroom device would leak them past this session.
       try {
-        clearQueue();
+        await clearQueue();
       } catch {
         // Storage can be unavailable (private mode); sign-out must still finish.
       }
