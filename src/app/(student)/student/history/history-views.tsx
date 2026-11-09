@@ -53,6 +53,7 @@ const STATE_CHIP_CLASSES: Record<HistoryRecordState, string> = {
   pending: "border-sky-500/40 bg-sky-500/15 text-sky-700 dark:text-sky-400",
   rejected: "border-red-500/40 bg-red-500/15 text-red-700 dark:text-red-400",
   corrected: "border-violet-500/40 bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  absent: "border-zinc-500/40 bg-zinc-500/15 text-zinc-700 dark:text-zinc-400",
 };
 
 const STATE_LEGEND_LABELS: Record<HistoryRecordState, string> = {
@@ -61,6 +62,7 @@ const STATE_LEGEND_LABELS: Record<HistoryRecordState, string> = {
   pending: "Pending",
   rejected: "Rejected",
   corrected: "Corrected",
+  absent: "Absent",
 };
 
 function pad(value: number): string {

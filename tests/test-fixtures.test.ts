@@ -5,34 +5,28 @@ import { describe, expect, it } from "vitest";
 
 import { institutionDayOfWeek, institutionMinutesOfDay } from "@/lib/attendance/timezone";
 
-const source = readFileSync(join(process.cwd(), "convex", "seed.ts"), "utf8");
+const source = readFileSync(join(process.cwd(), "convex", "testFixtures.ts"), "utf8");
 
-describe("convex/seed.ts", () => {
-  it("exports seedDemoData as an internal mutation", () => {
-    expect(source).toMatch(/export const seedDemoData = internalMutation\(/);
+describe("convex/testFixtures.ts", () => {
+  it("exposes reset as an internal mutation", () => {
+    expect(source).toMatch(/export const reset = internalMutation\(/);
   });
 
-  it("guards against re-seeding when institutions already exist", () => {
-    expect(source).toContain('"already-seeded"');
+  it("gates every entry point behind SANNIDHI_TEST_FIXTURES", () => {
+    expect(source).toContain('process.env.SANNIDHI_TEST_FIXTURES === "1"');
+    const resetBody = source.slice(source.indexOf("export const reset"));
+    expect(resetBody.indexOf("fixturesEnabled()")).toBeLessThan(resetBody.indexOf("deleteRows"));
+    const actorBody = source.slice(source.indexOf("export const getFixtureActor"));
+    expect(actorBody.indexOf("fixturesEnabled()")).toBeLessThan(actorBody.indexOf("ctx.db"));
   });
 
-  it("gates the clear utility behind demo mode", () => {
-    expect(source).toMatch(/export const clearDemoData = internalMutation\(/);
-    expect(source).toContain('process.env.SANNIDHI_DEMO_MODE !== "1"');
+  it("wipes every schema table before loading", () => {
+    expect(source).toContain("for (const table of ALL_TABLES)");
   });
 
-  it("gates seeding itself behind demo mode", () => {
-    const seedBody = source.slice(source.indexOf("seedDemoData"));
-    expect(seedBody.indexOf('SANNIDHI_DEMO_MODE !== "1"')).toBeLessThan(
-      seedBody.indexOf('"already-seeded"'),
-    );
-  });
-
-  it("computes today's weekday and brackets the current time for a live slot", () => {
-    // The "live today" slot must use the institution timezone (IST), not the
-    // server's zone — seed-time and read-time day math must agree.
+  it("computes today's weekday and time in the institution timezone for a live slot", () => {
     expect(source).toMatch(/const todayDayOfWeek = institutionDayOfWeek\(now\)/);
-    expect(source).toMatch(/const istMinutesOfDay = institutionMinutesOfDay\(now\)/);
+    expect(source).toMatch(/const currentMinutes = institutionMinutesOfDay\(now\)/);
     expect(source).toMatch(/dayOfWeek: todayDayOfWeek/);
     expect(source).toMatch(/startMinutes: liveStartMinutes/);
     expect(source).toMatch(/endMinutes: liveEndMinutes/);

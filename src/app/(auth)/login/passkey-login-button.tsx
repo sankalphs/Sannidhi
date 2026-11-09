@@ -34,7 +34,7 @@ function passkeysUnsupported(): boolean {
   return typeof window === "undefined" || !window.PublicKeyCredential;
 }
 
-export function PasskeyLoginButton() {
+export function PasskeyLoginButton({ next }: { next: string | null }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +45,7 @@ export function PasskeyLoginButton() {
     try {
       if (passkeysUnsupported()) {
         throw new Error(
-          "This browser does not support passkeys. Use demo access below or switch browsers.",
+          "This browser does not support passkeys. Use the USN / Email tab or switch browsers.",
         );
       }
       const optionsResponse = await fetch("/api/auth/webauthn/authenticate/options", {
@@ -63,7 +63,7 @@ export function PasskeyLoginButton() {
 
       const response = await withTimeout(
         startAuthentication({ optionsJSON: options }),
-        "Passkey sign-in timed out. Try again, or use the demo access below.",
+        "Passkey sign-in timed out. Try again, or use the USN / Email tab.",
       );
 
       const verifyResponse = await fetch("/api/auth/webauthn/authenticate/verify", {
@@ -78,7 +78,7 @@ export function PasskeyLoginButton() {
         throw new Error(payload?.error ?? "Passkey verification failed");
       }
       const result = (await verifyResponse.json()) as { redirect?: string };
-      router.push(result.redirect ?? "/");
+      router.push(next ?? result.redirect ?? "/");
       router.refresh();
     } catch (cause) {
       setError(

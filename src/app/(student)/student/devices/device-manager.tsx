@@ -1,13 +1,13 @@
 "use client";
 
 import { Loader2, ShieldCheck } from "lucide-react";
-import { startAuthentication } from "@simplewebauthn/browser";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { runPasskeyStepUp } from "@/lib/client/passkey-step-up";
 import { postJson } from "@/lib/client/post-json";
 
 import {
@@ -91,6 +91,20 @@ export function DeviceManager({
     });
   }
 
+  async function reissueCode(deviceId: string) {
+    await runDeviceOp(deviceId, async () => {
+      try {
+        const result = await postJson("/api/devices", { action: "reissue-code", deviceId });
+        const possessionCode = typeof result.code === "string" ? result.code : "";
+        setPendingCode({ deviceId, code: possessionCode });
+        setCode("");
+        setPhase("awaiting-code");
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "Could not issue a new code");
+      }
+    });
+  }
+
   async function activate(deviceId: string) {
     await runDeviceOp(deviceId, async () => {
       try {
@@ -105,7 +119,7 @@ export function DeviceManager({
   async function activateSuccessor(deviceId: string) {
     await runDeviceOp(deviceId, async () => {
       try {
-        await runStepUp();
+        await runPasskeyStepUp();
         await postJson("/api/devices", { action: "verify-successor", deviceId });
         await postJson("/api/devices", { action: "activate", deviceId });
         router.refresh();
@@ -115,24 +129,11 @@ export function DeviceManager({
     });
   }
 
-  async function runStepUp(): Promise<boolean> {
-    const options = await fetch("/api/auth/webauthn/step-up/options", { method: "POST" });
-    if (!options.ok) throw new Error("Step-up could not start");
-    const assertion = await startAuthentication({ optionsJSON: await options.json() });
-    const verification = await fetch("/api/auth/webauthn/step-up/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ response: assertion }),
-    });
-    if (!verification.ok) throw new Error("Identity re-verification failed");
-    return true;
-  }
-
   async function requestReplacement(deviceId: string) {
     await runDeviceOp(deviceId, async () => {
       try {
         if (!stepUpDone) {
-          await runStepUp();
+          await runPasskeyStepUp();
           setStepUpDone(true);
         }
         await postJson("/api/devices/replacement", { deviceId, reason });
@@ -260,7 +261,7 @@ export function DeviceManager({
               onClick={async () => {
                 setBusyDeviceId(replacementFor);
                 try {
-                  await runStepUp();
+                  await runPasskeyStepUp();
                   setStepUpDone(true);
                   setError(null);
                 } catch (cause) {
@@ -279,11 +280,10 @@ export function DeviceManager({
             </p>
           )}
           <label className="flex flex-col gap-1">
-            <span className="text-sm font-medium">Reason</span>
+            <span className="text-sm font-medium">Reason for replacement</span>
             <textarea
               className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-20 rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
               placeholder="Why does this device need replacement?"
-              aria-label="Replacement reason"
               value={reason}
               onChange={(event) => setReason(event.target.value)}
             />
@@ -315,24 +315,37 @@ export function DeviceManager({
             </p>
           ) : (
             <p className="text-muted-foreground text-sm">
-              Enter the six-digit code issued when you registered this device.
+              Enter the six-digit code issued when you registered this device. Lost it, or did it
+              expire? Issue a new code.
             </p>
           )}
-          <div className="flex items-center gap-2">
-            <Input
-              className="w-36 font-mono"
-              inputMode="numeric"
-              maxLength={6}
-              value={code}
-              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
-              placeholder="000000"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <label>
+              <span className="sr-only">Six-digit verification code</span>
+              <Input
+                className="w-36 font-mono"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                value={code}
+                onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+                placeholder="000000"
+              />
+            </label>
             <Button
               size="sm"
               disabled={code.length !== 6 || busyDeviceId !== null}
               onClick={() => verify(pendingCode.deviceId)}
             >
               Verify
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busyDeviceId !== null}
+              onClick={() => reissueCode(pendingCode.deviceId)}
+            >
+              Issue new code
             </Button>
             <Button
               variant="ghost"
@@ -351,11 +364,14 @@ export function DeviceManager({
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Register a device</h2>
         <div className="flex max-w-md items-center gap-2">
-          <Input
-            placeholder='Device label, e.g. "Pixel 9"'
-            value={label}
-            onChange={(event) => setLabel(event.target.value)}
-          />
+          <label className="flex-1">
+            <span className="sr-only">Device label</span>
+            <Input
+              placeholder='Device label, e.g. "Pixel 9"'
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+            />
+          </label>
           <Button disabled={label.trim().length === 0 || phase !== "idle"} onClick={register}>
             Register
           </Button>

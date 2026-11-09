@@ -200,6 +200,9 @@ export const startFromSlot = mutation({
 
     const slot = await ctx.db.get(args.slotId);
     if (slot === null) throw new ConvexError("timetable slot not found");
+    if (slot.facultyId !== undefined && slot.facultyId !== caller._id) {
+      throw new ConvexError("unauthorized");
+    }
     const section = await ctx.db.get(slot.sectionId);
     if (section === null) throw new ConvexError("section not found");
     const course = await ctx.db.get(section.courseId);

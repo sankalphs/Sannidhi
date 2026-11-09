@@ -7,12 +7,10 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(COOKIE_NAME)?.value;
   const session = token ? await verifySession(token) : null;
   const role = session !== null && isFullSession(session) ? session.role : null;
-  const decision = evaluateAccess(request.nextUrl.pathname, role);
+  const { pathname, search } = request.nextUrl;
+  const decision = evaluateAccess(pathname, role, search);
   if (decision.status === "redirect") {
-    const url = request.nextUrl.clone();
-    url.pathname = decision.to;
-    url.search = "";
-    return NextResponse.redirect(url);
+    return NextResponse.redirect(new URL(decision.to, request.url));
   }
   return NextResponse.next();
 }

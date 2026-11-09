@@ -57,8 +57,8 @@ export default async function AdminDevicesPage() {
     return (
       <EmptyState
         icon={Smartphone}
-        title="No institution yet"
-        description="Run `bun run seed` against your local Convex backend to create demo data."
+        title="No institution linked"
+        description="Your account is not linked to an institution. Ask your Sannidhi operator to run institution setup."
       />
     );
   }

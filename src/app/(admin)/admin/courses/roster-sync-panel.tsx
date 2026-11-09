@@ -29,15 +29,27 @@ function describeError(cause: unknown): string {
 
 /**
  * SIS/LMS roster sync: paste or upload a CSV, preview the exact diff against
- * the institution's catalog, then apply it idempotently. Students without an
- * account receive invites; nothing existing is ever overwritten.
+ * the institution's catalog, then confirm to apply it idempotently. Apply is
+ * only offered for the CSV text that was previewed. Students without an
+ * account get invites; nothing existing is ever overwritten. `showSample`
+ * offers the bundled sample dataset (development only).
  */
-export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; isAdmin: boolean }) {
+export function RosterSyncPanel({
+  actorToken,
+  isAdmin,
+  showSample,
+}: {
+  actorToken: string;
+  isAdmin: boolean;
+  showSample: boolean;
+}) {
   const router = useRouter();
   const convex = useConvex();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [csvText, setCsvText] = useState("");
   const [preview, setPreview] = useState<RosterDiff | null>(null);
+  const [previewedText, setPreviewedText] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState<ApplyResult | null>(null);
@@ -47,6 +59,7 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
 
   const parsed = useMemo(() => parseRosterCsv(csvText), [csvText]);
   const hasRows = parsed.rows.length > 0;
+  const previewIsCurrent = preview !== null && previewedText === csvText;
 
   async function loadSample() {
     setError(null);
@@ -66,6 +79,8 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
     setPreviewing(true);
     setError(null);
     setApplied(null);
+    setConfirming(false);
+    const text = csvText;
     try {
       // A dropped websocket can leave the one-shot query pending forever;
       // racing a timeout re-enables the button so the user can retry. The
@@ -81,6 +96,7 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
         ),
       ]);
       setPreview(result.diff);
+      setPreviewedText(text);
     } catch (cause) {
       setError(describeError(cause));
     } finally {
@@ -89,13 +105,15 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
   }
 
   async function apply() {
-    if (applying || !hasRows) return;
+    if (applying || !hasRows || !previewIsCurrent) return;
     setApplying(true);
     setError(null);
     try {
       const result = await applySync({ actorToken, rows: parsed.rows });
       setApplied(result as ApplyResult);
       setPreview(null);
+      setPreviewedText(null);
+      setConfirming(false);
       setCsvText("");
       if (fileInputRef.current) fileInputRef.current.value = "";
       router.refresh();
@@ -132,35 +150,46 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
             }}
           />
         </label>
-        <Button variant="outline" size="sm" onClick={loadSample} disabled={previewing || applying}>
-          Load sample dataset
-        </Button>
+        {showSample ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={loadSample}
+            disabled={previewing || applying}
+          >
+            Load sample dataset
+          </Button>
+        ) : null}
         <Button size="sm" onClick={runPreview} disabled={!hasRows || previewing || applying}>
           {previewing ? <Loader2 className="animate-spin" /> : null}
           Preview sync
         </Button>
         {isAdmin ? (
-          <Button size="sm" onClick={apply} disabled={!hasRows || applying || previewing}>
-            {applying ? <Loader2 className="animate-spin" /> : null}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setConfirming(true)}
+            disabled={!hasRows || !previewIsCurrent || applying || previewing}
+          >
             Apply sync
           </Button>
         ) : null}
       </div>
 
-      <label className="flex flex-col gap-1">
-        <span className="text-sm font-medium">Roster CSV</span>
-        <textarea
-          value={csvText}
-          onChange={(event) => setCsvText(event.target.value)}
-          rows={6}
-          spellCheck={false}
-          aria-label="Roster CSV"
-          placeholder={
-            "department_code,department_name,course_code,course_title,section_name,term,student_email,student_name,usn"
-          }
-          className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
-        />
+      <label htmlFor="roster-csv" className="text-sm font-medium">
+        Roster CSV
       </label>
+      <textarea
+        id="roster-csv"
+        value={csvText}
+        onChange={(event) => setCsvText(event.target.value)}
+        rows={6}
+        spellCheck={false}
+        placeholder={
+          "department_code,department_name,course_code,course_title,section_name,term,student_email,student_name,usn"
+        }
+        className="border-input focus-visible:border-ring focus-visible:ring-ring/50 w-full rounded-md border bg-transparent px-3 py-2 font-mono text-xs shadow-xs outline-none focus-visible:ring-[3px]"
+      />
 
       {parsed.issues.length > 0 ? (
         <ul className="text-destructive flex list-disc flex-col gap-1 pl-5 text-xs">
@@ -261,6 +290,28 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
               Preview only — institution administrators apply roster syncs.
             </p>
           ) : null}
+          {isAdmin && !previewIsCurrent ? (
+            <p className="text-muted-foreground text-xs">
+              The CSV changed since this preview — preview again before applying.
+            </p>
+          ) : null}
+          {isAdmin && confirming && previewIsCurrent ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+              <span>Apply exactly the changes above to the catalog?</span>
+              <Button size="sm" onClick={apply} disabled={applying}>
+                {applying ? <Loader2 className="animate-spin" /> : null}
+                Confirm apply
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirming(false)}
+                disabled={applying}
+              >
+                Cancel
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -289,10 +340,13 @@ export function RosterSyncPanel({ actorToken, isAdmin }: { actorToken: string; i
               ))}
             </ul>
           ) : null}
-          <p className="text-muted-foreground text-xs">
-            Invites are pending on the Users page — each student receives a one-time enrollment
-            link.
-          </p>
+          {applied.invitesCreated > 0 ? (
+            <p className="text-muted-foreground text-xs">
+              {applied.invitesCreated} student{applied.invitesCreated === 1 ? " was" : "s were"}{" "}
+              invited — Sannidhi does not email them, so share their activation links from the Users
+              page (Copy new link).
+            </p>
+          ) : null}
         </div>
       ) : null}
     </section>

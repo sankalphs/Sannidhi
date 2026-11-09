@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -90,7 +90,7 @@ test.afterAll(async () => {
   await facultyContext.close().catch(() => {});
   await studentContext.close().catch(() => {});
   await adminContext.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 /**
@@ -102,6 +102,7 @@ async function rotateFacultySession(): Promise<void> {
   const close = facultyPage.getByTestId("close-session");
   await expect(close).toBeVisible({ timeout: 30_000 });
   await close.click();
+  await facultyPage.getByTestId("confirm-close-session").click();
   // The close mutation is fired void; wait for the closed state (the restart
   // control appearing) before a new guest session can start cleanly.
   await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });

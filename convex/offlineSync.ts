@@ -8,7 +8,12 @@ import {
   outcomeToAttendanceState,
   type ResolvedRiskPolicy,
 } from "../src/lib/risk";
-import { mintBundleKey, nonceHash, verifySignature } from "../src/lib/offline/bundle";
+import {
+  isOfflineSyncOpen,
+  mintBundleKey,
+  nonceHash,
+  verifySignature,
+} from "../src/lib/offline/bundle";
 import type { Decision, DecisionOutcome } from "../src/lib/decision";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -142,8 +147,10 @@ export const syncOfflineBatch = mutation({
     // Session authorization is batch-level and fails closed: every record's
     // trust anchors in the caller owning that session's bundle key, and the
     // per-item status vocabulary has no slot for authorization failures.
-    const now = Date.now();
+    // A session's queue stays syncable for a bounded grace after its window,
+    // so a stale bundle key cannot add attendance to a long-settled class.
     const sessions = new Map<Id<"class_sessions">, Doc<"class_sessions">>();
+    const now = Date.now();
     for (const record of args.records) {
       if (sessions.has(record.sessionId)) continue;
       const session = await ctx.db.get(record.sessionId);
@@ -154,9 +161,9 @@ export const syncOfflineBatch = mutation({
       ) {
         throw new ConvexError("unauthorized");
       }
-      // The bundle pre-authorizes capture within the session window only:
-      // once the window has passed, stale keys can no longer append rows.
-      if (session.windowEndsAt <= now) throw new ConvexError("session_window_ended");
+      if (!isOfflineSyncOpen(session.windowEndsAt, now)) {
+        throw new ConvexError("offline_sync_window_closed");
+      }
       sessions.set(record.sessionId, session);
     }
 

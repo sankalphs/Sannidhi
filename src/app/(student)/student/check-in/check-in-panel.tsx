@@ -3,6 +3,7 @@
 import { api } from "../../../../../convex/_generated/api";
 import { useMutation } from "convex/react";
 import { Loader2, ScanLine } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CHECK_IN_PATH, extractCheckInCode } from "@/lib/client/check-in-link";
 
 import { OutcomeScreen, type CheckInOutcome } from "./outcome-screen";
 import { StepUpChallenge, type StepUpChallengeRef } from "./step-up-challenge";
@@ -76,13 +78,20 @@ function useSecondsUntil(target: number): number | null {
   return secondsLeft;
 }
 
+/**
+ * `linkedCode` is the `?code=` of a class QR opened by the phone camera; it is
+ * submitted once, as soon as the location check has settled.
+ */
 export function CheckInPanel({
   actorToken,
   active,
+  linkedCode,
 }: {
   actorToken: string;
   active: ActiveClassSession | null;
+  linkedCode: string | null;
 }) {
+  const router = useRouter();
   const redeemChallenge = useMutation(api.checkin.redeemChallenge);
   const [outcome, setOutcome] = useState<CheckInOutcome | null>(null);
   const [stepUp, setStepUp] = useState<StepUpOutcome | null>(null);
@@ -91,6 +100,7 @@ export function CheckInPanel({
   const [cameraState, setCameraState] = useState<CameraState>("off");
   const [unavailableReason, setUnavailableReason] = useState<CameraUnavailableReason | null>(null);
   const [pendingToken, setPendingToken] = useState<string | null>(null);
+  const [deepLinkCode, setDeepLinkCode] = useState(linkedCode);
   const [geo, setGeo] = useState<GeoState | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -125,7 +135,7 @@ export function CheckInPanel({
 
   const submit = useCallback(
     async (token: string) => {
-      const trimmed = token.trim();
+      const trimmed = extractCheckInCode(token);
       if (trimmed.length === 0 || submitting) return;
       setSubmitting(true);
       try {
@@ -190,6 +200,17 @@ export function CheckInPanel({
     },
     [actorToken, redeemChallenge, submitting, geo],
   );
+
+  // Drop the code from the address bar so a refresh doesn't resubmit it.
+  useEffect(() => {
+    if (linkedCode !== null) router.replace(CHECK_IN_PATH, { scroll: false });
+  }, [linkedCode, router]);
+
+  useEffect(() => {
+    if (deepLinkCode === null || geo === null) return;
+    setDeepLinkCode(null);
+    setPendingToken(deepLinkCode);
+  }, [deepLinkCode, geo]);
 
   useEffect(() => {
     if (pendingToken === null) return;
@@ -319,7 +340,7 @@ export function CheckInPanel({
             <ScanLine /> Scan the class QR
           </CardTitle>
           <CardDescription>
-            Point your camera at the rotating QR shown in class, or paste the check-in code below.
+            Scan the class QR with your phone camera, or use the scanner below.
           </CardDescription>
           <CardAction>
             <Badge variant="secondary" data-testid="geo-status">
@@ -331,8 +352,8 @@ export function CheckInPanel({
           {cameraState === "unavailable" ? (
             <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-sm">
               {unavailableReason === "scanner_unsupported"
-                ? "QR scanning isn't supported in this browser — copy the code shown under the class QR and paste it below."
-                : "Camera is unavailable on this device — copy the code shown under the class QR and paste it below."}
+                ? "This browser can't scan QR codes — scan the class QR with your phone camera instead, or paste a check-in link below."
+                : "Camera is unavailable here — scan the class QR with your phone camera instead, or paste a check-in link below."}
             </p>
           ) : (
             <div className="bg-muted relative aspect-video overflow-hidden rounded-lg border">
@@ -352,10 +373,10 @@ export function CheckInPanel({
             }}
           >
             <Input
-              aria-label="Paste check-in code"
+              aria-label="Paste check-in link or code"
               className="font-mono"
               data-testid="checkin-input"
-              placeholder="Paste check-in code"
+              placeholder="Paste check-in link or code"
               value={code}
               onChange={(event) => setCode(event.target.value)}
               disabled={submitting}

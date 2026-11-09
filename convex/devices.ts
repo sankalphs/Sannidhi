@@ -155,6 +155,37 @@ async function findPendingRequestForDevice(
   );
 }
 
+/**
+ * Stores a fresh possession code for `deviceId` and returns the plaintext once.
+ * Any earlier unconsumed code for the device is expired first, so only the
+ * newest code can ever verify.
+ */
+async function issuePossessionCode(
+  ctx: MutationCtx,
+  deviceId: Id<"devices">,
+  now: number,
+): Promise<{ code: string; expiresAt: number }> {
+  const prior = await ctx.db
+    .query("device_verifications")
+    .withIndex("by_device", (q) => q.eq("deviceId", deviceId))
+    .collect();
+  for (const row of prior) {
+    if (row.consumedAt === undefined && row.expiresAt > now) {
+      await ctx.db.patch(row._id, { expiresAt: now });
+    }
+  }
+
+  const code = generatePossessionCode();
+  const expiresAt = now + POSSESSION_CODE_TTL_MS;
+  await ctx.db.insert("device_verifications", {
+    deviceId,
+    codeHash: await hashPossessionCode(code),
+    expiresAt,
+    attempts: 0,
+  });
+  return { code, expiresAt };
+}
+
 export const registerDevice = mutation({
   args: { actorToken: v.string(), label: v.string(), platform: v.optional(v.string()) },
   handler: async (ctx, args) => {
@@ -180,13 +211,7 @@ export const registerDevice = mutation({
       stateChangedAt: now,
     });
 
-    const code = generatePossessionCode();
-    await ctx.db.insert("device_verifications", {
-      deviceId,
-      codeHash: await hashPossessionCode(code),
-      expiresAt: now + POSSESSION_CODE_TTL_MS,
-      attempts: 0,
-    });
+    const { code, expiresAt } = await issuePossessionCode(ctx, deviceId, now);
 
     await appendDeviceEvent(ctx, {
       institutionId: user.institutionId,
@@ -197,7 +222,28 @@ export const registerDevice = mutation({
       payload: { label },
     });
 
-    return { deviceId, code, expiresAt: now + POSSESSION_CODE_TTL_MS };
+    return { deviceId, code, expiresAt };
+  },
+});
+
+/**
+ * Replaces a lost, expired, or exhausted possession code for the caller's own
+ * unverified device. Replacement successors verify by passkey, not by code.
+ */
+export const reissuePossessionCode = mutation({
+  args: { actorToken: v.string(), deviceId: v.id("devices") },
+  handler: async (ctx, args) => {
+    const claims = await requireActor(ctx, args.actorToken);
+    if (claims.role !== "student") throw new ConvexError("only students register devices");
+    if (claims.user.status === "suspended") throw new ConvexError("account suspended");
+
+    const device = await getDeviceOrThrow(ctx, args.deviceId);
+    if (device.userId !== claims.user._id) throw new ConvexError("unauthorized");
+    if (device.state !== "new" || device.replacesDeviceId !== undefined) {
+      throw new ConvexError("device is not awaiting a possession code");
+    }
+
+    return await issuePossessionCode(ctx, device._id, Date.now());
   },
 });
 

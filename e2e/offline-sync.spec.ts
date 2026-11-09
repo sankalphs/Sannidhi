@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Page } from "@playwright/test";
 
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -48,7 +48,7 @@ test.beforeAll(async ({ browser }) => {
 test.afterAll(async () => {
   await facultyContext.close().catch(() => {});
   await adminContext.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 test("offline capture syncs through the same seam and dedupes replays", async () => {

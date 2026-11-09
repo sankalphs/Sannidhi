@@ -110,6 +110,25 @@ export const getSessionStepUpStatus = query({
   },
 });
 
+/** Revokes every active session for a user — used when an admin changes their role or suspends them. */
+export const revokeAllForUser = internalMutation({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const sessions = await ctx.db
+      .query("sessions")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .collect();
+    let count = 0;
+    for (const session of sessions) {
+      if (!isActiveSession(session, now)) continue;
+      await ctx.db.patch(session._id, { revokedAt: now });
+      count += 1;
+    }
+    return count;
+  },
+});
+
 export const getSessionStatus = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {

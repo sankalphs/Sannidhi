@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Young_Serif } from "next/font/google";
 
 import { ConvexClientProvider } from "@/components/shell/convex-provider";
-import { DemoBanner } from "@/components/shell/demo-banner";
+import { DevLoginBanner } from "@/components/shell/dev-login-banner";
 
 import "./globals.css";
 
@@ -65,7 +65,7 @@ export default function RootLayout({
         >
           Skip to content
         </a>
-        <DemoBanner />
+        <DevLoginBanner />
         <ConvexClientProvider>{children}</ConvexClientProvider>
       </body>
     </html>

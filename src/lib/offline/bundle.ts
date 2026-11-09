@@ -10,8 +10,8 @@ import { canonicalEventJson } from "@/lib/ledger/hash";
  *    random `nonce` (unique per queued record, never reused) and the device
  *    clock as `capturedAt`, then `signRecord(key, record)` and persist the
  *    `SignedOfflineRecord`.
- * 3. Back online: send the queued signed records to
- *    `syncOfflineBatch(actorToken, records)`. The server re-verifies each HMAC
+ * 3. Back online, within OFFLINE_SYNC_GRACE_MS of the session's window end:
+ *    send the queued signed records to `syncOfflineBatch(actorToken, records)`. The server re-verifies each HMAC
  *    against the key it stored at mint time, dedupes replays via
  *    `nonceHash(sessionId, nonce)`, and appends survivors to the same ledger
  *    append seam online check-in uses, tagged origin "offline-faculty".
@@ -37,6 +37,14 @@ export type OfflineRecord = {
 export type SignedOfflineRecord = OfflineRecord & { signature: string };
 
 const BUNDLE_KEY_BYTES = 32;
+
+/** How long after a session's window ends its offline queue may still sync. */
+export const OFFLINE_SYNC_GRACE_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Whether records for a session whose window ends at `windowEndsAt` may still sync at `now`. */
+export function isOfflineSyncOpen(windowEndsAt: number, now: number): boolean {
+  return now <= windowEndsAt + OFFLINE_SYNC_GRACE_MS;
+}
 
 function bytesToHex(bytes: Uint8Array): string {
   let hex = "";

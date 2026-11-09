@@ -29,6 +29,11 @@ export const expireStaleChallenges = internalMutation({
         .take(BATCH_SIZE);
       if (batch.length === 0) break;
       for (const challenge of batch) {
+        const redemptions = await ctx.db
+          .query("session_challenge_redemptions")
+          .withIndex("by_challenge_student", (q) => q.eq("challengeId", challenge._id))
+          .collect();
+        for (const redemption of redemptions) await ctx.db.delete(redemption._id);
         await ctx.db.delete(challenge._id);
         prunedChallenges += 1;
         if (prunedChallenges >= MAX_CHALLENGE_PRUNES_PER_RUN) break pruneLoop;

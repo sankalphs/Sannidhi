@@ -75,7 +75,7 @@ Web app first (students, faculty, admin), native mobile apps in a later phase re
 
 ## Previous milestones
 
-> **Phase 6 merged (PR #24)** — analytics & insights for investigation and early intervention. A pure analytics core (`src/lib/analytics/`) projects the Event Ledger's own records into attendance trajectories (percentage, trend, must-attend math reusing `summarizeAttendance`), subject-level trends with late-arrival counting, proxy-attempt summaries over reason codes, and rolling daily/weekly/monthly report windows — no direct row access anywhere, and every anomaly alert carries explainable factors. A daily `scanReviewAlerts` cron (plus an admin-triggered `triggerScan`) derives `low_attendance`, `proxy_attempt`, and `verification_anomaly` alerts into a `review_alerts` inbox served to admins and department authority; resolving an alert is acknowledge-or-dismiss with a ledger-stamped trail, and nothing ever acts on a student automatically. Surfaces: `/admin/analytics` (stat cards, trajectory table, subject trends, proxy/verification-anomaly panels), `/admin/review` (the inbox with live convex sync), and `/admin/reports` (rolling windows with hand-rolled CSV/PDF exports — zero new dependencies). The demo seed now backfills a full 12-week term — 48 closed sessions with 84 hash-chained attendance events replicating the exact seam math, self-verified at seed time — so trajectories, tardiness, proxy dashboards, and exports all render against realistic history without touching the seeded live slot or e2e resume flows.
+> **Phase 6 merged (PR #24)** — analytics & insights for investigation and early intervention. A pure analytics core (`src/lib/analytics/`) projects the Event Ledger's own records into attendance trajectories (percentage, trend, must-attend math reusing `summarizeAttendance`), subject-level trends with late-arrival counting, proxy-attempt summaries over reason codes, and rolling daily/weekly/monthly report windows — no direct row access anywhere, and every anomaly alert carries explainable factors. A daily `scanReviewAlerts` cron (plus an admin-triggered `triggerScan`) derives `low_attendance`, `proxy_attempt`, and `verification_anomaly` alerts into a `review_alerts` inbox served to admins and department authority; resolving an alert is acknowledge-or-dismiss with a ledger-stamped trail, and nothing ever acts on a student automatically. Surfaces: `/admin/analytics` (stat cards, trajectory table, subject trends, proxy/verification-anomaly panels), `/admin/review` (the inbox with live convex sync), and `/admin/reports` (rolling windows with hand-rolled CSV/PDF exports — zero new dependencies). The local test fixtures backfill a full 12-week term — 48 closed sessions with 84 hash-chained attendance events replicating the exact seam math, self-verified at load time — so analytics can be exercised against realistic history.
 >
 
 ## Local development
@@ -107,18 +107,48 @@ Run the app:
 bun run dev
 ```
 
-Setting `ENABLE_DEV_LOGIN=1` in `.env.local` enables the role switcher on `/login`.
-
-For public demo deployments (including production), `ENABLE_DEMO_LOGIN=1` exposes the same
-persona picker to visitors with seeded data. Keep it off for real institutional deployments —
-demo sessions carry full role authority. The Convex deployment also needs `SANNIDHI_DEMO_MODE=1`
-plus seeded demo data (`bun run seed`) for student and faculty personas to resolve.
-
-Seed demo data against a running Convex backend:
+Load the local test fixtures (a fictional institution with users, courses, a live timetable
+slot, and a term of history) — this wipes the local deployment first:
 
 ```sh
-bun run seed
+bunx convex env set SANNIDHI_TEST_FIXTURES 1
+bunx convex env set SANNIDHI_OPERATOR_EMAILS ananya.iyer@sit.edu.in  # fixture admin reviews access requests
+bun run fixtures
 ```
+
+Setting `ENABLE_DEV_LOGIN=1` in `.env.local` adds a role switcher to `/login` that signs in as
+the fixture users. It is hard-disabled in production builds (Vercel previews excepted).
+
+## Production setup
+
+A real deployment has no fixtures and no role switcher. Each step below runs once with the
+production deploy key (`CONVEX_DEPLOY_KEY=… bunx convex run …`) or from the Convex dashboard;
+these are internal functions, unreachable from the browser.
+
+1. **Set Convex env vars:** `SESSION_SECRET` (32+ random bytes, same value as the Vercel env)
+   and `NEXT_PUBLIC_APP_URL` (the public origin, e.g. `https://sannidhi-six.vercel.app`). Never
+   set `SANNIDHI_TEST_FIXTURES` here. Set `SANNIDHI_OPERATOR_EMAILS` (comma-separated) to the
+   admins who may review onboarding access requests; other admins never see that queue.
+2. **Clear old demo data** (only if this deployment ever ran the demo seed; irreversible):
+
+   ```sh
+   bunx convex run setup:wipeAllData '{"confirm":"delete-all-data"}'
+   ```
+
+3. **Create the institution and its first admin:**
+
+   ```sh
+   bunx convex run setup:bootstrap '{"institutionName":"Your College","institutionCode":"YC","adminName":"Jane Admin","adminEmail":"jane@yourcollege.edu"}'
+   ```
+
+   Open `NEXT_PUBLIC_APP_URL` + the returned `invitePath` on the admin's device to register a
+   passkey. The link is single-use and expires in 7 days; `setup:issueAdminInvite` (same args
+   minus `institutionName`) issues a fresh one, also for an admin who lost their passkeys.
+4. **In the app, as that admin:** import the roster under *Courses & sections* (departments,
+   courses, sections, students), invite faculty under *Users*, then add rooms and weekly slots
+   under *Venues & timetable*. Share invite links with people directly.
+5. **Remove** `ENABLE_DEMO_LOGIN` / `ENABLE_DEV_LOGIN` from the Vercel production environment
+   if they are still set (both are inert in production now).
 
 ### Scripts
 
@@ -130,4 +160,5 @@ bun run seed
 | `bun run test:e2e` | Playwright end-to-end tests |
 | `bun run format` | Prettier write |
 | `bun run format:check` | Prettier check |
+| `bun run fixtures` | Wipe the local deployment and load test fixtures |
 | `bun run build` | Production build |

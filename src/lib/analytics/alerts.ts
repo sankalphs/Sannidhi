@@ -14,6 +14,20 @@ export const ANOMALY_ALERT_THRESHOLD = 3;
 
 export type DerivedAlert = { kind: ReviewAlertKind; factors: string[] };
 
+/**
+ * Whether a reviewer may see and resolve a student's alerts: admins cover the
+ * whole institution, department authorities only students who share one of
+ * their departments (users.departmentIds). No student means no department.
+ */
+export function canReviewStudentAlert(
+  reviewer: { role: string; departmentIds?: readonly string[] },
+  student: { departmentIds?: readonly string[] } | null,
+): boolean {
+  if (reviewer.role !== "department_authority") return true;
+  const own = reviewer.departmentIds ?? [];
+  return (student?.departmentIds ?? []).some((departmentId) => own.includes(departmentId));
+}
+
 /** Dedupes while preserving first-seen order. */
 function uniqueOrdered(factors: string[]): string[] {
   return Array.from(new Set(factors));

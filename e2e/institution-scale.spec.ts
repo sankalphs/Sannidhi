@@ -1,6 +1,6 @@
 import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -42,7 +42,7 @@ test.afterAll(async () => {
   await adminContext.close().catch(() => {});
   await facultyContext.close().catch(() => {});
   await studentContext.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 function institutionCard(page: Page) {
@@ -177,8 +177,8 @@ test("departments create, list, and carry policy scopes", async () => {
   const manager = adminPage.locator("section", { hasText: "Multi-department administration" });
   await pollFillSave(
     [
-      [manager.getByLabel("Code"), "CSE"],
-      [manager.getByLabel("Name"), "Computer Science & Engineering"],
+      [manager.getByLabel("Code", { exact: true }), "CSE"],
+      [manager.getByLabel("Name", { exact: true }), "Computer Science & Engineering"],
     ],
     manager.getByRole("button", { name: "Create department" }),
     departmentCard(adminPage, "CSE"),
@@ -262,6 +262,10 @@ test("roster sync previews and applies the sample dataset idempotently", async (
 
   await pollClick(
     panel.getByRole("button", { name: "Apply sync" }),
+    panel.getByRole("button", { name: "Confirm apply" }),
+  );
+  await pollClick(
+    panel.getByRole("button", { name: "Confirm apply" }),
     panel.getByRole("heading", { name: "Sync applied", exact: true }),
     120_000,
   );
@@ -328,6 +332,7 @@ test("strict venue policy escalates a far-away check-in to faculty review", asyn
     const close = facultyPage.getByTestId("close-session");
     await expect(close).toBeVisible({ timeout: 30_000 });
     await close.click();
+    await facultyPage.getByTestId("confirm-close-session").click();
     await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });
   }
 

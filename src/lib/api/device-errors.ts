@@ -22,12 +22,23 @@ const ERROR_MAP: Array<{ pattern: RegExp; mapped: MappedError }> = [
     mapped: { status: 403, message: "Forbidden" },
   },
   {
-    pattern: /challenge invalid or expired|verification (expired|consumed|attempts-exhausted)/i,
+    pattern: /challenge invalid or expired/i,
     mapped: { status: 400, message: "Verification expired or invalid. Please start again." },
+  },
+  {
+    pattern: /verification (expired|consumed|attempts-exhausted)|no verification pending/i,
+    mapped: {
+      status: 400,
+      message: "This code has expired or is used up. Issue a new code and try again.",
+    },
   },
   {
     pattern: /^incorrect code$/,
     mapped: { status: 400, message: "Incorrect verification code. Check the code and try again." },
+  },
+  {
+    pattern: /device is not awaiting a possession code/i,
+    mapped: { status: 409, message: "This device no longer needs a verification code." },
   },
   {
     pattern: /another active device already exists/i,

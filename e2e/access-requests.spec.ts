@@ -1,3 +1,5 @@
+// The review half needs the fixture admin (ananya.iyer@sit.edu.in) listed as a
+// platform operator: `bunx convex env set SANNIDHI_OPERATOR_EMAILS ananya.iyer@sit.edu.in`.
 import { expect, test } from "@playwright/test";
 
 test("institutions can request access and admins review the queue", async ({ page }) => {
@@ -32,7 +34,7 @@ test("the request-access form rejects a blank submission", async ({ page }) => {
   await expect(page.getByText("Request received")).toHaveCount(0);
 });
 
-test("the login page highlights the requested persona and demo login reaches the panel", async ({
+test("the login page highlights the requested persona and dev login reaches the panel", async ({
   page,
 }) => {
   await page.goto("/login?as=student");

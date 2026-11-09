@@ -5,7 +5,7 @@ import {
   installDeniedCamera,
   installStaticCamera,
 } from "./helpers/fake-camera";
-import { reseedDemoData } from "./global-setup";
+import { resetFixtures } from "./global-setup";
 
 test.describe.configure({ mode: "serial" });
 
@@ -52,6 +52,7 @@ async function rotateFacultySession(): Promise<void> {
   const close = facultyPage.getByTestId("close-session");
   await expect(close).toBeVisible({ timeout: 15_000 });
   await close.click();
+  await facultyPage.getByTestId("confirm-close-session").click();
   // The close mutation is fired void; wait for the closed state (the restart
   // control appearing) before a new guest session can start cleanly.
   await expect(facultyPage.getByTestId("restart-session")).toBeVisible({ timeout: 30_000 });
@@ -183,7 +184,7 @@ test.afterAll(async () => {
   await studentContext.close().catch(() => {});
   await staticContext?.close().catch(() => {});
   await deniedContext?.close().catch(() => {});
-  reseedDemoData();
+  resetFixtures();
 });
 
 test("step-up: animated capture completes the challenge and verifies", async () => {

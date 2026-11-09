@@ -46,8 +46,6 @@ const PANELS = [
       "Attendance per subject, with threshold projections",
       "File corrections, exemptions, and on-duty requests",
     ],
-    href: "/login?as=student",
-    cta: "Explore the student panel",
   },
   {
     eyebrow: "Faculty panel",
@@ -59,8 +57,6 @@ const PANELS = [
       "A live board with reason codes per check-in",
       "Spot re-checks and manual overrides, fully audited",
     ],
-    href: "/login?as=faculty",
-    cta: "Explore the faculty panel",
   },
   {
     eyebrow: "Admin panel",
@@ -72,8 +68,6 @@ const PANELS = [
       "Device approvals and replacement flows",
       "Course, section, and policy controls",
     ],
-    href: "/login?as=admin",
-    cta: "Explore the admin panel",
   },
   {
     eyebrow: "Auditor panel",
@@ -85,8 +79,6 @@ const PANELS = [
       "Decision evidence with reason codes",
       "Corrections that link forward, never erase",
     ],
-    href: "/login?as=auditor",
-    cta: "Explore the auditor panel",
   },
 ];
 
@@ -217,15 +209,13 @@ export default function Home() {
               </h2>
               <p className="text-muted-foreground">
                 Every role gets its own surface with exactly the powers it needs — and nothing more.
-                Demo access lets you walk each one with seeded data.
               </p>
             </div>
             <div className="bg-border/70 mt-10 grid gap-px overflow-hidden rounded-xl border md:grid-cols-2">
               {PANELS.map((panel, index) => (
-                <Link
+                <div
                   key={panel.eyebrow}
-                  href={panel.href}
-                  className="group hover:bg-accent active:bg-accent/80 bg-card focus-visible:bg-accent relative flex flex-col gap-4 p-6 transition-colors focus-visible:outline-none sm:p-8"
+                  className="bg-card relative flex flex-col gap-4 p-6 sm:p-8"
                 >
                   <span
                     className="text-muted-foreground absolute top-6 right-6 font-mono text-[11px] sm:top-8 sm:right-8"
@@ -251,11 +241,7 @@ export default function Home() {
                       </li>
                     ))}
                   </ul>
-                  <span className="text-primary mt-3 inline-flex items-center gap-1.5 text-sm font-medium">
-                    {panel.cta}
-                    <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                </Link>
+                </div>
               ))}
             </div>
           </div>

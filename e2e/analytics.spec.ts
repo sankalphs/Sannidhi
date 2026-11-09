@@ -74,7 +74,7 @@ test("early-warning scan routes alerts into the human-review inbox", async ({ pa
   await expect(page.getByTestId("run-scan")).toBeVisible();
 
   await page.getByTestId("run-scan").click();
-  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts/, {
+  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts?/, {
     timeout: 30_000,
   });
 
@@ -102,7 +102,7 @@ test("acknowledged and dismissed alerts stay in the inbox history", async ({ pag
   await expect(inboxSummary).toBeVisible();
   if (!(await inboxSummary.textContent())?.includes("4 open")) {
     await page.getByTestId("run-scan").click();
-    await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts/, {
+    await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts?/, {
       timeout: 30_000,
     });
     await expect(inboxSummary).toContainText("4 open", { timeout: 30_000 });
@@ -129,7 +129,7 @@ test("acknowledged and dismissed alerts stay in the inbox history", async ({ pag
   });
 
   await page.getByTestId("run-scan").click();
-  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts/, {
+  await expect(page.getByTestId("scan-result")).toContainText(/Scan created \d+ alerts?/, {
     timeout: 30_000,
   });
   await expect(inboxSummary).toContainText("4 open · 1 acknowledged · 1 dismissed", {
@@ -158,7 +158,10 @@ test("reports render rolling windows with downloadable exports", async ({ page }
   const reportSummary = page.getByTestId("report-summary");
   await expect(reportSummary).toContainText("Past 7 days");
   await expect(reportSummary).toContainText("4 verified");
-  await expect(page.getByTestId("report-row")).toHaveCount(4);
+  // Diya missed every class in the newest term week: absences are synthesized
+  // from closed sessions she left no event in, one row each.
+  await expect(reportSummary).toContainText("4 absent");
+  await expect(page.getByTestId("report-row")).toHaveCount(8);
 
   const csvDownload = page.waitForEvent("download");
   await page.getByTestId("export-csv").click();
@@ -176,11 +179,12 @@ test("reports render rolling windows with downloadable exports", async ({ page }
   await expect(reportSummary).toContainText(/(19|2\d) verified/);
   await expect(reportSummary).toContainText(/[34] flagged/);
   await expect(reportSummary).toContainText("0 rejected");
+  await expect(reportSummary).toContainText("9 absent");
   await expect(reportSummary).toContainText("0 pending");
   await expect(page.getByTestId("report-row")).not.toHaveCount(0);
   const monthlyRowCount = await page.getByTestId("report-row").count();
-  expect(monthlyRowCount).toBeGreaterThanOrEqual(23);
-  expect(monthlyRowCount).toBeLessThanOrEqual(27);
+  expect(monthlyRowCount).toBeGreaterThanOrEqual(32);
+  expect(monthlyRowCount).toBeLessThanOrEqual(36);
 });
 
 test("students cannot reach the analytics surfaces", async ({ page }) => {

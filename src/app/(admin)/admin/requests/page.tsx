@@ -46,6 +46,15 @@ export default async function AdminAccessRequestsPage() {
     role: session.role,
     ...(session.sid !== undefined ? { sid: session.sid } : {}),
   });
+  if (!(await client.query(api.accessRequests.canReview, { actorToken }))) {
+    return (
+      <EmptyState
+        icon={Inbox}
+        title="Operator access required"
+        description="Onboarding requests from new institutions are reviewed by Sannidhi platform operators."
+      />
+    );
+  }
   const requests = await client.query(api.accessRequests.list, { actorToken });
   const newCount = requests.filter((request) => request.status === "new").length;
 

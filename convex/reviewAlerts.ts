@@ -3,6 +3,7 @@ import { ConvexError, v } from "convex/values";
 
 import {
   analyzeTrajectory,
+  canReviewStudentAlert,
   deriveAlerts,
   PROXY_LOOKBACK_DAYS,
   summarizeProxyAttempts,
@@ -87,22 +88,28 @@ async function loadStudents(ctx: MutationCtx, institutionId: Id<"institutions">)
 }
 
 /**
- * Early-warning scan: derives investigation alerts from ledger projections
- * only. Idempotent — an open alert of the same kind for the same student is
- * never duplicated; resolving one lets the next scan re-raise it only if the
+ * Early-warning scan over the given institutions (every institution when
+ * omitted): derives investigation alerts from ledger projections only.
+ * Idempotent — an open alert of the same kind for the same student is never
+ * duplicated; resolving one lets the next scan re-raise it only if the
  * evidence persists.
  */
-export async function performScan(ctx: MutationCtx): Promise<{
+export async function performScan(
+  ctx: MutationCtx,
+  institutionIds?: Array<Id<"institutions">>,
+): Promise<{
   institutionsScanned: number;
   alertsCreated: number;
 }> {
   const now = Date.now();
   const sinceMs = alertLookbackMs(now);
-  const institutions = await ctx.db.query("institutions").collect();
+  const scope =
+    institutionIds ??
+    (await ctx.db.query("institutions").collect()).map((institution) => institution._id);
 
   let alertsCreated = 0;
-  for (const institution of institutions) {
-    const students = await loadStudents(ctx, institution._id);
+  for (const institutionId of scope) {
+    const students = await loadStudents(ctx, institutionId);
     for (const student of students) {
       const records = await studentTrajectoryRecords(ctx, { studentId: student._id });
       const trajectory = analyzeTrajectory(records);
@@ -118,13 +125,13 @@ export async function performScan(ctx: MutationCtx): Promise<{
         verificationAnomalyCount: anomalyCount,
       })) {
         const duplicate = await hasOpenAlert(ctx, {
-          institutionId: institution._id,
+          institutionId,
           kind: alert.kind,
           studentId: student._id,
         });
         if (duplicate) continue;
         const alertId = await ctx.db.insert("review_alerts", {
-          institutionId: institution._id,
+          institutionId,
           kind: alert.kind,
           studentId: student._id,
           factors: alert.factors,
@@ -132,7 +139,7 @@ export async function performScan(ctx: MutationCtx): Promise<{
           detectedAt: now,
         });
         await ctx.runMutation(internal.ledger.appendLedgerEvent, {
-          institutionId: institution._id,
+          institutionId,
           category: "attendance",
           type: ALERT_CREATED_TYPE,
           subjectUserId: student._id,
@@ -143,7 +150,7 @@ export async function performScan(ctx: MutationCtx): Promise<{
     }
   }
 
-  return { institutionsScanned: institutions.length, alertsCreated };
+  return { institutionsScanned: scope.length, alertsCreated };
 }
 
 export const scanReviewAlerts = internalMutation({
@@ -151,12 +158,12 @@ export const scanReviewAlerts = internalMutation({
   handler: async (ctx) => performScan(ctx),
 });
 
-/** Manual trigger for demos and tests; shares the core with the daily cron. */
+/** Manual trigger scoped to the caller's institution; shares the core with the daily cron. */
 export const triggerScan = mutation({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
-    await requireAdminUser(ctx, args.actorToken);
-    return performScan(ctx);
+    const caller = await requireAdminUser(ctx, args.actorToken);
+    return performScan(ctx, [caller.institutionId]);
   },
 });
 
@@ -183,7 +190,10 @@ async function safeUser(ctx: MutationCtx | QueryCtx, userId: Id<"users"> | undef
   }
 }
 
-/** Inbox for admin and department authority: open alerts first, resolved history after. */
+/**
+ * Inbox for admin and department authority (scoped to their departments' students):
+ * open alerts first, resolved history after.
+ */
 export const listReviewAlerts = query({
   args: {
     actorToken: v.string(),
@@ -216,11 +226,12 @@ export const listReviewAlerts = query({
     }
 
     const mapped = await Promise.all(
-      rows.map(async (row): Promise<ReviewAlertRow> => {
+      rows.map(async (row): Promise<ReviewAlertRow | null> => {
         const [student, resolver] = await Promise.all([
           safeUser(ctx, row.studentId),
           safeUser(ctx, row.resolvedByUserId),
         ]);
+        if (!canReviewStudentAlert(caller, student)) return null;
         return {
           id: row._id,
           kind: row.kind,
@@ -237,7 +248,10 @@ export const listReviewAlerts = query({
       }),
     );
 
-    return mapped.sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt).slice(0, limit);
+    return mapped
+      .filter((row): row is ReviewAlertRow => row !== null)
+      .sort((a, b) => rank(a) - rank(b) || b.detectedAt - a.detectedAt)
+      .slice(0, limit);
   },
 });
 
@@ -258,6 +272,9 @@ export const resolveReviewAlert = mutation({
     const alert = await ctx.db.get(args.alertId);
     if (alert === null) throw new ConvexError("alert_not_found");
     if (alert.institutionId !== caller.institutionId) throw new ConvexError("unauthorized");
+    if (!canReviewStudentAlert(caller, await safeUser(ctx, alert.studentId))) {
+      throw new ConvexError("unauthorized");
+    }
     if (alert.status !== "open") throw new ConvexError("alert_not_open");
 
     const trimmed = args.note?.trim();

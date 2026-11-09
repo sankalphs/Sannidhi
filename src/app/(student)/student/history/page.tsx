@@ -1,5 +1,5 @@
 import { api } from "../../../../../convex/_generated/api";
-import { BookOpen } from "lucide-react";
+import { BookOpen, TriangleAlert } from "lucide-react";
 
 import { EmptyState } from "@/components/shell/empty-state";
 import { LockedEmptyState } from "@/components/shell/locked-empty-state";
@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import {
   DEFAULT_ATTENDANCE_THRESHOLD_PERCENT,
   summarizeAttendance,
+  type AttendanceRecordState,
 } from "@/lib/attendance/projection";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
@@ -23,7 +24,7 @@ type StudentHistoryRow = {
   courseId: string;
   courseCode: string;
   courseTitle: string;
-  state: "verified" | "flagged" | "pending" | "rejected" | "corrected";
+  state: AttendanceRecordState;
   decidedAt: number;
   reasonCodes: string[];
 };
@@ -98,9 +99,9 @@ export default async function StudentHistoryPage() {
           description="Calendar and subject-wise views."
         />
         <EmptyState
-          icon={BookOpen}
-          title="Could not load your history"
-          description="Something went wrong while loading your attendance. Please refresh the page and try again."
+          icon={TriangleAlert}
+          title="History unavailable"
+          description="Your attendance history could not be loaded. Refresh the page to try again."
         />
       </div>
     );

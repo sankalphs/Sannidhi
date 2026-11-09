@@ -93,17 +93,21 @@ export function SignupForm() {
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" data-testid="signup-form">
-      <FormField label="Institution code" htmlFor="institutionCode">
-        <Input
-          id="institutionCode"
-          name="institutionCode"
-          required
-          maxLength={24}
-          placeholder="SIT"
-          autoComplete="organization"
-          className="uppercase"
-        />
-      </FormField>
+      {/* An invite link already names the institution; the code is only asked
+          for when the token is pasted by hand. */}
+      {inviteFromUrl.length === 0 ? (
+        <FormField label="Institution code" htmlFor="institutionCode">
+          <Input
+            id="institutionCode"
+            name="institutionCode"
+            required
+            maxLength={24}
+            placeholder="SIT"
+            autoComplete="organization"
+            className="uppercase"
+          />
+        </FormField>
+      ) : null}
 
       <FormField label="Full name" htmlFor="name">
         <Input

@@ -8,7 +8,8 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { FACE_EMBEDDING_VERSION } from "../src/lib/biometry";
-import { requireActorUserWithActiveSession, resolveActorUser } from "./lib/actor";
+import { FRESH_AUTH_WINDOW_MS } from "../src/lib/devices/replacement";
+import { requireActorUserWithActiveSession, requireFreshAuth, resolveActorUser } from "./lib/actor";
 
 export const BIOMETRIC_CONSENT_VERSION = "biometric-consent-1";
 
@@ -203,6 +204,18 @@ export const enrollFaceTemplate = mutation({
     const invalidReason = validateFaceEmbedding(args.embedding);
     if (invalidReason !== null) throw new ConvexError(invalidReason);
 
+    // Replacing a template — including re-enrolling after a withdrawal — needs
+    // the same recent passkey step-up as sensitive device operations, so a
+    // hijacked session cannot swap in someone else's face.
+    const replacing = (await listBiometricRecords(ctx, user._id)).some(
+      (existing) => existing.faceTemplateRef !== undefined,
+    );
+    if (replacing) {
+      await requireFreshAuth(ctx, args.actorToken, FRESH_AUTH_WINDOW_MS, {
+        allowWithoutSession: true,
+      });
+    }
+
     const faceTemplateRef = createFaceTemplateRef();
     const faceEnrolledAt = Date.now();
     // The raw embedding is stored on the record for later matching; the ledger
@@ -216,7 +229,7 @@ export const enrollFaceTemplate = mutation({
 
     await appendIdentityEvent(ctx, {
       institutionId: user.institutionId,
-      type: "identity.face_template_enrolled",
+      type: replacing ? "identity.face_template_replaced" : "identity.face_template_enrolled",
       actorUserId: user._id,
       subjectUserId: user._id,
       payload: {

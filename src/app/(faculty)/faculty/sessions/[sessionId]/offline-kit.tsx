@@ -43,11 +43,11 @@ const SYNC_ERROR_TRANSLATIONS: ErrorTranslation = [
     match: "batch_too_large",
     message: "The queue is too large for one sync. Sync in smaller batches.",
   },
-  {
-    match: "session_window_ended",
-    message: "This session's window has ended — offline records can no longer be added to it.",
-  },
   { match: "unauthorized", message: "You are not authorized to sync records for this session." },
+  {
+    match: "offline_sync_window_closed",
+    message: "This session ended more than 7 days ago, so its offline records can no longer sync.",
+  },
 ];
 
 /** Server cap on syncOfflineBatch records; the client syncs in chunks of this size. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { evaluateAccess } from "@/lib/auth/guard";
+import { evaluateAccess, safeNextPath } from "@/lib/auth/guard";
 import { ROLES, type Role } from "@/lib/auth/session";
 
 const GROUP_PREFIXES = ["/student", "/faculty", "/admin", "/audit"] as const;
@@ -11,11 +11,24 @@ function allowedRolesFor(prefix: string): Role[] {
 }
 
 describe("evaluateAccess", () => {
-  it("redirects unauthenticated users to / for every guarded group", () => {
+  it("redirects unauthenticated users to sign-in with a return path for every guarded group", () => {
     for (const prefix of GROUP_PREFIXES) {
-      expect(evaluateAccess(prefix, null)).toEqual({ status: "redirect", to: "/" });
-      expect(evaluateAccess(`${prefix}/sub`, null)).toEqual({ status: "redirect", to: "/" });
+      expect(evaluateAccess(prefix, null)).toEqual({
+        status: "redirect",
+        to: `/login?next=${encodeURIComponent(prefix)}`,
+      });
+      expect(evaluateAccess(`${prefix}/sub`, null)).toEqual({
+        status: "redirect",
+        to: `/login?next=${encodeURIComponent(`${prefix}/sub`)}`,
+      });
     }
+  });
+
+  it("keeps the query string in the sign-in return path", () => {
+    expect(evaluateAccess("/student/check-in", null, "?code=a.b")).toEqual({
+      status: "redirect",
+      to: "/login?next=%2Fstudent%2Fcheck-in%3Fcode%3Da.b",
+    });
   });
 
   it("enforces the access matrix", () => {
@@ -67,5 +80,22 @@ describe("evaluateAccess", () => {
     expect(evaluateAccess("/student/requests", "student").status).toBe("allow");
     expect(evaluateAccess("/", "student").status).toBe("allow");
     expect(evaluateAccess("/login", null).status).toBe("allow");
+  });
+});
+
+describe("safeNextPath", () => {
+  it("keeps same-origin relative paths", () => {
+    expect(safeNextPath("/student")).toBe("/student");
+    expect(safeNextPath("/student/check-in?code=a.b")).toBe("/student/check-in?code=a.b");
+  });
+
+  it("drops absolute, protocol-relative, and missing targets", () => {
+    expect(safeNextPath(undefined)).toBeNull();
+    expect(safeNextPath(null)).toBeNull();
+    expect(safeNextPath("")).toBeNull();
+    expect(safeNextPath("student")).toBeNull();
+    expect(safeNextPath("https://evil.example")).toBeNull();
+    expect(safeNextPath("//evil.example")).toBeNull();
+    expect(safeNextPath("/\\evil.example")).toBeNull();
   });
 });

@@ -88,7 +88,7 @@ function assertValidSignupInput(args: {
 
 export const signUpWithPassword = action({
   args: {
-    institutionCode: v.string(),
+    institutionCode: v.optional(v.string()),
     name: v.string(),
     email: v.string(),
     usn: v.string(),
@@ -97,17 +97,6 @@ export const signUpWithPassword = action({
   },
   handler: async (ctx, args): Promise<SignupIssued> => {
     const input = assertValidSignupInput(args);
-
-    const code = args.institutionCode.trim().toUpperCase();
-    if (code.length === 0) {
-      throw new ConvexError("Enter your institution's signup code.");
-    }
-    const institution = await ctx.runQuery(internal.accountsInternal.getInstitutionByCode, {
-      code,
-    });
-    if (institution === null) {
-      throw new ConvexError("No institution matches that signup code.");
-    }
 
     // Identity squatting gate: an unclaimed institutional email can only be
     // registered against a pending invite for that exact email. The invite is
@@ -119,35 +108,61 @@ export const signUpWithPassword = action({
             token: inviteToken,
           })
         : null;
+
+    // The invite already names the institution; a typed code is optional and
+    // must agree with it when given.
+    const code = args.institutionCode?.trim().toUpperCase() ?? "";
+    let institutionId: Id<"institutions">;
+    if (code.length > 0) {
+      const institution = await ctx.runQuery(internal.accountsInternal.getInstitutionByCode, {
+        code,
+      });
+      if (institution === null) {
+        throw new ConvexError("No institution matches that signup code.");
+      }
+      institutionId = institution._id;
+    } else if (invite !== null) {
+      institutionId = invite.institutionId;
+    } else {
+      throw new ConvexError("signup_requires_invite");
+    }
+
     const inviteMatches =
       invite !== null &&
       invite.status === "pending" &&
-      invite.institutionId === institution._id &&
+      invite.institutionId === institutionId &&
       invite.email === input.email &&
       invite.expiresAt > Date.now();
     if (!inviteMatches) {
       throw new ConvexError("signup_requires_invite");
     }
 
-    const recentSignups = await ctx.runQuery(
-      internal.accountsInternal.countInstitutionSignupsSince,
-      { institutionId: institution._id, cutoff: Date.now() - SIGNUP_WINDOW_MS },
-    );
-    if (recentSignups >= MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR) {
-      throw new ConvexError("signup_rate_limited");
-    }
-
+    // Invites normally pre-create an "invited" row for the email, which
+    // signup claims (createPasswordUser enforces it, once); only a brand-new
+    // row counts against the signup rate limit.
     const existingByEmail = await ctx.runQuery(internal.accountsInternal.getUserByEmail, {
       email: input.email,
     });
-    if (existingByEmail !== null) {
+    if (
+      existingByEmail !== null &&
+      (existingByEmail.status !== "invited" || existingByEmail.institutionId !== institutionId)
+    ) {
       throw new ConvexError("account_exists");
     }
+    if (existingByEmail === null) {
+      const recentSignups = await ctx.runQuery(
+        internal.accountsInternal.countInstitutionSignupsSince,
+        { institutionId, cutoff: Date.now() - SIGNUP_WINDOW_MS },
+      );
+      if (recentSignups >= MAX_SIGNUPS_PER_INSTITUTION_PER_HOUR) {
+        throw new ConvexError("signup_rate_limited");
+      }
+    }
     const existingByUsn = await ctx.runQuery(internal.accountsInternal.getUserByInstitutionUsn, {
-      institutionId: institution._id,
+      institutionId,
       usn: input.usn,
     });
-    if (existingByUsn !== null) {
+    if (existingByUsn !== null && existingByUsn._id !== existingByEmail?._id) {
       throw new ConvexError("usn_taken");
     }
 
@@ -159,7 +174,7 @@ export const signUpWithPassword = action({
     // The invite's role — not a hardcoded default — is what the account
     // carries into activation.
     await ctx.runMutation(internal.accountsInternal.createPasswordUser, {
-      institutionId: institution._id,
+      institutionId,
       email: input.email,
       name: input.name,
       usn: input.usn,

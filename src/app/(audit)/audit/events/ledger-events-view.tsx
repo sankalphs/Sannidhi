@@ -165,7 +165,7 @@ function ChainStatusBadge({
     return (
       <Badge
         data-testid={testId}
-        className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+        className="border-amber-500/40 bg-amber-500/10 whitespace-normal text-amber-600 dark:text-amber-400"
       >
         {label} partially verified · first {status.count} events valid, walk limit reached
       </Badge>
@@ -289,7 +289,7 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
         title="Event ledger"
         description="Tamper-evident chain of attendance events with the full decision trail behind each verdict."
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-2 sm:max-w-md sm:justify-end">
             <ChainStatusBadge status={chainStatus} testId="chain-status" label="Chain" />
             <Button
               variant="outline"
@@ -314,7 +314,7 @@ function LedgerEventsViewInner({ actorToken }: { actorToken: string }) {
               {verifyingAttendanceChain ? <Loader2 className="animate-spin" /> : <ShieldCheck />}
               Verify attendance chain
             </Button>
-          </>
+          </div>
         }
       />
       {eventsResult === undefined ? (

@@ -48,6 +48,22 @@ export async function getActiveSession(options?: {
   return session;
 }
 
+/** Whether the signed-in admin is a platform operator who may review access requests. */
+export async function canReviewAccessRequests(): Promise<boolean> {
+  const session = await getActiveSession();
+  if (session === null || session.role !== "admin") return false;
+  try {
+    const actorToken = await mintActorToken({
+      userId: session.userId,
+      role: session.role,
+      ...(session.sid !== undefined ? { sid: session.sid } : {}),
+    });
+    return await getConvexClient().query(api.accessRequests.canReview, { actorToken });
+  } catch {
+    return false;
+  }
+}
+
 type ConvexSessionStatus = { active: boolean; expiresAt: number | null };
 
 async function queryOwnSession(session: SessionPayload & { sid: string }) {

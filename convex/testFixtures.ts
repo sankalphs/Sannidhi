@@ -1,405 +1,409 @@
-import { internalMutation } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+
+import { internalMutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { hashInviteToken } from "../src/lib/invites/token";
 import { attendanceChainHashInput } from "../src/lib/attendance/lifecycle";
 import { institutionDayOfWeek, institutionMinutesOfDay } from "../src/lib/attendance/timezone";
 import { computeEventHash } from "../src/lib/ledger/hash";
 import { RISK_POLICY_VERSION } from "../src/lib/risk/types";
 import type { Decision } from "../src/lib/decision";
+import { ALL_TABLES, deleteRows } from "./lib/wipe";
 
-const DEMO_INVITE_TOKEN = "demo-invite-token";
-const DEMO_PASSWORD_INVITE_TOKEN = "demo-password-invite-token";
+/**
+ * Deterministic fixtures for local development and the e2e suite — never for
+ * a real deployment. Every entry point refuses to run unless the Convex
+ * deployment sets SANNIDHI_TEST_FIXTURES=1.
+ *
+ *   bun run fixtures   # wipe the local deployment and load fixtures
+ */
 
-const DEMO_TABLES = [
-  "session_challenges",
-  "review_alerts",
-  "class_sessions",
-  "attendance_events",
-  "event_ledger",
-  "enrollments",
-  "timetable_slots",
-  "sections",
-  "courses",
-  "venues",
-  "replacement_requests",
-  "device_verifications",
-  "biometric_records",
-  "passkey_credentials",
-  "devices",
-  "sessions",
-  "auth_challenges",
-  "invites",
-  "users",
-  "institutions",
-] as const;
+const FIXTURE_INVITE_TOKEN = "fixture-invite-token";
+const FIXTURE_PASSWORD_INVITE_TOKEN = "fixture-password-invite-token";
 
-export const clearDemoData = internalMutation({
-  args: {},
-  handler: async (ctx) => {
-    if (process.env.SANNIDHI_DEMO_MODE !== "1") {
-      return { cleared: false as const, reason: "demo-mode-disabled" as const };
-    }
-    let deleted = 0;
-    for (const table of DEMO_TABLES) {
-      for (;;) {
-        const rows = await ctx.db.query(table).take(500);
-        if (rows.length === 0) break;
-        for (const row of rows) {
-          await ctx.db.delete(row._id);
-          deleted += 1;
-        }
-      }
-    }
-    return { cleared: true as const, deleted };
+function fixturesEnabled(): boolean {
+  return process.env.SANNIDHI_TEST_FIXTURES === "1";
+}
+
+const FIXTURE_ROLES = v.union(
+  v.literal("student"),
+  v.literal("faculty"),
+  v.literal("department_authority"),
+  v.literal("admin"),
+  v.literal("auditor"),
+);
+
+const FIXTURE_EMAILS = {
+  student: "aarav.patel@sit.edu.in",
+  faculty: "priya.menon@sit.edu.in",
+  department_authority: "vikram.desai@sit.edu.in",
+  admin: "ananya.iyer@sit.edu.in",
+  auditor: "rohan.gupta@sit.edu.in",
+} as const;
+
+/**
+ * Resolves the fixture user behind a dev-login role (see /api/dev-session);
+ * `email` picks a specific fixture user of that role, e.g. a second student.
+ */
+export const getFixtureActor = query({
+  args: { role: FIXTURE_ROLES, email: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<{ userId: string; email: string } | null> => {
+    if (!fixturesEnabled()) throw new ConvexError("unauthorized");
+    const user: Doc<"users"> | null = await ctx.db
+      .query("users")
+      .withIndex("by_email", (q) => q.eq("email", args.email ?? FIXTURE_EMAILS[args.role]))
+      .unique();
+    if (user === null || user.status === "suspended" || user.role !== args.role) return null;
+    return { userId: user._id, email: user.email };
   },
 });
 
-export const seedDemoData = internalMutation({
+/** Wipes every table, then loads the fixture institution. */
+export const reset = internalMutation({
   args: {},
   handler: async (ctx) => {
-    if (process.env.SANNIDHI_DEMO_MODE !== "1") {
-      return { seeded: false as const, reason: "demo-mode-disabled" as const };
+    if (!fixturesEnabled()) {
+      throw new ConvexError("test fixtures are disabled on this deployment");
     }
-    const existingInstitution = await ctx.db.query("institutions").first();
-    if (existingInstitution !== null) {
-      return { seeded: false as const, reason: "already-seeded" as const };
-    }
-
-    const now = Date.now();
-
-    const institutionId = await ctx.db.insert("institutions", {
-      name: "Sannidhi Institute of Technology",
-      code: "SIT",
-      createdAt: now,
-    });
-
-    const userData = [
-      {
-        email: "aarav.patel@sit.edu.in",
-        name: "Aarav Patel",
-        role: "student" as const,
-      },
-      {
-        email: "diya.sharma@sit.edu.in",
-        name: "Diya Sharma",
-        role: "student" as const,
-      },
-      {
-        email: "priya.menon@sit.edu.in",
-        name: "Priya Menon",
-        role: "faculty" as const,
-      },
-      {
-        email: "vikram.desai@sit.edu.in",
-        name: "Vikram Desai",
-        role: "department_authority" as const,
-      },
-      {
-        email: "ananya.iyer@sit.edu.in",
-        name: "Ananya Iyer",
-        role: "admin" as const,
-      },
-      {
-        email: "rohan.gupta@sit.edu.in",
-        name: "Rohan Gupta",
-        role: "auditor" as const,
-      },
-    ];
-
-    const studentIds: Id<"users">[] = [];
-    let adminId: Id<"users"> | undefined;
-    let facultyId: Id<"users"> | undefined;
-    for (const user of userData) {
-      const userId = await ctx.db.insert("users", {
-        institutionId,
-        email: user.email,
-        name: user.name,
-        role: user.role,
-        status: "active",
-        createdAt: now,
-      });
-      if (user.role === "student") {
-        studentIds.push(userId);
-      }
-      if (user.role === "admin") {
-        adminId = userId;
-      }
-      if (user.role === "faculty") {
-        facultyId = userId;
+    for (const table of ALL_TABLES) {
+      while ((await deleteRows(ctx, table, 500)) > 0) {
+        // keep deleting
       }
     }
-    if (adminId === undefined) {
-      throw new Error("seed data must include an admin user");
-    }
-    if (facultyId === undefined) {
-      throw new Error("seed data must include a faculty user");
-    }
-
-    const courseData = [
-      {
-        code: "CS101",
-        title: "Introduction to Computer Science",
-        department: "Computer Science",
-      },
-      {
-        code: "MA201",
-        title: "Discrete Mathematics",
-        department: "Mathematics",
-      },
-      {
-        code: "PH105",
-        title: "Engineering Physics",
-        department: "Physics",
-      },
-      {
-        code: "EC210",
-        title: "Digital Electronics",
-        department: "Electronics",
-      },
-    ];
-
-    const sectionIds: Id<"sections">[] = [];
-    const courseIds: Id<"courses">[] = [];
-    for (const course of courseData) {
-      const courseId = await ctx.db.insert("courses", {
-        institutionId,
-        code: course.code,
-        title: course.title,
-        department: course.department,
-      });
-      const sectionId = await ctx.db.insert("sections", {
-        courseId,
-        name: `${course.code} - Section A`,
-        term: "2026-Autumn",
-      });
-      courseIds.push(courseId);
-      sectionIds.push(sectionId);
-    }
-
-    const venueData = [
-      {
-        name: "Lecture Hall LH-1",
-        capacity: 120,
-        latitude: 12.9716,
-        longitude: 77.5946,
-        geofenceRadiusMeters: 250,
-      },
-      {
-        name: "Computing Lab CL-2",
-        capacity: 60,
-        latitude: 12.9723,
-        longitude: 77.5955,
-        geofenceRadiusMeters: 250,
-      },
-      {
-        name: "Seminar Room SR-3",
-        capacity: 40,
-        latitude: 12.9709,
-        longitude: 77.5937,
-        geofenceRadiusMeters: 250,
-      },
-    ];
-
-    const venueIds: Id<"venues">[] = [];
-    for (const venue of venueData) {
-      const venueId = await ctx.db.insert("venues", {
-        institutionId,
-        name: venue.name,
-        capacity: venue.capacity,
-        latitude: venue.latitude,
-        longitude: venue.longitude,
-        geofenceRadiusMeters: venue.geofenceRadiusMeters,
-      });
-      venueIds.push(venueId);
-    }
-
-    const slotData = [
-      { sectionIndex: 0, venueIndex: 0, dayOfWeek: 1, startMinutes: 540, endMinutes: 600 },
-      { sectionIndex: 0, venueIndex: 0, dayOfWeek: 3, startMinutes: 540, endMinutes: 600 },
-      { sectionIndex: 1, venueIndex: 0, dayOfWeek: 2, startMinutes: 600, endMinutes: 660 },
-      { sectionIndex: 1, venueIndex: 2, dayOfWeek: 4, startMinutes: 540, endMinutes: 600 },
-      { sectionIndex: 2, venueIndex: 1, dayOfWeek: 1, startMinutes: 660, endMinutes: 720 },
-      { sectionIndex: 2, venueIndex: 1, dayOfWeek: 5, startMinutes: 540, endMinutes: 600 },
-      { sectionIndex: 3, venueIndex: 2, dayOfWeek: 2, startMinutes: 540, endMinutes: 600 },
-      { sectionIndex: 3, venueIndex: 2, dayOfWeek: 4, startMinutes: 660, endMinutes: 720 },
-    ];
-
-    let slotCount = 0;
-    for (const slot of slotData) {
-      await ctx.db.insert("timetable_slots", {
-        sectionId: sectionIds[slot.sectionIndex],
-        venueId: venueIds[slot.venueIndex],
-        dayOfWeek: slot.dayOfWeek,
-        startMinutes: slot.startMinutes,
-        endMinutes: slot.endMinutes,
-      });
-      slotCount += 1;
-    }
-
-    // The "live today" slot must land on the institution's calendar day (IST),
-    // not the server's zone — seed-time day math and read-time day math
-    // (listMySchedule) must agree.
-    const todayDayOfWeek = institutionDayOfWeek(now);
-    const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
-    // IST minutes-of-day: local wall clock is UTC plus the east-of-UTC
-    // offset, wrapped by day, so the slot's start/end fall inside the day
-    // faculty actually see.
-    const istMinutesOfDay = institutionMinutesOfDay(now);
-    const liveStartMinutes = Math.max(0, istMinutesOfDay - 15);
-    const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
-
-    await ctx.db.insert("timetable_slots", {
-      sectionId: sectionIds[0],
-      venueId: venueIds[0],
-      dayOfWeek: todayDayOfWeek,
-      startMinutes: liveStartMinutes,
-      endMinutes: liveEndMinutes,
-      facultyId,
-    });
-    await ctx.db.insert("timetable_slots", {
-      sectionId: sectionIds[1],
-      venueId: venueIds[1],
-      dayOfWeek: tomorrowDayOfWeek,
-      startMinutes: 600,
-      endMinutes: 660,
-      facultyId,
-    });
-    slotCount += 2;
-
-    const enrollmentPlan = [
-      [
-        [0, 0],
-        [0, 1],
-        [0, 2],
-        [0, 3],
-      ],
-      [
-        [1, 0],
-        [1, 1],
-        [1, 2],
-        [1, 3],
-      ],
-    ];
-
-    let enrollmentCount = 0;
-    const termEnrolledAt = now - TERM_ENROLLED_AT_OFFSET_MS;
-    for (const [studentIndex, pairs] of enrollmentPlan.entries()) {
-      for (const pair of pairs) {
-        await ctx.db.insert("enrollments", {
-          studentId: studentIds[studentIndex],
-          sectionId: sectionIds[pair[1]],
-          enrolledAt: termEnrolledAt,
-        });
-        enrollmentCount += 1;
-      }
-    }
-
-    let deviceCount = 0;
-    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    for (const [studentIndex, studentId] of studentIds.entries()) {
-      await ctx.db.insert("passkey_credentials", {
-        userId: studentId,
-        credentialId: `demo-credential-${studentIndex}`,
-        publicKey: "demo-public-key",
-        counter: 0,
-        label: "Demo passkey",
-        createdAt: now,
-        lastUsedAt: now,
-      });
-      await ctx.db.insert("devices", {
-        institutionId,
-        userId: studentId,
-        label: "Demo Phone",
-        platform: "iOS 26",
-        state: "active",
-        registeredAt: weekAgo,
-        activatedAt: weekAgo,
-        stateChangedAt: weekAgo,
-      });
-      deviceCount += 1;
-      // Only one active device per student — the same invariant the
-      // replacement flow enforces in production.
-      await ctx.db.insert("devices", {
-        institutionId,
-        userId: studentId,
-        label: `Demo laptop ${studentIndex + 1}`,
-        platform: "web",
-        state: "enrolled",
-        registeredAt: now,
-        stateChangedAt: now,
-      });
-      deviceCount += 1;
-    }
-
-    const invitedEmail = "meera.nair@sit.edu.in";
-    await ctx.db.insert("users", {
-      institutionId,
-      email: invitedEmail,
-      name: "Meera Nair",
-      role: "student",
-      status: "invited",
-      createdAt: now,
-    });
-
-    // Demo invites always seed in demo mode: the passkey-invite flow and the
-    // invite-gated password-signup e2e both depend on them, whether the
-    // demo runs on a cloud deployment or a local anonymous backend.
-    await ctx.db.insert("invites", {
-      institutionId,
-      email: invitedEmail,
-      role: "student",
-      tokenHash: await hashInviteToken(DEMO_INVITE_TOKEN),
-      status: "pending",
-      invitedByUserId: adminId,
-      createdAt: now,
-      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-    });
-    // Password-signup demo: a pending invite for an email with no user row,
-    // so the invite-gated signup flow can be exercised end-to-end.
-    await ctx.db.insert("invites", {
-      institutionId,
-      email: "password.signup.demo@sit.edu.in",
-      role: "student",
-      tokenHash: await hashInviteToken(DEMO_PASSWORD_INVITE_TOKEN),
-      status: "pending",
-      invitedByUserId: adminId,
-      createdAt: now,
-      expiresAt: now + 7 * 24 * 60 * 60 * 1000,
-    });
-    const inviteCount = 2;
-
-    const backfill = await backfillTermHistory(ctx, {
-      institutionId,
-      facultyId,
-      studentIds,
-      courseIds,
-      sectionIds,
-      venueIds,
-    });
-
-    return {
-      institutions: 1,
-      users: userData.length + 1,
-      invites: inviteCount,
-      courses: courseData.length,
-      sections: sectionIds.length,
-      venues: venueIds.length,
-      timetableSlots: slotCount,
-      enrollments: enrollmentCount,
-      devices: deviceCount,
-      sessionsBackfilled: backfill.sessions,
-      attendanceEventsBackfilled: backfill.attendanceEvents,
-      ledgerEventsBackfilled: backfill.ledgerEvents,
-    };
+    return loadFixtures(ctx);
   },
 });
+
+async function loadFixtures(ctx: MutationCtx) {
+  const now = Date.now();
+
+  const institutionId = await ctx.db.insert("institutions", {
+    name: "Sannidhi Institute of Technology",
+    code: "SIT",
+    createdAt: now,
+  });
+
+  const userData = [
+    {
+      email: "aarav.patel@sit.edu.in",
+      name: "Aarav Patel",
+      role: "student" as const,
+    },
+    {
+      email: "diya.sharma@sit.edu.in",
+      name: "Diya Sharma",
+      role: "student" as const,
+    },
+    {
+      email: "priya.menon@sit.edu.in",
+      name: "Priya Menon",
+      role: "faculty" as const,
+    },
+    {
+      email: "vikram.desai@sit.edu.in",
+      name: "Vikram Desai",
+      role: "department_authority" as const,
+    },
+    {
+      email: "ananya.iyer@sit.edu.in",
+      name: "Ananya Iyer",
+      role: "admin" as const,
+    },
+    {
+      email: "rohan.gupta@sit.edu.in",
+      name: "Rohan Gupta",
+      role: "auditor" as const,
+    },
+  ];
+
+  const studentIds: Id<"users">[] = [];
+  let adminId: Id<"users"> | undefined;
+  let facultyId: Id<"users"> | undefined;
+  for (const user of userData) {
+    const userId = await ctx.db.insert("users", {
+      institutionId,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: "active",
+      createdAt: now,
+    });
+    if (user.role === "student") {
+      studentIds.push(userId);
+    }
+    if (user.role === "admin") {
+      adminId = userId;
+    }
+    if (user.role === "faculty") {
+      facultyId = userId;
+    }
+  }
+  if (adminId === undefined) {
+    throw new Error("seed data must include an admin user");
+  }
+  if (facultyId === undefined) {
+    throw new Error("seed data must include a faculty user");
+  }
+
+  const courseData = [
+    {
+      code: "CS101",
+      title: "Introduction to Computer Science",
+      department: "Computer Science",
+    },
+    {
+      code: "MA201",
+      title: "Discrete Mathematics",
+      department: "Mathematics",
+    },
+    {
+      code: "PH105",
+      title: "Engineering Physics",
+      department: "Physics",
+    },
+    {
+      code: "EC210",
+      title: "Digital Electronics",
+      department: "Electronics",
+    },
+  ];
+
+  const sectionIds: Id<"sections">[] = [];
+  const courseIds: Id<"courses">[] = [];
+  for (const course of courseData) {
+    const courseId = await ctx.db.insert("courses", {
+      institutionId,
+      code: course.code,
+      title: course.title,
+      department: course.department,
+    });
+    const sectionId = await ctx.db.insert("sections", {
+      courseId,
+      name: `${course.code} - Section A`,
+      term: "2026-Autumn",
+    });
+    courseIds.push(courseId);
+    sectionIds.push(sectionId);
+  }
+
+  const venueData = [
+    {
+      name: "Lecture Hall LH-1",
+      capacity: 120,
+      latitude: 12.9716,
+      longitude: 77.5946,
+      geofenceRadiusMeters: 250,
+    },
+    {
+      name: "Computing Lab CL-2",
+      capacity: 60,
+      latitude: 12.9723,
+      longitude: 77.5955,
+      geofenceRadiusMeters: 250,
+    },
+    {
+      name: "Seminar Room SR-3",
+      capacity: 40,
+      latitude: 12.9709,
+      longitude: 77.5937,
+      geofenceRadiusMeters: 250,
+    },
+  ];
+
+  const venueIds: Id<"venues">[] = [];
+  for (const venue of venueData) {
+    const venueId = await ctx.db.insert("venues", {
+      institutionId,
+      name: venue.name,
+      capacity: venue.capacity,
+      latitude: venue.latitude,
+      longitude: venue.longitude,
+      geofenceRadiusMeters: venue.geofenceRadiusMeters,
+    });
+    venueIds.push(venueId);
+  }
+
+  const slotData = [
+    { sectionIndex: 0, venueIndex: 0, dayOfWeek: 1, startMinutes: 540, endMinutes: 600 },
+    { sectionIndex: 0, venueIndex: 0, dayOfWeek: 3, startMinutes: 540, endMinutes: 600 },
+    { sectionIndex: 1, venueIndex: 0, dayOfWeek: 2, startMinutes: 600, endMinutes: 660 },
+    { sectionIndex: 1, venueIndex: 2, dayOfWeek: 4, startMinutes: 540, endMinutes: 600 },
+    { sectionIndex: 2, venueIndex: 1, dayOfWeek: 1, startMinutes: 660, endMinutes: 720 },
+    { sectionIndex: 2, venueIndex: 1, dayOfWeek: 5, startMinutes: 540, endMinutes: 600 },
+    { sectionIndex: 3, venueIndex: 2, dayOfWeek: 2, startMinutes: 540, endMinutes: 600 },
+    { sectionIndex: 3, venueIndex: 2, dayOfWeek: 4, startMinutes: 660, endMinutes: 720 },
+  ];
+
+  let slotCount = 0;
+  for (const slot of slotData) {
+    await ctx.db.insert("timetable_slots", {
+      sectionId: sectionIds[slot.sectionIndex],
+      venueId: venueIds[slot.venueIndex],
+      dayOfWeek: slot.dayOfWeek,
+      startMinutes: slot.startMinutes,
+      endMinutes: slot.endMinutes,
+    });
+    slotCount += 1;
+  }
+
+  // "Today" in the institution's timezone — the same clock the faculty
+  // schedule reads — so the live slot exists whatever the server's zone.
+  const todayDayOfWeek = institutionDayOfWeek(now);
+  const tomorrowDayOfWeek = (todayDayOfWeek + 1) % 7;
+  const currentMinutes = institutionMinutesOfDay(now);
+  const liveStartMinutes = Math.max(0, currentMinutes - 15);
+  const liveEndMinutes = Math.min(24 * 60, liveStartMinutes + 90);
+
+  await ctx.db.insert("timetable_slots", {
+    sectionId: sectionIds[0],
+    venueId: venueIds[0],
+    dayOfWeek: todayDayOfWeek,
+    startMinutes: liveStartMinutes,
+    endMinutes: liveEndMinutes,
+    facultyId,
+  });
+  await ctx.db.insert("timetable_slots", {
+    sectionId: sectionIds[1],
+    venueId: venueIds[1],
+    dayOfWeek: tomorrowDayOfWeek,
+    startMinutes: 600,
+    endMinutes: 660,
+    facultyId,
+  });
+  slotCount += 2;
+
+  const enrollmentPlan = [
+    [
+      [0, 0],
+      [0, 1],
+      [0, 2],
+      [0, 3],
+    ],
+    [
+      [1, 0],
+      [1, 1],
+      [1, 2],
+      [1, 3],
+    ],
+  ];
+
+  let enrollmentCount = 0;
+  const termEnrolledAt = now - TERM_ENROLLED_AT_OFFSET_MS;
+  for (const [studentIndex, pairs] of enrollmentPlan.entries()) {
+    for (const pair of pairs) {
+      await ctx.db.insert("enrollments", {
+        studentId: studentIds[studentIndex],
+        sectionId: sectionIds[pair[1]],
+        enrolledAt: termEnrolledAt,
+      });
+      enrollmentCount += 1;
+    }
+  }
+
+  let deviceCount = 0;
+  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
+  for (const [studentIndex, studentId] of studentIds.entries()) {
+    await ctx.db.insert("passkey_credentials", {
+      userId: studentId,
+      credentialId: `fixture-credential-${studentIndex}`,
+      publicKey: "fixture-public-key",
+      counter: 0,
+      label: "Fixture passkey",
+      createdAt: now,
+      lastUsedAt: now,
+    });
+    await ctx.db.insert("devices", {
+      institutionId,
+      userId: studentId,
+      label: "Test phone",
+      platform: "iOS 26",
+      state: "active",
+      registeredAt: weekAgo,
+      activatedAt: weekAgo,
+      stateChangedAt: weekAgo,
+    });
+    deviceCount += 1;
+    // Only one active device per student — the same invariant the
+    // replacement flow enforces in production.
+    await ctx.db.insert("devices", {
+      institutionId,
+      userId: studentId,
+      label: `Test laptop ${studentIndex + 1}`,
+      platform: "web",
+      state: "enrolled",
+      registeredAt: now,
+      stateChangedAt: now,
+    });
+    deviceCount += 1;
+  }
+
+  const invitedEmail = "meera.nair@sit.edu.in";
+  await ctx.db.insert("users", {
+    institutionId,
+    email: invitedEmail,
+    name: "Meera Nair",
+    role: "student",
+    status: "invited",
+    createdAt: now,
+  });
+
+  // The passkey-invite flow and the invite-gated password-signup e2e both
+  // depend on these fixed tokens.
+  await ctx.db.insert("invites", {
+    institutionId,
+    email: invitedEmail,
+    role: "student",
+    tokenHash: await hashInviteToken(FIXTURE_INVITE_TOKEN),
+    status: "pending",
+    invitedByUserId: adminId,
+    createdAt: now,
+    expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+  });
+  // Password signup: a pending invite for an email with no user row,
+  // so the invite-gated signup flow can be exercised end-to-end.
+  await ctx.db.insert("invites", {
+    institutionId,
+    email: "password.signup.fixture@sit.edu.in",
+    role: "student",
+    tokenHash: await hashInviteToken(FIXTURE_PASSWORD_INVITE_TOKEN),
+    status: "pending",
+    invitedByUserId: adminId,
+    createdAt: now,
+    expiresAt: now + 7 * 24 * 60 * 60 * 1000,
+  });
+  const inviteCount = 2;
+
+  const backfill = await backfillTermHistory(ctx, {
+    institutionId,
+    facultyId,
+    studentIds,
+    courseIds,
+    sectionIds,
+    venueIds,
+  });
+
+  return {
+    institutions: 1,
+    users: userData.length + 1,
+    invites: inviteCount,
+    courses: courseData.length,
+    sections: sectionIds.length,
+    venues: venueIds.length,
+    timetableSlots: slotCount,
+    enrollments: enrollmentCount,
+    devices: deviceCount,
+    sessionsBackfilled: backfill.sessions,
+    attendanceEventsBackfilled: backfill.attendanceEvents,
+    ledgerEventsBackfilled: backfill.ledgerEvents,
+  };
+}
 
 /**
  * Deterministic per-student outcome table for the backfilled term, keyed
  * [week][section] with "v" (verified) | "f" (flagged) | "r" (rejected) |
  * "a" (absent). Week 0 is the oldest; the recent weeks drive the analytics
- * demo stories: Diya ends the term below threshold with a trailing absence
+ * analytics fixtures: Diya ends the term below threshold with a trailing absence
  * streak and recent proxy flags, Aarav stays healthy above 85%.
  */
 const BACKFILL_OUTCOMES: Array<Array<Array<"v" | "f" | "r" | "a">>> = [
@@ -649,7 +653,7 @@ async function backfillTermHistory(
       category: "attendance" as const,
       type: anomaly.type,
       subjectUserId: anomaly.studentId,
-      payload: { reason: "seeded demo anomaly" },
+      payload: { reason: "fixture anomaly" },
       seq: ledgerSeq,
       prevEventHash: ledgerPrevHash,
     });
@@ -658,7 +662,7 @@ async function backfillTermHistory(
       category: "attendance",
       type: anomaly.type,
       subjectUserId: anomaly.studentId,
-      payload: { reason: "seeded demo anomaly" },
+      payload: { reason: "fixture anomaly" },
       seq: ledgerSeq,
       prevEventHash: ledgerPrevHash,
       eventHash,
