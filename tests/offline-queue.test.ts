@@ -16,6 +16,7 @@ import {
 import { verifySignature } from "@/lib/offline/bundle";
 
 const STORAGE_KEY = "sannidhi.offline-queue";
+const MINTING_KEY = "sannidhi.offline-queue.minting";
 const BUNDLE = { sessionId: "session_1", key: "a".repeat(64) };
 
 function deferred<T>() {
@@ -24,6 +25,22 @@ function deferred<T>() {
     resolve = res;
   });
   return { promise, resolve };
+}
+
+/** Lets the lease write (and any lock request) settle before the next step. */
+function tick(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Ages the current mint lease past its TTL, keeping its owner token intact. */
+function expireMintLease(): void {
+  const raw = window.localStorage.getItem(MINTING_KEY);
+  if (raw === null) throw new Error("expected a mint lease");
+  const lease = JSON.parse(raw) as { token: string; startedAt: number };
+  window.localStorage.setItem(
+    MINTING_KEY,
+    JSON.stringify({ ...lease, startedAt: Date.now() - 31_000 }),
+  );
 }
 
 function requireState(state: OfflineQueueState | null): OfflineQueueState {
@@ -147,20 +164,11 @@ describe("mintBundle / readQueue", () => {
     const state = await freshQueue();
     const pendingMint = deferred<typeof BUNDLE>();
     const minting = mintBundle(() => pendingMint.promise);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await tick();
 
     // A stalled mint's lease expires, so another attestation is allowed in
     // with the key the server is about to rotate away.
-    const lease = JSON.parse(
-      window.localStorage.getItem("sannidhi.offline-queue.minting") ?? "{}",
-    ) as {
-      token: string;
-      startedAt: number;
-    };
-    window.localStorage.setItem(
-      "sannidhi.offline-queue.minting",
-      JSON.stringify({ ...lease, startedAt: Date.now() - 31_000 }),
-    );
+    expireMintLease();
     const queued = requireState(
       await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n"),
     );
@@ -175,6 +183,74 @@ describe("mintBundle / readQueue", () => {
     const [{ studentName, ...signed }] = minted?.queued ?? [];
     expect(studentName).toBe("A");
     expect(await verifySignature("c".repeat(64), signed)).toBe(true);
+  });
+
+  it("does not invalidate the winning mint's records when a stalled mint adopts its key", async () => {
+    await freshQueue();
+    const stalled = deferred<typeof BUNDLE>();
+    const stalledMint = mintBundle(() => stalled.promise);
+    await tick();
+    expireMintLease();
+
+    // Mint B wins the race; the server rotates to its key.
+    const winning = await mintBundle(async () => ({ sessionId: "session_1", key: "b".repeat(64) }));
+    expect(winning?.bundle.key).toBe("b".repeat(64));
+
+    const queued = requireState(
+      await enqueueStudent(winning!, { id: "student_1", name: "A" }, "section_1", "n"),
+    );
+    expect(queued.queued).toHaveLength(1);
+
+    // The stalled mint's request lands later; the server adopts B's key and
+    // the client discards the duplicate result instead of overwriting B.
+    stalled.resolve({ sessionId: "session_1", key: "b".repeat(64) });
+    expect(await stalledMint).toBeNull();
+
+    const stored = readQueue("session_1");
+    expect(stored?.bundle.key).toBe("b".repeat(64));
+    const [{ studentName, ...signed }] = stored?.queued ?? [];
+    expect(studentName).toBe("A");
+    expect(await verifySignature("b".repeat(64), signed)).toBe(true);
+  });
+
+  it("retries a transient storage failure so re-signed records survive", async () => {
+    const state = await freshQueue();
+    const pendingMint = deferred<typeof BUNDLE>();
+    const minting = mintBundle(() => pendingMint.promise);
+    await tick();
+    expireMintLease();
+    const queued = requireState(
+      await enqueueStudent(state, { id: "student_1", name: "A" }, "section_1", "n"),
+    );
+    expect(queued.queued).toHaveLength(1);
+
+    // The server key rotates while localStorage is briefly full; the save
+    // retries, so the record is persisted under the new key, not left dead.
+    const realSetItem = Storage.prototype.setItem;
+    let failures = 1;
+    const setItemSpy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(function (
+      this: Storage,
+      key: string,
+      value: string,
+    ) {
+      if (key === STORAGE_KEY && failures > 0) {
+        failures -= 1;
+        throw new Error("quota exceeded");
+      }
+      realSetItem.call(this, key, value);
+    });
+    try {
+      pendingMint.resolve({ sessionId: "session_1", key: "c".repeat(64) });
+      const minted = await minting;
+      expect(minted?.bundle.key).toBe("c".repeat(64));
+      const [{ studentName, ...signed }] = minted?.queued ?? [];
+      expect(studentName).toBe("A");
+      expect(await verifySignature("c".repeat(64), signed)).toBe(true);
+    } finally {
+      setItemSpy.mockRestore();
+    }
+    expect(readQueue("session_1")?.bundle.key).toBe("c".repeat(64));
+    expect(readQueue("session_1")?.queued).toHaveLength(1);
   });
 });
 

@@ -95,6 +95,13 @@ export const mintOfflineBundle = mutation({
   args: {
     actorToken: v.string(),
     sessionId: v.id("class_sessions"),
+    /**
+     * The key the caller believes is current. A concurrent mint that landed
+     * first makes this mismatch, and instead of rotating again (which would
+     * invalidate records already signed with the winner's key) we hand back
+     * the current key so every device converges on one bundle.
+     */
+    knownKey: v.optional(v.string()),
   },
   returns: v.object({
     sessionId: v.id("class_sessions"),
@@ -111,9 +118,13 @@ export const mintOfflineBundle = mutation({
     if (session.status !== "active") throw new ConvexError("session_not_active");
 
     // Raw key on the row so sync can recompute HMACs; re-minting rotates it,
-    // invalidating any keys still held by stale device copies.
-    const key = mintBundleKey();
-    await ctx.db.patch(session._id, { offlineKey: key });
+    // invalidating any keys still held by stale device copies. When a known
+    // key no longer matches, another mint already rotated: adopt it rather
+    // than rotate twice and strand the records signed in between.
+    const current = session.offlineKey;
+    const adopt = args.knownKey !== undefined && current !== undefined && current !== args.knownKey;
+    const key = adopt ? current : mintBundleKey();
+    if (!adopt) await ctx.db.patch(session._id, { offlineKey: key });
 
     await ctx.runMutation(internal.ledger.appendLedgerEvent, {
       institutionId: session.institutionId,

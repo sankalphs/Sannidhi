@@ -161,8 +161,12 @@ export function OfflineKit({
       // lock-held check inside mintBundle refuses when ANY unsynced record
       // exists — this session's or another's — so no queued attestation is
       // silently destroyed by the replacement.
-      const state = await mintBundle(async () => {
-        const bundle = await mintOfflineBundle({ actorToken, sessionId });
+      const state = await mintBundle(async (knownKey) => {
+        const bundle = await mintOfflineBundle({
+          actorToken,
+          sessionId,
+          ...(knownKey !== undefined ? { knownKey } : {}),
+        });
         return { sessionId: bundle.sessionId, key: bundle.key };
       });
       if (state === null) {

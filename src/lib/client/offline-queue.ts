@@ -64,6 +64,23 @@ function saveState(state: OfflineQueueState): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+/**
+ * Saves the post-mint state, retrying once: by this point the server key has
+ * already rotated, so a transient storage failure (quota freed by another tab)
+ * must not strand re-signed records on the old key.
+ */
+function saveStateRetry(state: OfflineQueueState): void {
+  try {
+    saveState(state);
+  } catch (first) {
+    try {
+      saveState(state);
+    } catch {
+      throw first;
+    }
+  }
+}
+
 /** Wipes storage synchronously — for callers already holding the queue lock. */
 function clearStorageSynced(): void {
   window.localStorage.removeItem(STORAGE_KEY);
@@ -186,18 +203,24 @@ function bumpQueueEpoch(): void {
  * must not hold the queue lock — a Convex mutation that hangs offline would
  * block attestations and sign-out — so the lease does the work instead:
  * attestations and other mints refuse while it is held, and the result is
- * saved only when the stored queue is exactly what the mint started from.
- * Returns null when the device still holds unsynced records or a mint is
- * already in flight.
+ * saved only when the lease is still ours and the queue is still this
+ * session's. Returns null when the device already holds unsynced records, a
+ * mint is in flight, or the mint lost a race with a sign-out/competing mint.
+ *
+ * `mint` receives the key this device currently believes is current, so the
+ * server can detect a competing mint and hand back the winning key instead of
+ * rotating a second time.
  */
 export async function mintBundle(
-  mint: () => Promise<OfflineBundle>,
+  mint: (knownKey: string | undefined) => Promise<OfflineBundle>,
 ): Promise<OfflineQueueState | null> {
   const token = crypto.randomUUID();
   let epoch: string | null = null;
+  let knownKey: string | undefined;
   const leased = await withQueueLock(() => {
     if (mintLeaseActive() || hasAnyUnsyncedRecords()) return false;
     epoch = queueEpoch();
+    knownKey = parseState()?.bundle.key;
     window.localStorage.setItem(
       MINTING_KEY,
       JSON.stringify({ token, startedAt: Date.now() } satisfies MintLease),
@@ -207,7 +230,7 @@ export async function mintBundle(
   if (!leased) return null;
 
   try {
-    const bundle = await mint();
+    const bundle = await mint(knownKey);
     return await withQueueLock(async () => {
       // Sign-out clears the lease and bumps the epoch; another tab's mint
       // replaces the lease with its own token. Either way this bundle is
@@ -216,7 +239,7 @@ export async function mintBundle(
       const current = parseState();
       if (current === null) {
         const state: OfflineQueueState = { bundle, queued: [] };
-        saveState(state);
+        saveStateRetry(state);
         return state;
       }
       // Another session's queue took storage: never overwrite it.
@@ -239,7 +262,7 @@ export async function mintBundle(
         });
       }
       const state: OfflineQueueState = { bundle, queued };
-      saveState(state);
+      saveStateRetry(state);
       return state;
     });
   } finally {
