@@ -3,6 +3,8 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { institutionDayOfWeek, institutionMinutesOfDay } from "@/lib/attendance/timezone";
+
 const source = readFileSync(join(process.cwd(), "convex", "testFixtures.ts"), "utf8");
 
 describe("convex/testFixtures.ts", () => {
@@ -13,6 +15,7 @@ describe("convex/testFixtures.ts", () => {
   it("gates every entry point behind SANNIDHI_TEST_FIXTURES", () => {
     expect(source).toContain('process.env.SANNIDHI_TEST_FIXTURES === "1"');
     const resetBody = source.slice(source.indexOf("export const reset"));
+    expect(resetBody.indexOf("fixturesEnabled()")).toBeGreaterThanOrEqual(0);
     expect(resetBody.indexOf("fixturesEnabled()")).toBeLessThan(resetBody.indexOf("deleteRows"));
     const actorBody = source.slice(source.indexOf("export const getFixtureActor"));
     expect(actorBody.indexOf("fixturesEnabled()")).toBeLessThan(actorBody.indexOf("ctx.db"));
@@ -28,6 +31,20 @@ describe("convex/testFixtures.ts", () => {
     expect(source).toMatch(/dayOfWeek: todayDayOfWeek/);
     expect(source).toMatch(/startMinutes: liveStartMinutes/);
     expect(source).toMatch(/endMinutes: liveEndMinutes/);
+  });
+
+  it("converts UTC to IST wall-clock minutes correctly (behavioral)", () => {
+    // 2026-09-04T10:00:00Z is 15:30 IST — east-of-UTC offsets are ADDED to
+    // the UTC clock, not subtracted.
+    expect(institutionMinutesOfDay(Date.UTC(2026, 8, 4, 10, 0, 0))).toBe(15 * 60 + 30);
+    // Midnight UTC is 05:30 IST, the same calendar day.
+    expect(institutionMinutesOfDay(Date.UTC(2026, 8, 4, 0, 0, 0))).toBe(5 * 60 + 30);
+    // 2026-09-04T20:00:00Z is 01:30 IST on Sep 5 — wrap by day.
+    expect(institutionMinutesOfDay(Date.UTC(2026, 8, 4, 20, 0, 0))).toBe(1 * 60 + 30);
+    // The day-of-week flips at 18:30 UTC: Sep 4 2026 is a Friday, so 19:00
+    // UTC is already Saturday Sep 5 IST.
+    expect(institutionDayOfWeek(Date.UTC(2026, 8, 4, 18, 0, 0))).toBe(5); // Friday
+    expect(institutionDayOfWeek(Date.UTC(2026, 8, 4, 19, 0, 0))).toBe(6); // Saturday IST
   });
 
   it("assigns the seeded faculty member to the live timetable slots", () => {

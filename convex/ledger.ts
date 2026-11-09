@@ -47,26 +47,6 @@ export const appendLedgerEvent = internalMutation({
 const MAX_VERIFY_WINDOW = 2000;
 const MAX_LEDGER_PAGE = 200;
 
-export const history = query({
-  args: { actorToken: v.string(), subjectUserId: v.id("users") },
-  handler: async (ctx, args) => {
-    const caller = await requireActorUser(ctx, args.actorToken);
-    if (caller._id !== args.subjectUserId && caller.role !== "admin" && caller.role !== "auditor") {
-      throw new ConvexError("unauthorized");
-    }
-    if (caller._id !== args.subjectUserId) {
-      const subject = await ctx.db.get(args.subjectUserId);
-      if (subject === null || subject.institutionId !== caller.institutionId) {
-        throw new ConvexError("unauthorized");
-      }
-    }
-    return ctx.db
-      .query("event_ledger")
-      .withIndex("by_subject", (q) => q.eq("subjectUserId", args.subjectUserId))
-      .collect();
-  },
-});
-
 async function safeGetUser(
   ctx: QueryCtx,
   userId: Id<"users"> | undefined,
@@ -417,8 +397,9 @@ export const verifyChain = query({
     if (fromSeq > 0) {
       const predecessor = await ctx.db
         .query("event_ledger")
-        .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
-        .filter((q) => q.eq(q.field("seq"), fromSeq - 1))
+        .withIndex("by_institution_seq", (q) =>
+          q.eq("institutionId", caller.institutionId).eq("seq", fromSeq - 1),
+        )
         .first();
       if (predecessor === null) {
         // Predecessor pruned by retention? Only a window starting at the oldest
@@ -436,8 +417,9 @@ export const verifyChain = query({
 
     const events = await ctx.db
       .query("event_ledger")
-      .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
-      .filter((q) => q.gte(q.field("seq"), fromSeq))
+      .withIndex("by_institution_seq", (q) =>
+        q.eq("institutionId", caller.institutionId).gte("seq", fromSeq),
+      )
       .order("asc")
       .take(limit + 1);
 
@@ -489,8 +471,9 @@ export const verifyAttendanceChain = query({
     if (fromSeq > 0) {
       const predecessor = await ctx.db
         .query("attendance_events")
-        .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
-        .filter((q) => q.eq(q.field("seq"), fromSeq - 1))
+        .withIndex("by_institution_seq", (q) =>
+          q.eq("institutionId", caller.institutionId).eq("seq", fromSeq - 1),
+        )
         .first();
       if (predecessor === null) {
         const oldest = await ctx.db
@@ -506,8 +489,9 @@ export const verifyAttendanceChain = query({
 
     const events = await ctx.db
       .query("attendance_events")
-      .withIndex("by_institution_seq", (q) => q.eq("institutionId", caller.institutionId))
-      .filter((q) => q.gte(q.field("seq"), fromSeq))
+      .withIndex("by_institution_seq", (q) =>
+        q.eq("institutionId", caller.institutionId).gte("seq", fromSeq),
+      )
       .order("asc")
       .take(limit + 1);
 

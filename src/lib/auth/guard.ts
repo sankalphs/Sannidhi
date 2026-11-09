@@ -10,6 +10,7 @@ export const ROUTE_GROUPS: readonly RouteGroup[] = [
   { prefix: "/faculty", roles: ["faculty"] },
   { prefix: "/admin", roles: ["admin", "department_authority"] },
   { prefix: "/admin/users", roles: ["admin"] },
+  { prefix: "/admin/requests", roles: ["admin"] },
   { prefix: "/admin/devices", roles: ["admin"] },
   { prefix: "/admin/schedule", roles: ["admin"] },
   { prefix: "/admin/analytics", roles: ["admin", "department_authority"] },
@@ -42,6 +43,8 @@ export function evaluateAccess(pathname: string, role: Role | null, search = "")
 /** A post-sign-in `next` target, kept only when it is a same-origin relative path. */
 export function safeNextPath(raw: string | null | undefined): string | null {
   if (typeof raw !== "string" || !raw.startsWith("/")) return null;
+  // Control characters can smuggle a scheme past URL parsers (`/\t/evil.example`).
+  if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
   if (raw.startsWith("//") || raw.startsWith("/\\")) return null;
   return raw;
 }

@@ -14,18 +14,19 @@ import { describeConvexError, type ErrorTranslation } from "@/lib/client/describ
 import {
   dropSynced,
   enqueueStudent,
+  mintBundle,
   readQueue,
-  rememberBundle,
   removeFromQueue,
   settledStudentIds,
+  subscribeQueueCleared,
   type OfflineQueueState,
+  type SyncResultStatus,
 } from "@/lib/client/offline-queue";
 
 export type BoardSnapshot = FunctionReturnType<typeof api.classSessions.getBoard>;
 type BoardRow = BoardSnapshot["rows"][number];
 
-type SyncStatus =
-  "accepted" | "step_up" | "flagged" | "rejected" | "duplicate" | "invalid_signature";
+type SyncStatus = SyncResultStatus;
 
 type SyncOutcome = { studentName: string; status: SyncStatus };
 
@@ -49,6 +50,9 @@ const SYNC_ERROR_TRANSLATIONS: ErrorTranslation = [
     message: "This session ended more than 7 days ago, so its offline records can no longer sync.",
   },
 ];
+
+/** Server cap on syncOfflineBatch records; the client syncs in chunks of this size. */
+const SYNC_CHUNK_SIZE = 200;
 
 const STATUS_COPY: Record<SyncStatus, string> = {
   accepted: "Verified",
@@ -116,13 +120,16 @@ export function OfflineKit({
   const [outcomes, setOutcomes] = useState<SyncOutcome[] | null>(null);
 
   // The queue lives on the faculty device, so it is read on mount/dialog open —
-  // never during SSR.
+  // never during SSR. A wipe broadcast (sign-out in another tab) drops the
+  // in-memory copy so student names cannot be written back into storage.
   useEffect(() => {
     if (!open) return;
     setQueue(readQueue(sessionId));
     setError(null);
     setOutcomes(null);
   }, [open, sessionId]);
+
+  useEffect(() => subscribeQueueCleared(() => setQueue(null)), []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -150,8 +157,21 @@ export function OfflineKit({
     setMinting(true);
     setError(null);
     try {
-      const bundle = await mintOfflineBundle({ actorToken, sessionId });
-      setQueue(rememberBundle(sessionId, { sessionId: bundle.sessionId, key: bundle.key }));
+      // Minting replaces the device queue and rotates the server key. The
+      // lock-held check inside mintBundle refuses when ANY unsynced record
+      // exists — this session's or another's — so no queued attestation is
+      // silently destroyed by the replacement.
+      const state = await mintBundle(async () => {
+        const bundle = await mintOfflineBundle({ actorToken, sessionId });
+        return { sessionId: bundle.sessionId, key: bundle.key };
+      });
+      if (state === null) {
+        setError(
+          "Could not authorize offline capture right now. Sync any queued records, or wait a moment and try again.",
+        );
+        return;
+      }
+      setQueue(state);
     } catch (cause) {
       setError(
         describeConvexError(
@@ -177,14 +197,19 @@ export function OfflineKit({
         `${row.studentName} — present in class`,
       );
       setQueue(next);
+    } catch {
+      // Signing or storage can fail (private-mode quota, missing crypto
+      // surface); the record was never persisted, so say so instead of
+      // vanishing into an unhandled rejection.
+      setError("Could not queue this attestation on the device. Please try again.");
     } finally {
       setBusyStudentId(null);
     }
   }
 
-  function handleRemove(studentId: string) {
+  async function handleRemove(studentId: string) {
     if (queue === null || syncing || busyStudentId !== null) return;
-    setQueue(removeFromQueue(queue, studentId));
+    setQueue(await removeFromQueue(queue, studentId));
   }
 
   async function handleSync() {
@@ -204,19 +229,28 @@ export function OfflineKit({
         ...(record.note !== undefined ? { note: record.note } : {}),
         signature: record.signature,
       }));
-      const result = await syncOfflineBatch({ actorToken, records });
-      const nameOf = (studentId: Id<"users">) => byStudent.get(studentId) ?? "Student";
-      setOutcomes(
-        result.results.map(({ studentId, status }) => ({
-          studentName: nameOf(studentId),
-          status,
-        })),
-      );
-      // Every per-record status is a settlement: accepted entries are recorded,
-      // duplicates were already recorded by an earlier sync, and
-      // rejected/invalid-signature claims are verdicts, not retries. The queue
-      // drops them all so nothing is endlessly resubmitted.
-      setQueue(dropSynced(queue, settledStudentIds(result.results)));
+      // The server caps one batch at SYNC_CHUNK_SIZE records; a bigger queue
+      // drains in sequential chunks. Settled students are dropped after every
+      // chunk — and React state updated immediately — so a mid-sync failure
+      // never resubmits already-settled chunks.
+      const allOutcomes: SyncOutcome[] = [];
+      let remaining = records;
+      while (remaining.length > 0) {
+        const chunk = remaining.slice(0, SYNC_CHUNK_SIZE);
+        remaining = remaining.slice(chunk.length);
+        const result = await syncOfflineBatch({ actorToken, records: chunk });
+        const nameOf = (studentId: Id<"users">) => byStudent.get(studentId) ?? "Student";
+        allOutcomes.push(
+          ...result.results.map(({ studentId, status }) => ({
+            studentName: nameOf(studentId),
+            status,
+          })),
+        );
+        const settled = settledStudentIds(result.results);
+        const nextQueue = await dropSynced(queue, settled);
+        setQueue(nextQueue);
+      }
+      setOutcomes(allOutcomes);
     } catch (cause) {
       setError(
         describeConvexError(
@@ -382,7 +416,12 @@ export function OfflineKit({
             ) : (
               <p className="text-muted-foreground text-sm" data-testid="offline-empty-queue">
                 {outcomes !== null
-                  ? "Queue empty — every record synced. Mark more students or close this dialog."
+                  ? outcomes.every(
+                      (outcome) =>
+                        outcome.status === "rejected" || outcome.status === "invalid_signature",
+                    )
+                    ? "Queue empty — no record could be added to the session. Review the sync results below."
+                    : "Queue empty — every record synced. Mark more students or close this dialog."
                   : "No records queued yet — mark attending students to build the offline roster."}
               </p>
             )}

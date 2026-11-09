@@ -44,6 +44,7 @@ describe("evaluateAccess", () => {
       status: "redirect",
       to: "/admin",
     });
+    expect(allowedRolesFor("/admin/requests")).toEqual(["admin"]);
     expect(allowedRolesFor("/admin/courses")).toEqual(["department_authority", "admin"]);
     expect(allowedRolesFor("/admin/policies")).toEqual(["department_authority", "admin"]);
   });
@@ -96,5 +97,11 @@ describe("safeNextPath", () => {
     expect(safeNextPath("https://evil.example")).toBeNull();
     expect(safeNextPath("//evil.example")).toBeNull();
     expect(safeNextPath("/\\evil.example")).toBeNull();
+  });
+
+  it("drops control characters that could smuggle another origin", () => {
+    expect(safeNextPath("/\t/evil.example")).toBeNull();
+    expect(safeNextPath("/\n/evil.example")).toBeNull();
+    expect(safeNextPath("/student\r\nSet-Cookie: x")).toBeNull();
   });
 });

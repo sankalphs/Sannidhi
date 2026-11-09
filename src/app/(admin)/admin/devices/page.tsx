@@ -156,10 +156,18 @@ export default async function AdminDevicesPage() {
                     </td>
                     <td className="flex justify-end gap-2 px-4 py-2">
                       {device.state === "enrolled" ? (
-                        <DeviceActionButton action="activate" deviceId={device._id} />
+                        <DeviceActionButton
+                          action="activate"
+                          deviceId={device._id}
+                          label="Activate"
+                        />
                       ) : null}
                       {device.state === "suspended" ? (
-                        <DeviceActionButton action="activate" deviceId={device._id} />
+                        <DeviceActionButton
+                          action="activate"
+                          deviceId={device._id}
+                          label="Reactivate"
+                        />
                       ) : null}
                       {["new", "enrolled", "suspended", "active"].includes(device.state) ? (
                         <DeviceActionButton action="revoke" deviceId={device._id} />

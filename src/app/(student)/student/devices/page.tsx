@@ -76,7 +76,7 @@ export default async function StudentDevicesPage() {
           description="Something went wrong while loading your biometric consent status. Please refresh the page and try again."
         />
       ) : (
-        <BiometricsCard initialRecord={biometricRecord} />
+        <BiometricsCard initialRecord={biometricRecord} studentId={session.userId} />
       )}
     </div>
   );

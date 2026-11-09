@@ -19,9 +19,11 @@ const ACTION_LABEL: Record<AdminAction, string> = {
 export function DeviceActionButton({
   action,
   deviceId,
+  label,
 }: {
   action: AdminAction;
   deviceId: string;
+  label?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -63,7 +65,7 @@ export function DeviceActionButton({
           onClick={needsConfirm ? () => setConfirming(true) : run}
         >
           {pending ? <Loader2 className="animate-spin" /> : null}
-          {ACTION_LABEL[action]}
+          {label ?? ACTION_LABEL[action]}
         </Button>
       )}
       {error ? <span className="text-destructive text-xs">{error}</span> : null}

@@ -63,12 +63,14 @@ async function listPendingInvites(
   institutionId: Id<"institutions">,
   email: string,
 ): Promise<Doc<"invites">[]> {
+  // Index on pending first: an address accumulates historical invites, and
+  // collecting them all to filter would eventually exceed the read budget.
   const candidates = await ctx.db
     .query("invites")
-    .withIndex("by_email", (q) => q.eq("email", email))
+    .withIndex("by_email_status", (q) => q.eq("email", email).eq("status", "pending"))
     .collect();
   return candidates
-    .filter((invite) => invite.institutionId === institutionId && invite.status === "pending")
+    .filter((invite) => invite.institutionId === institutionId)
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -256,22 +258,6 @@ export const createInvites = mutation({
   handler: async (ctx, args) => createInvitesInternal(ctx, args),
 });
 
-export const importUsersCsv = mutation({
-  args: {
-    actorToken: v.string(),
-    institutionId: v.id("institutions"),
-    rows: v.array(v.object({ email: v.string(), name: v.string(), role: roleValidator })),
-    ttlDays: v.optional(v.number()),
-  },
-  handler: async (ctx, args) =>
-    createInvitesInternal(ctx, {
-      actorToken: args.actorToken,
-      institutionId: args.institutionId,
-      invites: args.rows,
-      ttlDays: args.ttlDays,
-    }),
-});
-
 /**
  * Issues a fresh link for someone who has not activated yet (revoking their
  * older pending link) and returns it once, for the admin to copy and share —
@@ -287,13 +273,11 @@ export const reissueInvite = mutation({
       .query("users")
       .withIndex("by_email", (q) => q.eq("email", email))
       .first();
-    const [latestInvite] = await ctx.db
-      .query("invites")
-      .withIndex("by_email", (q) => q.eq("email", email))
-      .filter((q) => q.eq(q.field("institutionId"), admin.institutionId))
-      .order("desc")
-      .take(1);
-    const role = user?.role ?? latestInvite?.role;
+    // An existing account keeps its role. Without one, only a still-pending
+    // invite may supply the role — a revoked or accepted historical invite
+    // must not mint a fresh user and working link.
+    const pending = user === null ? await listPendingInvites(ctx, admin.institutionId, email) : [];
+    const role = user?.role ?? pending[0]?.role;
     if (role === undefined) throw new ConvexError("invite not found");
     if (user !== null) assertSameInstitution(admin.institutionId, user.institutionId);
 
@@ -307,7 +291,6 @@ export const reissueInvite = mutation({
     });
   },
 });
-
 export const listInvites = query({
   args: { actorToken: v.string() },
   handler: async (ctx, args) => {
@@ -372,44 +355,6 @@ export const revokeInvite = mutation({
       payload: { email: invite.email, role: invite.role, inviteId: invite._id },
     });
     return { ok: true as const };
-  },
-});
-
-export const redeemInvite = mutation({
-  args: { token: v.string(), name: v.optional(v.string()) },
-  handler: async (ctx, args) => {
-    const tokenHash = await hashInviteToken(args.token);
-    const invite = await ctx.db
-      .query("invites")
-      .withIndex("by_tokenHash", (q) => q.eq("tokenHash", tokenHash))
-      .unique();
-
-    if (invite === null) throw new ConvexError("invite not found");
-    if (invite.status === "accepted") throw new ConvexError("invite already accepted");
-    if (invite.status === "revoked") throw new ConvexError("invite revoked");
-    if (invite.expiresAt <= Date.now()) {
-      if (invite.status === "pending") {
-        await ctx.db.patch(invite._id, { status: "expired" });
-      }
-      throw new ConvexError("invite expired");
-    }
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_email", (q) => q.eq("email", invite.email))
-      .first();
-    if (user === null || user.institutionId !== invite.institutionId) {
-      throw new ConvexError("user not found");
-    }
-    if (user.status === "suspended") throw new ConvexError("account suspended");
-
-    const displayName = args.name?.trim();
-    if (displayName !== undefined && displayName.length > 0 && displayName !== user.name) {
-      await ctx.db.patch(user._id, { name: displayName });
-    }
-    await activateUserAndAcceptInvite(ctx, { user, invite });
-
-    return { userId: user._id, role: invite.role };
   },
 });
 

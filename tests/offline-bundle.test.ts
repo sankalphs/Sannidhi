@@ -6,6 +6,7 @@ import {
   mintBundleKey,
   OFFLINE_SYNC_GRACE_MS,
   nonceHash,
+  resolveMintKey,
   signRecord,
   verifySignature,
   type OfflineRecord,
@@ -141,5 +142,31 @@ describe("isOfflineSyncOpen", () => {
 
   it("closes sync once the grace period has passed", () => {
     expect(isOfflineSyncOpen(windowEndsAt, windowEndsAt + OFFLINE_SYNC_GRACE_MS + 1)).toBe(false);
+  });
+});
+
+describe("resolveMintKey", () => {
+  const create = () => "fresh-key";
+
+  it("adopts an active session's existing key without rotating", () => {
+    // A second device, a retry, or a stalled request must not rotate: records
+    // already signed with this key stay valid.
+    expect(resolveMintKey("existing-key", create)).toEqual({
+      key: "existing-key",
+      rotate: false,
+    });
+  });
+
+  it("creates a key only when the session has none", () => {
+    expect(resolveMintKey(undefined, create)).toEqual({ key: "fresh-key", rotate: true });
+  });
+
+  it("converges competing mints that both started with no key", () => {
+    // Both requests resolve against the same row; whichever runs first creates
+    // the key and the other adopts it, so no records are stranded.
+    const first = resolveMintKey(undefined, create);
+    const second = resolveMintKey(first.key, create);
+    expect(first.key).toBe(second.key);
+    expect(second.rotate).toBe(false);
   });
 });

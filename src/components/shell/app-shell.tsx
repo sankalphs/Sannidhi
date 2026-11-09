@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { Seal, Wordmark } from "@/components/marketing/wordmark";
 import { MobileNav } from "@/components/shell/mobile-nav";
+import { SessionRefresher } from "@/components/shell/session-refresher";
 import { SignOutButton } from "@/components/shell/sign-out-button";
 import { SideNav } from "@/components/shell/side-nav";
 import type { NavItem } from "@/lib/auth/nav";
@@ -21,6 +22,7 @@ function roleLabel(role: Role): string {
 export function AppShell({ role, nav, children }: AppShellProps) {
   return (
     <div className="bg-background min-h-screen">
+      <SessionRefresher />
       {/* Chalkboard sidebar — desktop. Board green in light; the dark theme's
           sidebar tokens in dark, where --primary turns pale. */}
       <aside className="bg-primary text-primary-foreground border-primary-foreground/10 dark:bg-sidebar dark:text-sidebar-foreground dark:border-sidebar-border fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex">
