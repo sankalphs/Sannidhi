@@ -104,7 +104,7 @@ export function SessionControl({
       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-2xl font-semibold tracking-tight">
+            <h1 className="text-2xl font-semibold tracking-tight break-words">
               {session.courseCode} {session.courseTitle}
             </h1>
             {session.kind === "guest" ? <Badge variant="outline">Guest</Badge> : null}
@@ -179,7 +179,7 @@ export function SessionControl({
           {error}
         </p>
       ) : null}
-      <div className="grid items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[340px_minmax(0,1fr)]">
         <QrPanel actorToken={actorToken} sessionId={sessionId} sessionStatus={session.status} />
         <LiveBoard
           actorToken={actorToken}

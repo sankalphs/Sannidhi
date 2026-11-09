@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatReasonCode } from "@/lib/analytics/labels";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 
 import { ManualVerifyDialog } from "./manual-verify-dialog";
 
@@ -40,12 +41,17 @@ const SPOT_ERROR_COPY: Record<SpotRecheckFailure["reason"], string> = {
   student_not_eligible: "This student has no verifiable attendance to re-check.",
 };
 
+const CLOCK_FORMAT = new Intl.DateTimeFormat("en-GB", {
+  timeZone: INSTITUTION_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+/** HH:MM:SS on the institution's clock, whatever zone the browser is in. */
 function formatClock(timestamp: number): string {
-  const date = new Date(timestamp);
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  const ss = String(date.getSeconds()).padStart(2, "0");
-  return `${hh}:${mm}:${ss}`;
+  return CLOCK_FORMAT.format(timestamp);
 }
 
 function formatMmSs(totalSeconds: number): string {
@@ -122,6 +128,10 @@ export function LiveBoard({
   const countByState = (state: RowState) =>
     rows.reduce((total, row) => (row.state === state ? total + 1 : total), 0);
 
+  // Re-checks and manual verification only work while the window is live.
+  const { status, closedAt } = board.session;
+  const live = status === "active";
+
   async function handleSpotRecheck(studentId?: Id<"users">) {
     if (recheckBusy) return;
     setRecheckBusy(true);
@@ -144,20 +154,55 @@ export function LiveBoard({
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Live roster</CardTitle>
-          <CardDescription className="flex items-center gap-1.5">
-            <span className="relative flex size-2 motion-reduce:animate-none">
-              <span className="bg-muted-foreground/60 absolute inline-flex size-full animate-ping rounded-full opacity-75 motion-reduce:hidden" />
-              <span className="bg-muted-foreground relative inline-flex size-2 rounded-full" />
-            </span>
-            Updated live
-          </CardDescription>
-          <p className="text-muted-foreground text-sm">
-            Manual verification records faculty-attested attendance with a mandatory auditable
-            reason. Re-checks ask a verified student to confirm their face on the spot.
-          </p>
+          <CardTitle>{status === "closed" ? "Final roster" : "Live roster"}</CardTitle>
+          {live ? (
+            <>
+              <CardDescription className="flex items-center gap-1.5">
+                <span className="relative flex size-2 motion-reduce:animate-none">
+                  <span className="bg-muted-foreground/60 absolute inline-flex size-full animate-ping rounded-full opacity-75 motion-reduce:hidden" />
+                  <span className="bg-muted-foreground relative inline-flex size-2 rounded-full" />
+                </span>
+                Updated live
+              </CardDescription>
+              <p className="text-muted-foreground text-sm">
+                Manual verification records faculty-attested attendance with a mandatory auditable
+                reason. Re-checks ask a verified student to confirm their face on the spot.
+              </p>
+            </>
+          ) : (
+            <CardDescription>
+              {status === "paused"
+                ? "Paused — restart the window to verify or re-check students."
+                : "This session is closed. Restart the window to verify or re-check students."}
+            </CardDescription>
+          )}
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
+          {status === "closed" ? (
+            <div
+              data-testid="board-closed-summary"
+              className="bg-muted/40 flex flex-col gap-1 rounded-lg border p-4"
+            >
+              <p className="font-medium" suppressHydrationWarning>
+                {closedAt !== null ? `Closed at ${formatClock(closedAt)}` : "Session closed"}
+              </p>
+              <p className="text-muted-foreground text-sm">
+                {[
+                  `${countByState("verified")} of ${rows.length} verified`,
+                  countByState("flagged") > 0
+                    ? `${countByState("flagged")} flagged for review`
+                    : null,
+                  countByState("challenged") > 0
+                    ? `${countByState("challenged")} still finishing verification`
+                    : null,
+                  countByState("rejected") > 0 ? `${countByState("rejected")} rejected` : null,
+                  `${countByState("pending")} didn't check in`,
+                ]
+                  .filter((part) => part !== null)
+                  .join(" · ")}
+              </p>
+            </div>
+          ) : null}
           <div className="flex flex-wrap items-center gap-2">
             <Badge
               data-testid="board-count-verified"
@@ -186,16 +231,18 @@ export function LiveBoard({
             >
               Rejected {countByState("rejected")}
             </Badge>
-            <Button
-              variant="outline"
-              size="xs"
-              className="ml-auto"
-              data-testid="spot-recheck-random"
-              disabled={recheckBusy || countByState("verified") === 0}
-              onClick={() => void handleSpotRecheck()}
-            >
-              Random recheck
-            </Button>
+            {live ? (
+              <Button
+                variant="outline"
+                size="xs"
+                className="ml-auto"
+                data-testid="spot-recheck-random"
+                disabled={recheckBusy || countByState("verified") === 0}
+                onClick={() => void handleSpotRecheck()}
+              >
+                Random recheck
+              </Button>
+            ) : null}
           </div>
           {spotError !== null ? (
             <p className="text-destructive text-sm" data-testid="spot-error" role="alert">
@@ -209,124 +256,86 @@ export function LiveBoard({
               description="The roster appears once students enroll in this section."
             />
           ) : (
-            <div className="-mx-6 max-h-[70vh] overflow-auto px-6">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-muted-foreground text-left text-xs font-medium">
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
+            <ul className="-mx-6 divide-y border-t px-6 lg:max-h-[70vh] lg:overflow-auto">
+              {rows.map((row) => (
+                <li
+                  key={row.studentId}
+                  data-testid={`board-row-${row.studentId}`}
+                  className="flex flex-col gap-3 py-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                >
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-medium">{row.studentName}</span>
+                      <StateBadge state={row.state} />
+                      {row.state === "challenged" && row.challenge !== null ? (
+                        <ChallengeCountdown studentId={row.studentId} challenge={row.challenge} />
+                      ) : null}
+                    </div>
+                    <p className="text-muted-foreground truncate text-xs">{row.email}</p>
+                    <p
+                      className="text-muted-foreground text-xs tabular-nums"
+                      suppressHydrationWarning
                     >
-                      Student
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
-                    >
-                      State
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
-                    >
-                      Checked in
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pr-4 pb-2"
-                    >
-                      Reasons
-                    </th>
-                    <th
-                      scope="col"
-                      className="border-border/70 bg-card sticky top-0 z-10 border-b pb-2"
-                    >
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr
-                      key={row.studentId}
-                      data-testid={`board-row-${row.studentId}`}
-                      className="border-b last:border-b-0"
-                    >
-                      <td className="py-2.5 pr-4">
-                        <div className="font-medium">{row.studentName}</div>
-                        <div className="text-muted-foreground text-xs">{row.email}</div>
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <StateBadge state={row.state} />
-                          {row.state === "challenged" && row.challenge !== null ? (
-                            <ChallengeCountdown
-                              studentId={row.studentId}
-                              challenge={row.challenge}
-                            />
-                          ) : null}
-                        </div>
-                      </td>
-                      <td
-                        className="text-muted-foreground py-2.5 pr-4 tabular-nums"
-                        suppressHydrationWarning
-                      >
-                        {row.checkedInAt !== null ? formatClock(row.checkedInAt) : "—"}
-                      </td>
-                      <td className="py-2.5 pr-4">
-                        {row.reasonCodes.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {row.reasonCodes.map((code) => (
-                              <span
-                                key={code}
-                                title={code}
-                                className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-[11px]"
-                              >
-                                {formatReasonCode(code)}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5">
-                        {row.state === "verified" ? (
-                          row.challenge?.kind === "spot_recheck" ? (
-                            <span
-                              data-testid={`spot-pending-${row.studentId}`}
-                              className="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400"
-                            >
-                              Spot re-check requested
-                            </span>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="xs"
-                              data-testid={`spot-recheck-${row.studentId}`}
-                              disabled={recheckBusy}
-                              onClick={() => void handleSpotRecheck(row.studentId)}
-                            >
-                              Recheck
-                            </Button>
-                          )
+                      {row.checkedInAt !== null
+                        ? `Checked in ${formatClock(row.checkedInAt)}`
+                        : "Not checked in"}
+                      {row.updatedAt !== null && row.updatedAt !== row.checkedInAt
+                        ? ` · updated ${formatClock(row.updatedAt)}`
+                        : ""}
+                    </p>
+                    {row.reasonCodes.length > 0 ? (
+                      <div className="mt-0.5 flex flex-wrap gap-1">
+                        {row.reasonCodes.map((code) => (
+                          <span
+                            key={code}
+                            title={code}
+                            className="text-muted-foreground rounded-md border px-1.5 py-0.5 text-[11px]"
+                          >
+                            {formatReasonCode(code)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                  {live ? (
+                    <div className="shrink-0">
+                      {row.state === "verified" ? (
+                        row.challenge?.kind === "spot_recheck" ? (
+                          <span
+                            data-testid={`spot-pending-${row.studentId}`}
+                            className="inline-flex items-center rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-600 dark:text-amber-400"
+                          >
+                            Spot re-check requested
+                          </span>
                         ) : (
                           <Button
                             variant="outline"
-                            size="xs"
-                            data-testid={`manual-verify-${row.studentId}`}
-                            onClick={() => setVerifyTarget(row)}
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            data-testid={`spot-recheck-${row.studentId}`}
+                            disabled={recheckBusy}
+                            onClick={() => void handleSpotRecheck(row.studentId)}
                           >
-                            <ShieldCheck />
-                            {row.state === "pending" ? "Verify" : "Override"}
+                            Recheck
                           </Button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        )
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full sm:w-auto"
+                          data-testid={`manual-verify-${row.studentId}`}
+                          onClick={() => setVerifyTarget(row)}
+                        >
+                          <ShieldCheck />
+                          {row.state === "pending" ? "Verify" : "Override"}
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
           )}
         </CardContent>
       </Card>

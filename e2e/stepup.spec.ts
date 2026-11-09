@@ -90,7 +90,12 @@ async function openScannerAt(
   await context.setGeolocation(coords);
   await page.goto("/student/check-in");
   const input = page.getByTestId("checkin-input");
-  await input.waitFor({ state: "visible", timeout: 120_000 });
+  // A student already settled in the live session sees that state instead of
+  // the scanner; scenarios that re-submit on purpose open it anyway.
+  const scanOther = page.getByTestId("checkin-scan-other");
+  await expect(input.or(scanOther).first()).toBeVisible({ timeout: 120_000 });
+  if (await scanOther.isVisible()) await scanOther.click();
+  await input.waitFor({ state: "visible", timeout: 30_000 });
   await expect(page.getByTestId("geo-status")).toHaveText(/Location ready/i, {
     timeout: 30_000,
   });
@@ -187,7 +192,7 @@ test.afterAll(async () => {
   resetFixtures();
 });
 
-test("step-up: animated capture completes the challenge and verifies", async () => {
+test("step-up: a passed camera check cannot clear a location mismatch", async () => {
   test.setTimeout(180_000);
 
   // Fresh session: the resume path may land on a session where an earlier
@@ -200,12 +205,14 @@ test("step-up: animated capture completes the challenge and verifies", async () 
 
   await expectStepUpStarted(studentPage);
   await captureFace(studentPage);
-  await expect(studentPage.getByTestId("stepup-result")).toContainText(/verified/i, {
+  // The step-up was triggered by a far-away location; the camera check
+  // passes, but presence is still unresolved, so faculty decide.
+  await expect(studentPage.getByTestId("stepup-result")).toContainText(/faculty review/i, {
     timeout: 90_000,
   });
 
   const rowId = await studentRowId();
-  await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {
+  await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/flagged/i, {
     timeout: 30_000,
   });
 
@@ -256,7 +263,7 @@ test("step-up: static presentation flags spoof and faculty overrides", async ({ 
   const row = facultyPage.getByTestId(`board-row-${rowId}`);
   await expect(row).toContainText(/flagged/i, { timeout: 30_000 });
   // Reason codes render as friendly labels; the raw code rides in the title.
-  await expect(row).toContainText(/face spoof suspected/i, { timeout: 30_000 });
+  await expect(row).toContainText(/camera saw a photo\/screen/i, { timeout: 30_000 });
 
   await overrideViaDialog(rowId, "Verified in person after reviewing the spoof flag.");
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {
@@ -296,6 +303,16 @@ test("step-up: unavailable camera escalates to faculty review", async ({ browser
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/flagged/i, {
     timeout: 30_000,
   });
+
+  // A fresh code scanned in the venue cannot upgrade the settled flag: the
+  // student gets their flagged outcome echoed and the row stays flagged.
+  const freshToken = await nextFreshToken();
+  await openScannerAt(deniedContext, deniedPage, LH1_COORDS);
+  await submitCode(deniedPage, freshToken);
+  await expect(deniedPage.getByTestId("outcome-verdict")).toHaveText(/flag/i, {
+    timeout: 60_000,
+  });
+  await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/flagged/i);
 
   await overrideViaDialog(rowId, "Student arrived without a working camera; verified in person.");
   await expect(facultyPage.getByTestId(`board-row-${rowId}`)).toContainText(/verified/i, {

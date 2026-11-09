@@ -21,22 +21,23 @@ function roleLabel(role: Role): string {
 export function AppShell({ role, nav, children }: AppShellProps) {
   return (
     <div className="bg-background min-h-screen">
-      {/* Chalkboard sidebar — desktop */}
-      <aside className="bg-primary text-primary-foreground border-primary-foreground/10 fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex">
+      {/* Chalkboard sidebar — desktop. Board green in light; the dark theme's
+          sidebar tokens in dark, where --primary turns pale. */}
+      <aside className="bg-primary text-primary-foreground border-primary-foreground/10 dark:bg-sidebar dark:text-sidebar-foreground dark:border-sidebar-border fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r lg:flex">
         <div className="flex items-center gap-2.5 px-5 pt-6 pb-5">
           <Link href="/" className="flex items-center gap-2.5 rounded-md">
             <Seal className="size-6" />
             <span className="font-display text-lg leading-none tracking-tight">Sannidhi</span>
           </Link>
         </div>
-        <div className="border-primary-foreground/10 mx-5 border-t pt-4">
-          <p className="text-primary-foreground/65 px-3 pb-2 font-mono text-[10px] font-medium tracking-[0.16em] uppercase">
+        <div className="border-primary-foreground/10 dark:border-sidebar-border mx-5 border-t pt-4">
+          <p className="text-primary-foreground/65 dark:text-sidebar-foreground/65 px-3 pb-2 font-mono text-[10px] font-medium tracking-[0.16em] uppercase">
             {roleLabel(role)} panel
           </p>
           <SideNav nav={nav} variant="board" className="px-1 pb-4" />
         </div>
-        <div className="border-primary-foreground/10 mt-auto flex items-center justify-between gap-2 border-t px-5 py-4">
-          <span className="text-primary-foreground/75 font-mono text-[11px] tracking-[0.1em] uppercase">
+        <div className="border-primary-foreground/10 dark:border-sidebar-border mt-auto flex items-center justify-between gap-2 border-t px-5 py-4">
+          <span className="text-primary-foreground/75 dark:text-sidebar-foreground/75 font-mono text-[11px] tracking-[0.1em] uppercase">
             {roleLabel(role)}
           </span>
           <SignOutButton onBoard />

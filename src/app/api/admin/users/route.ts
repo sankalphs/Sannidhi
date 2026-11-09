@@ -50,3 +50,36 @@ export async function PATCH(request: Request) {
     return convexRouteErrorResponse("admin-users", error, "User update failed. Please try again.");
   }
 }
+
+/** Body: `{ userId }`. Removes someone who never activated; the mutation refuses anyone else. */
+export async function DELETE(request: Request) {
+  const session = await getActiveSession({ allowEnrollment: false });
+  if (session === null || session.role !== "admin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => null)) as { userId?: unknown } | null;
+  const userId = body?.userId;
+  if (typeof userId !== "string" || userId.length === 0) {
+    return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+  }
+
+  try {
+    const actorToken = await mintActorToken({
+      userId: session.userId,
+      role: session.role,
+      ...(session.sid !== undefined ? { sid: session.sid } : {}),
+    });
+    await getConvexClient().mutation(api.users.removeInvitedUser, {
+      actorToken,
+      userId: userId as Id<"users">,
+    });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return convexRouteErrorResponse(
+      "admin-users",
+      error,
+      "Removing this person failed. Please try again.",
+    );
+  }
+}

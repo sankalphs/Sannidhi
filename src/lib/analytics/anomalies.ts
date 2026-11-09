@@ -10,7 +10,6 @@ export const PROXY_REASON_CODES = [
 export const VERIFICATION_ANOMALY_TYPES = [
   "challenge_replayed",
   "wrong_session_challenge",
-  "malformed_challenge",
   "challenge_expired_use",
   "checkin_rate_limited",
 ] as const;

@@ -18,6 +18,7 @@ import { requireActorUser } from "./lib/actor";
 import { resolveSessionPolicy } from "./lib/policyContext";
 
 const DEFAULT_WINDOW_MINUTES = 45;
+const MAX_MANUAL_REASON_LENGTH = 1000;
 
 /** Sessions run in minutes, not seconds or hours — clamp hostile/nonsense input. */
 function resolveWindowMinutes(raw: number | undefined): number {
@@ -108,6 +109,29 @@ async function appendSessionLedgerEvent(
     ...(args.actorUserId !== undefined ? { actorUserId: args.actorUserId } : {}),
     payload: { sessionId: args.session._id, sectionId: args.session.sectionId },
   });
+}
+
+/**
+ * When each student first appeared in this session — the earliest attendance
+ * event, whatever came after it. The board shows this as "checked in" so later
+ * escalations and overrides never rewrite the arrival time.
+ */
+async function firstEventAtByStudent(
+  ctx: QueryCtx,
+  session: Doc<"class_sessions">,
+): Promise<Map<Id<"users">, number>> {
+  const events = await ctx.db
+    .query("attendance_events")
+    .withIndex("by_section_captured", (q) =>
+      q.eq("sectionId", session.sectionId).gte("capturedAt", session.startedAt),
+    )
+    .collect();
+  const firstAt = new Map<Id<"users">, number>();
+  for (const event of events) {
+    if (event.sessionId !== session._id || firstAt.has(event.studentId)) continue;
+    firstAt.set(event.studentId, event.capturedAt);
+  }
+  return firstAt;
 }
 
 function projectBoardState(state: Doc<"attendance_events">["state"]): BoardRowState {
@@ -388,11 +412,14 @@ export const getBoard = query({
       .withIndex("by_section", (q) => q.eq("sectionId", session.sectionId))
       .collect();
 
-    const latestByStudent = await latestEventsByStudentSince(ctx, {
-      sectionId: session.sectionId,
-      sessionId: session._id,
-      sinceMs: session.startedAt,
-    });
+    const [latestByStudent, firstEventAt] = await Promise.all([
+      latestEventsByStudentSince(ctx, {
+        sectionId: session.sectionId,
+        sessionId: session._id,
+        sinceMs: session.startedAt,
+      }),
+      firstEventAtByStudent(ctx, session),
+    ]);
 
     const pendingChallenges = await ctx.db
       .query("verification_challenges")
@@ -416,7 +443,9 @@ export const getBoard = query({
       email: string;
       state: BoardRowState;
       reasonCodes: string[];
+      /** First event in this session; `updatedAt` is when the current state landed. */
       checkedInAt: number | null;
+      updatedAt: number | null;
       challenge: { kind: "checkin_stepup" | "spot_recheck"; expiresAt: number } | null;
     }> = [];
 
@@ -430,7 +459,8 @@ export const getBoard = query({
         email: student.email,
         state: latest !== undefined ? projectBoardState(latest.state) : "pending",
         reasonCodes: latest?.decision?.reasonCodes ?? [],
-        checkedInAt: latest !== undefined ? latest.capturedAt : null,
+        checkedInAt: firstEventAt.get(enrollment.studentId) ?? null,
+        updatedAt: latest !== undefined ? latest.capturedAt : null,
         challenge: challengeByStudent.get(enrollment.studentId) ?? null,
       });
     }
@@ -453,6 +483,7 @@ export const getBoard = query({
         venueName: venue?.name ?? "",
         startedAt: session.startedAt,
         windowEndsAt: session.windowEndsAt,
+        closedAt: session.closedAt ?? null,
       },
       rows,
     };
@@ -472,6 +503,9 @@ export const verifyManually = mutation({
 
     const trimmed = args.reason.trim();
     if (trimmed.length < 10) throw new ConvexError("reason_too_short");
+    if (trimmed.length > MAX_MANUAL_REASON_LENGTH) {
+      throw new ConvexError(`Reason is limited to ${MAX_MANUAL_REASON_LENGTH} characters`);
+    }
 
     // Manual verification is bound to the live window: a closed session or an
     // expired window has no verifiable present to attest to.

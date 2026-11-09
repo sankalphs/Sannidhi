@@ -85,8 +85,8 @@ export default async function AdminCoursesPage() {
               {courses.map((course) => (
                 <tr key={course.id}>
                   <td className="px-4 py-2 font-mono text-xs">{course.code}</td>
-                  <td className="px-4 py-2">{course.title}</td>
-                  <td className="text-muted-foreground px-4 py-2">
+                  <td className="cell-wrap px-4 py-2">{course.title}</td>
+                  <td className="text-muted-foreground cell-wrap px-4 py-2">
                     {course.departmentId !== null
                       ? (departmentById.get(course.departmentId)?.name ?? "Unlinked")
                       : "—"}

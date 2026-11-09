@@ -50,13 +50,13 @@ test("admin sees cohort analytics with trajectories and trends", async ({ page }
   const diyaProxy = proxyCards.filter({ hasText: "Diya Sharma" });
   await expect(diyaProxy).toContainText("2");
   await expect(diyaProxy).toContainText("flagged check-ins");
-  await expect(diyaProxy).toContainText("Face mismatch");
-  await expect(diyaProxy).toContainText("Face spoof suspected");
+  await expect(diyaProxy).toContainText("Possible proxy (camera check mismatch)");
+  await expect(diyaProxy).toContainText("Possible proxy (camera saw a photo/screen)");
 
   const aaravProxy = proxyCards.filter({ hasText: "Aarav Patel" });
   await expect(aaravProxy).toContainText("1");
   await expect(aaravProxy).toContainText("flagged check-in");
-  await expect(aaravProxy).toContainText("Distrusted device");
+  await expect(aaravProxy).toContainText("Suspended or revoked device");
 
   const replayed = page.getByTestId("anomaly-type-row").filter({ hasText: "challenge_replayed" });
   await expect(replayed).toContainText("3");
@@ -90,7 +90,7 @@ test("early-warning scan routes alerts into the human-review inbox", async ({ pa
   await expect(lowAttendance).toContainText("Attendance at 54.2%");
 
   const verificationAnomaly = page.locator('[data-kind="verification_anomaly"]');
-  await expect(verificationAnomaly).toContainText("5 ledger anomalies");
+  await expect(verificationAnomaly).toContainText("4 ledger anomalies");
 });
 
 test("acknowledged and dismissed alerts stay in the inbox history", async ({ page }) => {

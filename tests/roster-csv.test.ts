@@ -96,6 +96,15 @@ describe("parseRosterCsv", () => {
     ]);
   });
 
+  it("drops rows with over-long fields", () => {
+    const csv = `${HEADER}\nCSE,CS,CS101,${"t".repeat(161)},A,,a@sit.edu.in,Aarav,\nCSE,CS,CS101,Intro,A,,b@sit.edu.in,Bea,`;
+    const result = parseRosterCsv(csv);
+    expect(result.issues).toEqual([
+      { row: 2, field: "course_title", message: "course_title is longer than 160 characters" },
+    ]);
+    expect(result.rows.map((r) => r.studentEmail)).toEqual(["b@sit.edu.in"]);
+  });
+
   it("drops invalid emails and keeps valid rows", () => {
     const csv = `${HEADER}\nCSE,Computer Science,CS101,Intro,Section A,2026-Autumn,nope,A Person,\nCSE,Computer Science,CS101,Intro,Section A,2026-Autumn,ok@sit.edu.in,Ok Person,`;
     const result = parseRosterCsv(csv);

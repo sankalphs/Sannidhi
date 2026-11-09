@@ -5,6 +5,7 @@ import { deviceErrorResponse } from "@/lib/api/device-errors";
 import { mintActorToken } from "@/lib/auth/actor-token";
 import { getActiveSession } from "@/lib/auth/server";
 import { getConvexClient } from "@/lib/convex/server-client";
+import { DEVICE_LABEL_MAX_LENGTH } from "@/lib/devices/lifecycle";
 
 export async function POST(request: Request) {
   const session = await getActiveSession();
@@ -20,8 +21,11 @@ export async function POST(request: Request) {
   }
 
   const label = typeof body.label === "string" ? body.label.trim() : "";
-  if (label.length === 0 || label.length > 80) {
-    return NextResponse.json({ error: "label required (1-80 characters)" }, { status: 400 });
+  if (label.length === 0 || label.length > DEVICE_LABEL_MAX_LENGTH) {
+    return NextResponse.json(
+      { error: `label required (1-${DEVICE_LABEL_MAX_LENGTH} characters)` },
+      { status: 400 },
+    );
   }
 
   try {

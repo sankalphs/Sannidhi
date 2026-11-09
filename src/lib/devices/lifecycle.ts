@@ -9,6 +9,9 @@ export const DEVICE_STATES = [
 
 export type DeviceState = (typeof DEVICE_STATES)[number];
 
+/** Longest device label a student can register; enforced by the API, Convex, and the form. */
+export const DEVICE_LABEL_MAX_LENGTH = 80;
+
 export const DEVICE_TRANSITIONS: Readonly<Record<DeviceState, readonly DeviceState[]>> = {
   new: ["enrolled", "revoked"],
   enrolled: ["active", "revoked"],

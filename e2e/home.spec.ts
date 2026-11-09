@@ -17,5 +17,5 @@ test("home page presents the four role panels and the live session preview", asy
     await expect(page.getByText(panel, { exact: true })).toBeVisible();
   }
   await expect(page.getByTestId("demo-qr-token")).toBeVisible();
-  await expect(page.getByText("Rotates every 8s")).toBeVisible();
+  await expect(page.getByText("New code every 30s")).toBeVisible();
 });

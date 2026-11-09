@@ -101,7 +101,7 @@ describe("summarizeVerificationAnomalies", () => {
   it("sorts byType by count descending then type ascending", () => {
     const summary = summarizeVerificationAnomalies(
       [
-        { type: "malformed_challenge", subjectUserId: null, createdAt: SINCE },
+        { type: "wrong_session_challenge", subjectUserId: null, createdAt: SINCE },
         { type: "challenge_replayed", subjectUserId: null, createdAt: SINCE },
         { type: "challenge_replayed", subjectUserId: null, createdAt: SINCE },
         { type: "challenge_replayed", subjectUserId: null, createdAt: SINCE },
@@ -114,7 +114,7 @@ describe("summarizeVerificationAnomalies", () => {
     expect(summary.byType).toEqual([
       { type: "challenge_replayed", count: 3 },
       { type: "checkin_rate_limited", count: 2 },
-      { type: "malformed_challenge", count: 1 },
+      { type: "wrong_session_challenge", count: 1 },
     ]);
   });
 

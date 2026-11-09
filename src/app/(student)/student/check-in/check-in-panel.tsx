@@ -1,8 +1,10 @@
 "use client";
 
 import { api } from "../../../../../convex/_generated/api";
-import { useMutation } from "convex/react";
-import { Loader2, ScanLine } from "lucide-react";
+import type { FunctionReturnType } from "convex/server";
+import { useMutation, useQuery } from "convex/react";
+import { CheckCircle2, Flag, Loader2, ScanLine, XCircle } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -17,19 +19,21 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { INSTITUTION_TIME_ZONE } from "@/lib/attendance/timezone";
 import { CHECK_IN_PATH, extractCheckInCode } from "@/lib/client/check-in-link";
+import { cn } from "@/lib/utils";
 
 import { OutcomeScreen, type CheckInOutcome } from "./outcome-screen";
-import { StepUpChallenge, type StepUpChallengeRef } from "./step-up-challenge";
+import {
+  PendingChallengeBanner,
+  StepUpChallenge,
+  type StepUpChallengeRef,
+} from "./step-up-challenge";
 
-export type ActiveClassSession = {
-  sessionId: string;
-  courseCode: string;
-  courseTitle: string;
-  sectionName: string;
-  venueName: string;
-  windowEndsAt: number;
-};
+export type ActiveClassSession = NonNullable<
+  FunctionReturnType<typeof api.checkin.getActiveForStudent>
+>;
+type MyCheckIn = NonNullable<ActiveClassSession["myCheckIn"]>;
 
 type StepUpOutcome = {
   challenge: StepUpChallengeRef;
@@ -67,6 +71,89 @@ function formatCountdown(totalSeconds: number): string {
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 }
 
+const SETTLED_COPY: Record<
+  MyCheckIn["state"],
+  { title: string; message: string; icon: typeof CheckCircle2; tone: string }
+> = {
+  verified: {
+    title: "You're checked in",
+    message: "Your attendance for this class is recorded. Keep the app open until class ends.",
+    icon: CheckCircle2,
+    tone: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  },
+  flagged: {
+    title: "Checked in — under faculty review",
+    message: "Your check-in needs a quick look from your faculty member. No need to scan again.",
+    icon: Flag,
+    tone: "bg-verdict-flag/15 text-verdict-flag",
+  },
+  step_up: {
+    title: "Verification not finished",
+    message: "Your extra verification lapsed, so your faculty member will review this check-in.",
+    icon: Flag,
+    tone: "bg-verdict-flag/15 text-verdict-flag",
+  },
+  rejected: {
+    title: "Check-in not accepted",
+    message: "This check-in was rejected. If that looks wrong, talk to your faculty member.",
+    icon: XCircle,
+    tone: "bg-destructive/15 text-destructive",
+  },
+};
+
+function formatTime(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: INSTITUTION_TIME_ZONE,
+  });
+}
+
+/** The student's settled standing in the active session, in place of the scanner. */
+function SettledCard({
+  active,
+  checkIn,
+  onScanAnyway,
+}: {
+  active: ActiveClassSession;
+  checkIn: MyCheckIn;
+  onScanAnyway: () => void;
+}) {
+  const copy = SETTLED_COPY[checkIn.state];
+  const Icon = copy.icon;
+  return (
+    <div
+      className="flex flex-col items-center gap-3 rounded-xl border p-8 text-center"
+      data-testid="checkin-settled"
+      role="status"
+    >
+      <div className={cn("flex size-14 items-center justify-center rounded-full", copy.tone)}>
+        <Icon className="size-8" />
+      </div>
+      <h2 className="text-xl font-semibold">{copy.title}</h2>
+      <p className="text-muted-foreground text-sm">
+        {active.courseCode} · {active.venueName} ·{" "}
+        <span suppressHydrationWarning>{formatTime(checkIn.checkedInAt)}</span>
+      </p>
+      <p className="text-muted-foreground max-w-md text-sm">{copy.message}</p>
+      {checkIn.state === "verified" ? null : (
+        <Link href="/student/requests" className="text-sm underline underline-offset-4">
+          Dispute this record
+        </Link>
+      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-muted-foreground"
+        data-testid="checkin-scan-other"
+        onClick={onScanAnyway}
+      >
+        Checking in to a different class? Scan a code
+      </Button>
+    </div>
+  );
+}
+
 function useSecondsUntil(target: number): number | null {
   const [secondsLeft, setSecondsLeft] = useState<number | null>(null);
   useEffect(() => {
@@ -93,6 +180,11 @@ export function CheckInPanel({
 }) {
   const router = useRouter();
   const redeemChallenge = useMutation(api.checkin.redeemChallenge);
+  // Live so a faculty override or a finished re-check updates this screen.
+  const liveActive = useQuery(api.checkin.getActiveForStudent, { actorToken });
+  const current = liveActive === undefined ? active : liveActive;
+  const pending = useQuery(api.challenges.getMyPending, { actorToken });
+  const [scanAnyway, setScanAnyway] = useState(false);
   const [outcome, setOutcome] = useState<CheckInOutcome | null>(null);
   const [stepUp, setStepUp] = useState<StepUpOutcome | null>(null);
   const [code, setCode] = useState("");
@@ -218,8 +310,18 @@ export function CheckInPanel({
     void submit(pendingToken);
   }, [pendingToken, submit]);
 
+  // A pending challenge for this class or a settled check-in replaces the
+  // scanner; anything it would scan here could only echo that state back.
+  const settled = current?.myCheckIn ?? null;
+  const challengeHere =
+    current !== null &&
+    pending !== undefined &&
+    pending !== null &&
+    pending.challenge.sessionId === current.sessionId;
+  const showScanner = scanAnyway || (settled === null && !challengeHere);
+
   useEffect(() => {
-    if (outcome !== null || stepUp !== null) return;
+    if (outcome !== null || stepUp !== null || !showScanner) return;
     let cancelled = false;
     let stream: MediaStream | null = null;
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -293,9 +395,9 @@ export function CheckInPanel({
       cancelled = true;
       stopEverything();
     };
-  }, [outcome, stepUp]);
+  }, [outcome, stepUp, showScanner]);
 
-  const secondsLeft = useSecondsUntil(active?.windowEndsAt ?? Number.MAX_SAFE_INTEGER);
+  const secondsLeft = useSecondsUntil(current?.windowEndsAt ?? Number.MAX_SAFE_INTEGER);
 
   if (outcome !== null) {
     return <OutcomeScreen outcome={outcome} onRetry={() => setOutcome(null)} />;
@@ -313,15 +415,31 @@ export function CheckInPanel({
     );
   }
 
+  if (!showScanner) {
+    return (
+      <div className="flex flex-col gap-6">
+        <PendingChallengeBanner actorToken={actorToken} />
+        {settled !== null && current !== null && !challengeHere ? (
+          <SettledCard
+            active={current}
+            checkIn={settled}
+            onScanAnyway={() => setScanAnyway(true)}
+          />
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-6">
-      {active !== null ? (
+      <PendingChallengeBanner actorToken={actorToken} />
+      {current !== null ? (
         <Card className="border-primary/60 bg-primary/5">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2">
-              <span>Class in progress: {active.courseCode}</span>
+              <span>Class in progress: {current.courseCode}</span>
               <span className="text-muted-foreground font-normal">
-                · {active.sectionName} · {active.venueName}
+                · {current.sectionName} · {current.venueName}
               </span>
               <Badge variant="secondary" className="font-mono">
                 Window closes in{" "}
@@ -330,7 +448,7 @@ export function CheckInPanel({
                 </span>
               </Badge>
             </CardTitle>
-            <CardDescription>{active.courseTitle}</CardDescription>
+            <CardDescription>{current.courseTitle}</CardDescription>
           </CardHeader>
         </Card>
       ) : null}
