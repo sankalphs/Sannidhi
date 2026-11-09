@@ -19,8 +19,8 @@ import type { Doc, Id } from "./_generated/dataModel";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 const MAX_ALERTS_PER_LIST = 200;
-/** Ceiling on alerts joined per status when department scope filters most of them out. */
-const MAX_ALERT_SCAN = MAX_ALERTS_PER_LIST * 5;
+/** Ceiling on alerts scanned per status when department scope filters most of them out. */
+const MAX_ALERT_SCAN = 500;
 const MAX_RESOLUTION_NOTE_LENGTH = 1000;
 const ALERT_CREATED_TYPE = "analytics.review_alert_created";
 const ALERT_RESOLVED_TYPE = "analytics.review_alert_resolved";
@@ -248,8 +248,10 @@ type ScopedAlert = { row: Doc<"review_alerts">; student: Doc<"users"> | null };
 
 /**
  * Newest-first alerts of one status that the caller may review, joined to
- * their student. Pages past alerts outside the caller's departments rather
- * than counting them toward the display limit.
+ * their student. Scans past alerts outside the caller's departments instead of
+ * counting them toward the display limit. Convex allows one paginated scan per
+ * query, so this is a bounded take: a department authority reaches authorized
+ * alerts behind up to MAX_ALERT_SCAN newer ones from other departments.
  */
 async function scopedAlerts(
   ctx: QueryCtx,
@@ -257,30 +259,21 @@ async function scopedAlerts(
   status: Doc<"review_alerts">["status"],
   wanted: number,
 ): Promise<ScopedAlert[]> {
+  const rows = await ctx.db
+    .query("review_alerts")
+    .withIndex("by_institution_status_detected", (q) =>
+      q.eq("institutionId", caller.institutionId).eq("status", status),
+    )
+    .order("desc")
+    .take(MAX_ALERT_SCAN);
+
   const found: ScopedAlert[] = [];
-  let cursor: string | null = null;
-  let scanned = 0;
-
-  while (found.length < wanted && scanned < MAX_ALERT_SCAN) {
-    const page = await ctx.db
-      .query("review_alerts")
-      .withIndex("by_institution_status_detected", (q) =>
-        q.eq("institutionId", caller.institutionId).eq("status", status),
-      )
-      .order("desc")
-      .paginate({ numItems: wanted, cursor });
-    scanned += page.page.length;
-
-    for (const row of page.page) {
-      const student = await safeUser(ctx, row.studentId);
-      if (!canReviewStudentAlert(caller, student)) continue;
-      found.push({ row, student });
-      if (found.length >= wanted) break;
-    }
-    if (page.isDone) break;
-    cursor = page.continueCursor;
+  for (const row of rows) {
+    const student = await safeUser(ctx, row.studentId);
+    if (!canReviewStudentAlert(caller, student)) continue;
+    found.push({ row, student });
+    if (found.length >= wanted) break;
   }
-
   return found;
 }
 
